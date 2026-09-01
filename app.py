@@ -7,8 +7,8 @@ import random
 import urllib.request
 from datetime import datetime
 
-from fastapi import FastAPI, Response, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 import uvicorn
 
 app = FastAPI()
@@ -143,9 +143,9 @@ def update_article_with_ai(article_id, category, topic):
     [작성 가이드라인]:
     1. 분량: 한글 1,500자 ~ 2,000자 이상의 매우 상세하고 유익한 내용.
     2. 기사 구성 (HTML 태그 필수 적용):
-       - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
-       - [요약]: 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
-       - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
+           - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
+           - [요약]: 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
+           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
     3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
     [출력 JSON 규격]:
