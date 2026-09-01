@@ -4,6 +4,7 @@ import json
 import time
 import threading
 import random
+import urllib.request
 from datetime import datetime
 
 from fastapi import FastAPI, Response
@@ -13,6 +14,7 @@ import uvicorn
 app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
+WEBZINE_URL = "https://insight-webzine.onrender.com"
 
 # Gemini API 클라이언트 초기화
 client = None
@@ -56,6 +58,23 @@ def init_db():
     conn.close()
 
 init_db()
+
+# 24시간 잠자기 방지 자체 핑 엔진 (무료 상시 가동)
+def keep_alive_scheduler():
+    time.sleep(60)
+    while True:
+        try:
+            req = urllib.request.Request(
+                WEBZINE_URL + "/ping",
+                headers={'User-Agent': 'Mozilla/5.0 (KeepAlive-Bot)'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as res:
+                pass
+        except Exception:
+            pass
+        time.sleep(600)  # 10분마다 깨우기 신호 전송
+
+threading.Thread(target=keep_alive_scheduler, daemon=True).start()
 
 def increase_article_view_async(article_id: int):
     def _run():
@@ -173,6 +192,7 @@ def generate_and_save_article(category="", topic=""):
         inserted_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        print("[" + now + "] 기사 발행 성공: " + title)
         return inserted_id
     except Exception:
         return 1
@@ -260,6 +280,11 @@ def get_cat_badge(cat_name):
 def render_html(title, content):
     page = HTML_BASE_TEMPLATE.replace("__PAGE_TITLE__", title).replace("__MAIN_CONTENT__", content)
     return HTMLResponse(content=page)
+
+# 상시 깨우기 핑 라우트
+@app.get("/ping")
+def ping():
+    return Response(content="pong", media_type="text/plain")
 
 @app.get("/")
 def index(cat: str = ""):
@@ -387,14 +412,14 @@ def view_article(article_id: int):
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <button id="ttsPlayBtn" class="btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
-                    <i class="fa-solid fa-circle-play me-1"></i> <span id="ttsBtnText">뉴스 아나운서 음성 듣기</span>
+                    <i class="fa-solid fa-circle-play me-1"></i> <span id="ttsBtnText">차분한 아나운서 음성 듣기</span>
                 </button>
                 <div class="btn-group btn-group-sm" role="group">
                     <button type="button" class="btn btn-outline-primary" onclick="setSpeed(0.85)">0.8x</button>
-                    <button type="button" class="btn btn-primary active" id="speedNormal" onclick="setSpeed(1.0)">1.0x</button>
-                    <button type="button" class="btn btn-outline-primary" onclick="setSpeed(1.2)">1.2x</button>
+                    <button type="button" class="btn btn-primary active" id="speedNormal" onclick="setSpeed(0.92)">표준 낭독</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="setSpeed(1.1)">1.1x</button>
                 </div>
-                <small id="ttsStatus" class="text-secondary fw-semibold">편안하고 또렷한 음성으로 낭독합니다.</small>
+                <small id="ttsStatus" class="text-secondary fw-semibold">편안하고 차분한 어조로 낭독합니다.</small>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="text-muted small fw-semibold">글자:</span>
@@ -456,16 +481,17 @@ def view_article(article_id: int):
 
         var isSpeaking = false;
         var speechSynth = window.speechSynthesis;
-        var currentRate = 0.95;
+        var currentRate = 0.92;
         var selectedVoice = null;
 
         function findBestKoreanVoice() {
             if (!speechSynth) return null;
             var voices = speechSynth.getVoices();
             for (var i = 0; i < voices.length; i++) {
-                if (voices[i].lang.indexOf('ko') !== -1 || voices[i].lang.indexOf('KO') !== -1) {
-                    if (voices[i].name.indexOf('Google') !== -1 || voices[i].name.indexOf('Natural') !== -1 || voices[i].name.indexOf('Online') !== -1) {
-                        return voices[i];
+                var v = voices[i];
+                if (v.lang.indexOf('ko') !== -1 || v.lang.indexOf('KO') !== -1) {
+                    if (v.name.indexOf('Heami') !== -1 || v.name.indexOf('SunHi') !== -1 || v.name.indexOf('Google') !== -1 || v.name.indexOf('Natural') !== -1 || v.name.indexOf('Online') !== -1) {
+                        return v;
                     }
                 }
             }
@@ -498,7 +524,7 @@ def view_article(article_id: int):
             if (isSpeaking) {
                 speechSynth.cancel();
                 isSpeaking = false;
-                document.getElementById('ttsBtnText').innerText = "뉴스 아나운서 음성 듣기";
+                document.getElementById('ttsBtnText').innerText = "차분한 아나운서 음성 듣기";
                 document.getElementById('ttsPlayBtn').className = "btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm";
                 document.getElementById('ttsStatus').innerText = "재생이 정지되었습니다.";
             } else {
@@ -508,7 +534,7 @@ def view_article(article_id: int):
                 var utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = 'ko-KR';
                 utterance.rate = currentRate;
-                utterance.pitch = 1.0;
+                utterance.pitch = 0.92;
                 
                 if (!selectedVoice) selectedVoice = findBestKoreanVoice();
                 if (selectedVoice) utterance.voice = selectedVoice;
@@ -524,7 +550,7 @@ def view_article(article_id: int):
                 isSpeaking = true;
                 document.getElementById('ttsBtnText').innerText = "음성 일시정지";
                 document.getElementById('ttsPlayBtn').className = "btn btn-danger px-3 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "아나운서 톤으로 정갈하게 낭독 중입니다...";
+                document.getElementById('ttsStatus').innerText = "차분하고 품격 있는 톤으로 낭독 중입니다...";
             }
         }
 
@@ -556,9 +582,9 @@ def write_form():
     <div class="container py-5" style="max-width: 760px;">
         <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
             <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
-            <p class="text-muted small mb-4">원하는 특정 주제가 있을 때 입력하시면 즉시 2,000자 이상의 심층 리포트를 작성하여 웹진에 자동 등록합니다.</p>
+            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 2,000자 이상의 심층 리포트를 즉시 발행합니다.</p>
 
-            <form id="writeForm" method="get" action="/create" onsubmit="showLoading()">
+            <form id="writeForm" method="get" action="/create" onsubmit="showInstantNotice()">
                 <div class="mb-3">
                     <label class="form-label fw-bold">카테고리</label>
                     <select name="category" class="form-select py-2">
@@ -573,22 +599,17 @@ def write_form():
                     <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
                 <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
-                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 작성 및 발행
+                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 발행 요청
                 </button>
             </form>
-
-            <div id="loadingBox" class="text-center py-4 mt-3" style="display: none;">
-                <div class="spinner-border text-primary mb-3" role="status"></div>
-                <h5 class="fw-bold text-dark">AI 기자가 2,000자 심층 가이드를 집필 중입니다...</h5>
-                <p class="text-muted small mb-0">약 5~10초 후 완성된 기사로 바로 이동합니다. 창을 닫지 마세요.</p>
-            </div>
         </div>
     </div>
 
     <script>
-        function showLoading() {
-            document.getElementById('writeForm').style.display = 'none';
-            document.getElementById('loadingBox').style.display = 'block';
+        function showInstantNotice() {
+            var btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>기사 생성 요청 접수 중...';
         }
     </script>
     """
@@ -598,8 +619,25 @@ def write_form():
 def create_article(category: str = "정부 지원금/복지 혜택", topic: str = ""):
     if not topic:
         return RedirectResponse(url="/", status_code=303)
-    new_article_id = generate_and_save_article(category, topic)
-    return RedirectResponse(url="/article/" + str(new_article_id), status_code=303)
+    
+    threading.Thread(target=generate_and_save_article, args=(category, topic), daemon=True).start()
+    
+    success_page = """
+    <div class="container py-5 text-center" style="max-width: 600px;">
+        <div class="card p-5 shadow-sm border-0 rounded-4">
+            <div class="text-success mb-3" style="font-size: 3.5rem;"><i class="fa-solid fa-circle-check"></i></div>
+            <h4 class="fw-bold mb-2">기사 생성이 시작되었습니다!</h4>
+            <p class="text-muted small mb-4">AI 기자가 2,000자 심층 가이드를 작성하여 수초 내에 메인 페이지 맨 위에 등록합니다.</p>
+            <a href="/" class="btn btn-primary fw-bold px-4 py-2 rounded-pill">메인 홈으로 이동</a>
+        </div>
+    </div>
+    <script>
+        setTimeout(function() {
+            window.location.href = '/';
+        }, 2000);
+    </script>
+    """
+    return render_html("기사 접수 완료", success_page)
 
 @app.get("/sitemap.xml", response_class=Response)
 def sitemap():
@@ -629,21 +667,16 @@ def rss_feed():
         articles = cursor.fetchall()
         conn.close()
 
-        xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
-        xml += '<rss version="2.0">\n<channel>\n'
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0">\n<channel>\n'
         xml += '  <title>인사이트 데일리 웹진</title>\n'
         xml += '  <link>https://insight-webzine.onrender.com</link>\n'
         xml += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
         for row in articles:
-            xml += '  <item>\n'
-            xml += '    <title><![CDATA[' + str(row["title"]) + ']]></title>\n'
-            xml += '    <link>https://insight-webzine.onrender.com/article/' + str(row["id"]) + '</link>\n'
-            xml += '    <description><![CDATA[' + str(row["summary"]) + ']]></description>\n'
-            xml += '  </item>\n'
+            xml += '  <item>\n    <title><![CDATA[' + str(row["title"]) + ']]></title>\n    <link>https://insight-webzine.onrender.com/article/' + str(row["id"]) + '</link>\n    <description><![CDATA[' + str(row["summary"]) + ']]></description>\n  </item>\n'
         xml += '</channel>\n</rss>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
-        return Response(content='<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>인사이트 데일리 웹진</title><link>https://insight-webzine.onrender.com</link></channel></rss>', media_type="application/xml")
+        return Response(content='<?xml version="1.0"?><rss version="2.0"><channel><title>인사이트 데일리 웹진</title><link>https://insight-webzine.onrender.com</link></channel></rss>', media_type="application/xml")
 
 @app.get("/admin/stats")
 def admin_stats(pw=""):
