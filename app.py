@@ -14,7 +14,6 @@ app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
 
-# Gemini API 클라이언트 초기화
 client = None
 try:
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -130,6 +129,11 @@ def update_article_with_ai(article_id, category, topic):
             config=dict(response_mime_type="application/json")
         )
         raw = response.text.strip()
+        
+        # 문법 에러 원인이었던 문자열 닫기 완벽 수정
         if raw.startswith("```json"):
             raw = raw[7:]
+        elif raw.startswith("```"):
+            raw = raw[3:]
+            
         if raw.endswith("
