@@ -2,6 +2,8 @@ import os
 import sqlite3
 import json
 import time
+import threading
+import random
 from datetime import datetime
 
 from fastapi import FastAPI, Form, Request, Response
@@ -14,10 +16,10 @@ import uvicorn
 # ======================================================
 app = FastAPI()
 
-# 관리자 통계 비밀번호
+# 관리자 통계 접속 비밀번호
 ADMIN_STATS_PASSWORD = "admin1234"
 
-# Gemini API 클라이언트 초기화 (환경 변수 GEMINI_API_KEY 사용)
+# Gemini API 클라이언트 초기화
 gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
@@ -60,7 +62,93 @@ def increase_article_view(article_id: int):
         pass
 
 # ======================================================
-# 2. 공통 HTML 레이아웃
+# 2. AI 자동 기사 작성 엔진 (1,500자+ 고품격 가이드)
+# ======================================================
+AUTO_TOPIC_POOL = [
+    ("시니어/복지", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 정리"),
+    ("문화/여행", "시니어를 위한 전국 힐링 무장애 나눔길 베스트 5 및 코스별 교통편 안내"),
+    ("경제/재테크", "기초연금 수급자격 및 소득인정액 계산법과 2026년 인상 혜택 가이드"),
+    ("건강/의학", "시니어 관절 건강을 지키는 걷기 운동법과 무릎 부담 줄이는 생활 수칙"),
+    ("시니어/복지", "문화누리카드 지원금 확대 및 KTX 할인과 연계한 알찬 사용 꿀팁"),
+    ("IT/디지털", "어르신을 위한 스마트폰 모바일 신분증 발급 및 간편 병원 본인확인 방법"),
+    ("경제/재테크", "주택연금 가입조건과 월 지급금 수령액 비교 및 실전 신청 가이드"),
+    ("건강/의학", "뇌 건강을 지키는 치매 예방 식습관 7가지와 인지재활 훈련법"),
+    ("문화/여행", "자연휴양림 시니어 숲 치유 프로그램 예약 방법 및 국립공원 할인 혜택"),
+    ("시니어/복지", "시니어 노인일자리 및 사회활동 지원사업 신청기간 및 맞춤 직종 안내")
+]
+
+def generate_and_save_article(category: str = "", topic: str = ""):
+    if not category or not topic:
+        category, topic = random.choice(AUTO_TOPIC_POOL)
+
+    title = f"{topic}"
+    summary = "1. 실생활에 즉시 도움 되는 핵심 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 정리. 3. 주의사항 및 실전 활용 꿀팁 완벽 수록."
+    content = f"<h2>1. {topic} 개요 및 중요성</h2><p>본 기사는 독자 여러분께 꼭 필요한 핵심 정보를 제공합니다.</p>"
+
+    if client:
+        prompt = f"""
+        당신은 5060 시니어 및 대중을 위한 전문 웹진의 수석 에디터입니다.
+        아래 [주제]와 [카테고리]에 맞는 고품격 심층 가이드 기사를 작성해 주세요.
+
+        [주제]: {topic}
+        [카테고리]: {category}
+
+        [작성 가이드라인 - 반드시 준수]:
+        1. 분량: 한글 공백 포함 최소 1,500자 ~ 2,000자 이상의 매우 상세하고 실용적인 내용.
+        2. 기사 구조:
+           - 매력적이고 클릭을 유도하는 기사 제목 1개 (SEO 최적화)
+           - 핵심 3줄 요약 (1. 2. 3. 번호 매김)
+           - 본문 (HTML 태그 적극 활용):
+             * <h2> 소제목 3~4개로 구조화
+             * 독자가 바로 실천할 수 있는 구체적 수치, 지원 대상, 신청처, 고객센터 정보 포함
+             * 본문 중간에 비교나 정리를 위한 HTML <table> 요약표 반드시 1개 이상 포함
+             * <h2> 자주 묻는 질문 (FAQ) 3가지 및 명쾌한 답변
+             * <h2> 주의사항 및 꿀팁 체크리스트
+        3. 톤앤매너: 친절하고 신뢰감 넘치는 전문가 어조 ('~합니다', '~하세요').
+
+        [출력 JSON 형식]:
+        {{
+            "title": "기사 제목",
+            "summary": "1. ... 2. ... 3. ...",
+            "content": "<h2>...</h2><p>...</p><table>...</table><h2>자주 묻는 질문 (FAQ)</h2>..."
+        }}
+        """
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=dict(response_mime_type="application/json")
+            )
+            data = json.loads(response.text)
+            title = data.get("title", title)
+            summary = data.get("summary", summary)
+            content = data.get("content", content)
+        except Exception as e:
+            print(f"AI 자동 생성 오류: {e}")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO articles (title, category, summary, content, created_at, views)
+        VALUES (?, ?, ?, ?, ?, 0)
+    """, (title, category, summary, content, now))
+    conn.commit()
+    conn.close()
+    print(f"[{now}] 자동 기사 발행 완료: {title}")
+
+# 백그라운드 자동 발행 스케줄러 (6시간 = 21600초마다 1개 자동 생성)
+def auto_article_scheduler():
+    time.sleep(10)  # 서버 시작 10초 후 즉시 첫 기사 1개 발행
+    generate_and_save_article()
+    while True:
+        time.sleep(21600)  # 6시간 대기 후 다음 기사 자동 발행
+        generate_and_save_article()
+
+threading.Thread(target=auto_article_scheduler, daemon=True).start()
+
+# ======================================================
+# 3. 공통 HTML 레이아웃 (SEO & 메타태그)
 # ======================================================
 HTML_LAYOUT = """<!DOCTYPE html>
 <html lang="ko">
@@ -79,8 +167,6 @@ HTML_LAYOUT = """<!DOCTYPE html>
         .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
         .article-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
         .badge-cat { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; }
-        .btn-custom { background-color: #1e3a8a; color: white; }
-        .btn-custom:hover { background-color: #172554; color: white; }
         
         .article-content { font-size: 1.15rem; line-height: 1.95; color: #334155; }
         .article-content h2, .article-content h3 { color: #0f172a; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; border-left: 5px solid #2563eb; padding-left: 12px; }
@@ -99,7 +185,8 @@ HTML_LAYOUT = """<!DOCTYPE html>
         <div class="container">
             <a class="navbar-brand" href="/"><i class="fa-solid fa-newspaper me-2 text-primary"></i>인사이트 데일리</a>
             <div class="d-flex align-items-center">
-                <a href="/write" class="btn btn-primary btn-sm me-2 fw-semibold"><i class="fa-solid fa-wand-magic-sparkles me-1"></i>AI 기사 생성</a>
+                <span class="badge bg-success-subtle text-success border border-success-subtle me-2 px-2 py-1"><i class="fa-solid fa-circle-dot me-1"></i>하루 4회 자동 발행 중</span>
+                <a href="/write" class="btn btn-primary btn-sm me-2 fw-semibold"><i class="fa-solid fa-plus me-1"></i>즉시 발행</a>
                 <a href="/admin/stats" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-chart-line me-1"></i>관리자 통계</a>
             </div>
         </div>
@@ -116,7 +203,7 @@ HTML_LAYOUT = """<!DOCTYPE html>
 """
 
 # ======================================================
-# 3. 사이트 페이지 라우트
+# 4. 사이트 페이지 라우트
 # ======================================================
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -148,13 +235,13 @@ def index():
         """
 
     if not cards_html:
-        cards_html = '<div class="col-12 text-center py-5 text-muted">발행된 기사가 없습니다. 상단의 AI 기사 생성을 눌러보세요.</div>'
+        cards_html = '<div class="col-12 text-center py-5 text-muted">첫 자동 기사를 생성 중입니다. 잠시 후 새로고침해 주세요.</div>'
 
     content = f"""
     <div class="hero-section text-center">
         <div class="container">
             <h1 class="fw-bold mb-2 display-6">인사이트 데일리 웹진</h1>
-            <p class="lead mb-0 text-white-50">시니어를 위한 알찬 혜택부터 생활 문화·재테크 심층 가이드</p>
+            <p class="lead mb-0 text-white-50">시니어를 위한 알찬 복지혜택부터 생활 문화·재테크 심층 가이드</p>
         </div>
     </div>
     <div class="container">
@@ -305,16 +392,14 @@ def view_article(article_id: int):
     """
     return HTML_LAYOUT.replace("__PAGE_TITLE__", row['title']).replace("__CONTENT__", content)
 
-# ======================================================
-# 4. 고도화된 AI 기사 작성 시스템
-# ======================================================
+# 수동 즉시 생성 폼 (원할 때 수동 작성도 가능)
 @app.get("/write", response_class=HTMLResponse)
 def write_form():
     form_html = """
     <div class="container py-5" style="max-width: 760px;">
         <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
-            <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-wand-magic-sparkles me-2 text-primary"></i>AI 전문가 심층 기사 생성</h3>
-            <p class="text-muted small mb-4">주제 키워드만 입력하면 체류 시간을 극대화하는 1,500자 이상의 고품격 가이드 기사를 자동 작성합니다.</p>
+            <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>수동 기사 즉시 발행</h3>
+            <p class="text-muted small mb-4">원하는 특별 주제가 있을 때 입력하시면 즉시 1,500자 이상의 심층 기사를 작성하여 사이트에 등록합니다.</p>
 
             <form method="post" action="/write">
                 <div class="mb-3">
@@ -328,76 +413,21 @@ def write_form():
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">기사 주제 (키워드 또는 관심사)</label>
-                    <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 임플란트 건강보험 혜택 및 신청방법 총정리" required>
+                    <label class="form-label fw-bold">기사 주제</label>
+                    <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 틀니 건강보험 혜택 및 신청방법 총정리" required>
                 </div>
                 <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
-                    <i class="fa-solid fa-bolt me-1"></i> 원클릭 1,500자 전문 기사 자동 생성 및 발행
+                    <i class="fa-solid fa-bolt me-1"></i> 즉시 심층 기사 생성 및 발행
                 </button>
             </form>
         </div>
     </div>
     """
-    return HTML_LAYOUT.replace("__PAGE_TITLE__", "AI 기사 작성").replace("__CONTENT__", form_html)
+    return HTML_LAYOUT.replace("__PAGE_TITLE__", "기사 수동 발행").replace("__CONTENT__", form_html)
 
 @app.post("/write")
 def write_submit(category: str = Form(...), topic: str = Form(...)):
-    if not client:
-        title = f"[안내] {topic}"
-        summary = "1. 주요 세부 정보 가이드. 2. 신청 방법 및 핵심 혜택 요약. 3. 꼭 알아두어야 할 주의사항 안내."
-        content = f"<h2>1. {topic} 개요 및 필요성</h2><p>본 기사는 {topic}에 대해 다룹니다.</p>"
-    else:
-        prompt = f"""
-        당신은 5060 시니어 및 일반 대중을 위한 전문 웹진의 수석 에디터입니다.
-        아래 [주제]와 [카테고리]에 맞는 고품격 심층 가이드 기사를 작성해 주세요.
-
-        [주제]: {topic}
-        [카테고리]: {category}
-
-        [작성 가이드라인 - 반드시 준수]:
-        1. 분량: 한글 공백 포함 최소 1,500자 ~ 2,000자 이상의 매우 상세하고 실용적인 내용.
-        2. 기사 구조:
-           - 매력적이고 클릭을 유도하는 기사 제목 1개 (SEO 최적화)
-           - 핵심 3줄 요약 (1. 2. 3. 번호 매김)
-           - 본문 (HTML 태그 적극 활용):
-             * <h2> 소제목 3~4개로 구조화
-             * 독자가 바로 실천할 수 있는 구체적 수치, 지원 대상, 신청처, 고객센터 정보 포함
-             * 본문 중간에 비교나 정리를 위한 HTML <table> 요약표 반드시 1개 이상 포함
-             * <h2> 자주 묻는 질문 (FAQ) 3가지 및 명쾌한 답변
-             * <h2> 주의사항 및 꿀팁 체크리스트
-        3. 톤앤매너: 친절하고 신뢰감 넘치는 전문가 어조 ('~합니다', '~하세요').
-
-        [출력 JSON 형식]:
-        {{
-            "title": "기사 제목",
-            "summary": "1. ... 2. ... 3. ...",
-            "content": "<h2>...</h2><p>...</p><table>...</table><h2>자주 묻는 질문 (FAQ)</h2>..."
-        }}
-        """
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-                config=dict(response_mime_type="application/json")
-            )
-            data = json.loads(response.text)
-            title = data.get("title", topic)
-            summary = data.get("summary", "상세 가이드 내용 요약")
-            content = data.get("content", "<p>내용 생성 오류</p>")
-        except Exception as e:
-            title = f"{topic} 핵심 가이드"
-            summary = "상세 내용 요약"
-            content = f"<p>AI 기사 생성 중 오류: {str(e)}</p>"
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO articles (title, category, summary, content, created_at, views)
-        VALUES (?, ?, ?, ?, ?, 0)
-    """, (title, category, summary, content, now))
-    conn.commit()
-    conn.close()
+    generate_and_save_article(category, topic)
     return RedirectResponse(url="/", status_code=303)
 
 # ======================================================
