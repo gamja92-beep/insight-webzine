@@ -8,15 +8,21 @@ from datetime import datetime
 
 from fastapi import FastAPI, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from google import genai
 import uvicorn
 
 app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
 
-gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
+# Gemini API 클라이언트 초기화 (오류 방지 예외 처리)
+client = None
+try:
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    if gemini_api_key:
+        from google import genai
+        client = genai.Client(api_key=gemini_api_key)
+except Exception as e:
+    print(f"Gemini 초기화 예외: {e}")
 
 def get_db():
     conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
@@ -79,24 +85,33 @@ def generate_and_save_article(category: str = "", topic: str = ""):
         category, topic = random.choice(AUTO_TOPIC_POOL)
 
     title = topic
-    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+    summary = "1. 실생활에 즉시 도움 되는 핵심 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
     content = f"""
-    <h2>1. {topic} 개요 및 필요성</h2>
-    <p>{topic}에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 정리해 드립니다.</p>
+    <h2>1. {topic} 개요 및 중요성</h2>
+    <p>{topic}에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 실천 지침을 담고 있습니다.</p>
     <h2>2. 주요 혜택 및 신청 기준 요약</h2>
-    <table class="table table-bordered">
+    <table class="table table-bordered my-3">
         <thead class="table-light">
-            <tr><th>구분</th><th>주요 지원 내용</th><th>신청 대상</th></tr>
+            <tr><th>구분</th><th>주요 지원 내용</th><th>지원 대상</th></tr>
         </thead>
         <tbody>
-            <tr><td>기본 지원</td><td>맞춤형 감면 및 바우처 제공</td><td>만 65세 이상 및 해당 가구</td></tr>
-            <tr><td>신청 방법</td><td>정부24 온라인 또는 주민센터 방문</td><td>신분증 및 구비서류 지참</td></tr>
+            <tr><td>기본 혜택</td><td>맞춤형 지원금 및 본인부담금 감면</td><td>만 65세 이상 어르신 및 해당 가구</td></tr>
+            <tr><td>신청 방법</td><td>정부24 온라인 신청 또는 관할 주민센터 방문</td><td>신분증 및 구비서류 지참</td></tr>
         </tbody>
     </table>
-    <h2>3. 실전 신청 절차 및 주의사항</h2>
-    <p>신청 시기를 놓치지 않도록 사전 요건을 확인하시고, 관련 고객센터를 통해 상담을 진행하시기 바랍니다.</p>
-    <h2>4. 자주 묻는 질문 (FAQ)</h2>
-    <p><strong>Q. 기존 수급자도 재신청이 필요한가요?</strong><br>A. 자격 유지 조건에 따라 자동 연장되거나 변동 시 서류 보완이 필요합니다.</p>
+    <h2>3. 실패 없는 실전 신청 절차</h2>
+    <ol>
+        <li>신청 자격 및 해당 연도 소득인정액 기준을 확인합니다.</li>
+        <li>필수 지참 서류(신분증, 통장사본 등)를 지참하여 신청 기관에 접수합니다.</li>
+        <li>심사 결과 확인 후 혜택을 수령하고 정기 자격 변동 여부를 점검합니다.</li>
+    </ol>
+    <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2>
+    <ul>
+        <li>신청 시기를 놓칠 경우 소급 적용이 불가할 수 있으므로 사전 신청 기간을 반드시 확인하세요.</li>
+        <li>타 복지 지원 사업과의 중복 수혜 가능 여부를 관할 상담 센터에 사전 문의하시기 바랍니다.</li>
+    </ul>
+    <h2>5. 자주 묻는 질문 (FAQ)</h2>
+    <p><strong>Q1. 본인 직접 방문이 어려운 경우 대리 신청이 가능한가요?</strong><br>A1. 네, 배우자나 직계가족이 위임장과 가족관계증명서를 지참하시면 대리 신청이 가능합니다.</p>
     """
 
     if client:
@@ -109,15 +124,10 @@ def generate_and_save_article(category: str = "", topic: str = ""):
 
         [작성 가이드라인]:
         1. 분량: 한글 공백 포함 최소 1,800자 이상의 상세한 내용.
-        2. 기사 구성 형식 (HTML 태그 필수 적용):
+        2. 기사 구성 (HTML 태그 필수 적용):
            - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
            - [요약]: 기사의 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
-           - [본문 구성]:
-             * <h2>1. 주요 배경과 핵심 정보</h2> (3개 이상의 풍부한 문단)
-             * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2> (항목/대상/내용이 담긴 HTML <table> 표 필수)
-             * <h2>3. 실패 없는 실전 신청 절차 및 준비 서류</h2> (<ol> 순서 리스트)
-             * <h2>4. 전문가가 알려주는 주의사항 및 알짜 꿀팁</h2> (<ul> 체크리스트)
-             * <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
+           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 답변)
         3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
         [출력 JSON 규격]:
@@ -143,7 +153,7 @@ def generate_and_save_article(category: str = "", topic: str = ""):
             summary = data.get("summary", summary)
             content = data.get("content", content)
         except Exception as e:
-            print(f"AI 생성 오류: {e}")
+            print(f"AI 생성 예외: {e}")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_db()
@@ -154,7 +164,7 @@ def generate_and_save_article(category: str = "", topic: str = ""):
     """, (title, category, summary, content, now))
     conn.commit()
     conn.close()
-    print(f"[{now}] 기사 저장 성공: {title}")
+    print(f"[{now}] 기사 발행 성공: {title}")
 
 def auto_article_scheduler():
     time.sleep(15)
@@ -256,7 +266,7 @@ def index():
         """
 
     if not cards_html:
-        cards_html = '<div class="col-12 text-center py-5 text-muted">발행된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
+        cards_html = '<div class="col-12 text-center py-5 text-muted">기사를 준비 중입니다. 잠시 후 새로고침해 주세요.</div>'
 
     body = f"""
     <div class="hero-section text-center">
