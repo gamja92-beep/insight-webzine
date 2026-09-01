@@ -14,14 +14,14 @@ app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
 
-# Gemini API 클라이언트 초기화 (오류 시 안전 패스)
+# Gemini API 클라이언트 초기화
 client = None
 try:
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
     if gemini_api_key:
         from google import genai
         client = genai.Client(api_key=gemini_api_key)
-except Exception as e:
+except Exception:
     pass
 
 def get_db():
@@ -84,9 +84,9 @@ def make_article_data(category: str, topic: str):
     title = topic
     summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
     
-    content = f"""
+    content = """
     <h2>1. 주요 배경과 핵심 정보</h2>
-    <p>{topic}에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 알찬 지침을 담고 있습니다.</p>
+    <p>""" + topic + """에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 알찬 지침을 담고 있습니다.</p>
     <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2>
     <table class="table table-bordered my-3">
         <thead class="table-light">
@@ -113,12 +113,12 @@ def make_article_data(category: str, topic: str):
     """
 
     if client:
-        prompt = f"""
+        prompt = """
         당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
         아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 기사'를 작성해 주세요.
 
-        [주제]: {topic}
-        [카테고리]: {category}
+        [주제]: """ + topic + """
+        [카테고리]: """ + category + """
 
         [작성 가이드라인]:
         1. 분량: 한글 1,500자 ~ 2,000자 이상의 매우 상세하고 유익한 내용.
@@ -129,11 +129,11 @@ def make_article_data(category: str, topic: str):
         3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
         [출력 JSON 규격]:
-        {{
+        {
             "title": "기사 제목",
             "summary": "1. ... 2. ... 3. ...",
             "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
-        }}
+        }
         """
         try:
             response = client.models.generate_content(
