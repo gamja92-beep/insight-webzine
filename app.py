@@ -12,19 +12,16 @@ from google import genai
 import uvicorn
 
 # ======================================================
-# 1. 환경 설정 및 DB 초기화 (안정성 강화)
+# 1. 환경 설정 및 DB 초기화
 # ======================================================
 app = FastAPI()
 
-# 관리자 통계 접속 비밀번호
 ADMIN_STATS_PASSWORD = "admin1234"
 
-# Gemini API 클라이언트 초기화
 gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
 def get_db():
-    # 데이터베이스 잠금 방지를 위해 timeout을 30초로 설정
     conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -44,7 +41,7 @@ def init_db():
             likes INTEGER DEFAULT 0
         )
     """)
-    # 기존 DB 테이블 구조 자동 업그레이드
+    # 기존 DB 컬럼 누락 방지
     try:
         cursor.execute("ALTER TABLE articles ADD COLUMN views INTEGER DEFAULT 0")
     except Exception:
@@ -69,7 +66,7 @@ def increase_article_view(article_id: int):
         pass
 
 # ======================================================
-# 2. 고품격 심층 기사 자동 생성 엔진 (오류 철통 방어)
+# 2. AI 자동 및 수동 기사 작성 엔진
 # ======================================================
 AUTO_TOPIC_POOL = [
     ("시니어/복지", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
@@ -85,76 +82,90 @@ AUTO_TOPIC_POOL = [
 ]
 
 def generate_and_save_article(category: str = "", topic: str = ""):
-    try:
-        if not category or not topic:
-            category, topic = random.choice(AUTO_TOPIC_POOL)
+    if not category or not topic:
+        category, topic = random.choice(AUTO_TOPIC_POOL)
 
-        title = topic
-        summary = "1. 실생활에 즉시 도움 되는 심층 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
-        content = f"<h2>1. {topic} 핵심 개요</h2><p>본 기사는 독자 여러분께 꼭 필요한 정확하고 실용적인 정보를 다룹니다.</p><h2>2. 상세 혜택 및 신청 방법</h2><p>해당 지원 혜택의 구체적인 내용과 관할 기관을 꼼꼼히 확인하시기 바랍니다.</p>"
+    title = topic
+    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 꿀팁 완벽 수록."
+    
+    # 기본 서식 본문 (AI 호출 실패 시 대비)
+    content = f"""
+    <h2>1. {topic} 개요 및 중요성</h2>
+    <p>{topic}에 대한 핵심 정보를 심층적으로 안내해 드립니다. 시니어 및 독자 여러분이 실생활에서 바로 활용할 수 있는 실천 지침입니다.</p>
+    <h2>2. 주요 혜택 및 신청 기준 요약</h2>
+    <table>
+        <thead>
+            <tr><th>구분</th><th>주요 내용</th><th>지원 대상</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>기본 혜택</td><td>맞춤형 지원 및 감면</td><td>만 65세 이상 및 해당 대상자</td></tr>
+            <tr><td>신청 방법</td><td>온라인 및 관할 주민센터</td><td>신분증 및 관련 서류 지참</td></tr>
+        </tbody>
+    </table>
+    <h2>3. 실전 신청 절차 및 주의사항</h2>
+    <p>신청 전 본인부담금과 서류 요건을 미리 확인하시고, 공식 고객센터를 통해 세부 조건을 점검하시기 바랍니다.</p>
+    """
 
-        if client:
-            prompt = f"""
-            당신은 5060 시니어 및 일반 대중을 위한 전문 프리미엄 웹진의 수석 기자입니다.
-            아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 리포트'를 작성해 주세요.
+    if client:
+        prompt = f"""
+        당신은 5060 시니어 및 일반 대중을 위한 전문 프리미엄 웹진의 수석 전문 기자입니다.
+        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽고 소장할 만한 '초고품질 심층 가이드 리포트'를 작성해 주세요.
 
-            [주제]: {topic}
-            [카테고리]: {category}
+        [주제]: {topic}
+        [카테고리]: {category}
 
-            [작성 필수 가이드라인]:
-            1. 분량: 한글 공백 포함 최소 2,000자 이상의 매우 상세하고 실용적인 내용.
-            2. 기사 구성 형식 (HTML 태그 필수 적용):
-               - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
-               - [요약]: 기사의 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
-               - [본문 구성]:
-                 * <h2>1. 주요 배경과 꼭 알아야 할 핵심 포인트</h2> (3개 이상의 풍부한 문단)
-                 * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2> (항목/대상/지원내용이 담긴 HTML <table> 표 필수)
-                 * <h2>3. 실패 없는 실전 신청 절차 및 준비 서류 가이드</h2> (<ol> 순서 리스트)
-                 * <h2>4. 전문가가 알려주는 주의사항 및 알짜 꿀팁</h2> (<ul> 체크리스트)
-                 * <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
-            3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
+        [작성 필수 가이드라인]:
+        1. 분량: 한글 공백 포함 최소 1,800자 ~ 2,500자 이상의 매우 상세하고 실용적인 내용.
+        2. 기사 구성 형식 (HTML 태그 적극 활용):
+           - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
+           - [요약]: 기사의 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
+           - [본문 구성]:
+             * <h2>1. 주요 배경과 핵심 정보</h2> (3개 이상의 풍부한 문단)
+             * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2> (항목/대상/지원내용이 포함된 HTML <table> 표 필수)
+             * <h2>3. 실패 없는 실전 신청 절차 및 준비 서류</h2> (<ol> 순서 리스트)
+             * <h2>4. 전문가가 알려주는 주의사항 및 알짜 꿀팁</h2> (<ul> 체크리스트)
+             * <h2>5. 자주 묻는 질문 (FAQ)</h2> (실전 질문 3가지와 명쾌한 답변)
+        3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
-            [출력 JSON 규격]:
-            {{
-                "title": "기사 제목",
-                "summary": "1. ... 2. ... 3. ...",
-                "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
-            }}
-            """
-            try:
-                response = client.models.generate_content(
-                    model='gemini-2.0-flash',
-                    contents=prompt,
-                    config=dict(response_mime_type="application/json")
-                )
-                raw_text = response.text.strip()
-                if raw_text.startswith("```json"):
-                    raw_text = raw_text[7:]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text[:-3]
-                data = json.loads(raw_text.strip())
-                title = data.get("title", title)
-                summary = data.get("summary", summary)
-                content = data.get("content", content)
-            except Exception as e:
-                print(f"AI 생성 예외 (기본 서식 적용): {e}")
+        [출력 JSON 규격]:
+        {{
+            "title": "기사 제목",
+            "summary": "1. ... 2. ... 3. ...",
+            "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
+        }}
+        """
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config=dict(response_mime_type="application/json")
+            )
+            raw_text = response.text.strip()
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            data = json.loads(raw_text.strip())
+            title = data.get("title", title)
+            summary = data.get("summary", summary)
+            content = data.get("content", content)
+        except Exception as e:
+            print(f"AI 생성 예외: {e}")
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO articles (title, category, summary, content, created_at, views, likes)
-            VALUES (?, ?, ?, ?, ?, 0, 0)
-        """, (title, category, summary, content, now))
-        conn.commit()
-        conn.close()
-        print(f"[{now}] 기사 저장 성공: {title}")
-    except Exception as e:
-        print(f"기사 저장 전체 오류: {e}")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO articles (title, category, summary, content, created_at, views, likes)
+        VALUES (?, ?, ?, ?, ?, 0, 0)
+    """, (title, category, summary, content, now))
+    conn.commit()
+    conn.close()
+    print(f"[{now}] 기사 저장 완료: {title}")
 
-# 백그라운드 자동 스케줄러 (6시간마다 자동 발행)
+# 백그라운드 6시간 자동 발행
 def auto_article_scheduler():
-    time.sleep(15)  # 서버 기동 15초 후 첫 기사 자동 생성
+    time.sleep(15)
     generate_and_save_article()
     while True:
         time.sleep(21600)
@@ -163,48 +174,48 @@ def auto_article_scheduler():
 threading.Thread(target=auto_article_scheduler, daemon=True).start()
 
 # ======================================================
-# 3. 공통 HTML 레이아웃
+# 3. 공통 HTML 템플릿 함수 (안정적 렌더링)
 # ======================================================
-HTML_LAYOUT = """<!DOCTYPE html>
+def render_page(title: str, body_content: str) -> HTMLResponse:
+    html = f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta name="naver-site-verification" content="2be1d8c699f2db6d04ee4bbe598876b754cf1c10" />
     <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>__PAGE_TITLE__ - 인사이트 데일리 웹진</title>
+    <title>{title} - 인사이트 데일리 웹진</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
+        :root {{
             --primary-color: #1e3a8a;
             --accent-color: #2563eb;
             --text-main: #1e293b;
             --bg-subtle: #f8fafc;
-        }
-        body { background-color: var(--bg-subtle); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text-main); -webkit-font-smoothing: antialiased; }
+        }}
+        body {{ background-color: var(--bg-subtle); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text-main); }}
+        #readingProgress {{ position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #38bdf8); width: 0%; z-index: 9999; }}
+        .navbar-brand {{ font-weight: 800; color: var(--primary-color) !important; font-size: 1.35rem; }}
+        .hero-section {{ background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 48px 0; margin-bottom: 30px; }}
+        .article-card {{ border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }}
+        .article-card:hover {{ transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }}
+        .badge-cat {{ background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; font-size: 0.85rem; }}
         
-        #readingProgress { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #38bdf8); width: 0%; z-index: 9999; transition: width 0.1s ease; }
-        .navbar-brand { font-weight: 800; color: var(--primary-color) !important; font-size: 1.35rem; }
-        .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 48px 0; margin-bottom: 30px; }
-        .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
-        .article-card:hover { transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }
-        .badge-cat { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; }
-        
-        .article-content { font-size: 1.18rem; line-height: 2.05; color: #334155; }
-        .article-content h2 { color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.8rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }
-        .article-content h3 { color: #1e293b; font-weight: 700; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.8rem; }
-        .article-content p { margin-bottom: 1.6rem; word-break: keep-all; letter-spacing: -0.02em; }
-        .article-content table { width: 100%; margin: 2rem 0; border-collapse: separate; border-spacing: 0; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
-        .article-content th { background: #f1f5f9; padding: 14px; font-weight: 700; text-align: center; border-bottom: 2px solid #cbd5e1; color: #0f172a; }
-        .article-content td { padding: 13px 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }
-        .article-content ul, .article-content ol { margin-bottom: 1.8rem; padding-left: 1.8rem; }
-        .article-content li { margin-bottom: 0.7rem; }
+        .article-content {{ font-size: 1.16rem; line-height: 2.05; color: #334155; }}
+        .article-content h2 {{ color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.6rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }}
+        .article-content h3 {{ color: #1e293b; font-weight: 700; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.8rem; }}
+        .article-content p {{ margin-bottom: 1.5rem; word-break: keep-all; }}
+        .article-content table {{ width: 100%; margin: 1.8rem 0; border-collapse: separate; border-spacing: 0; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }}
+        .article-content th {{ background: #f1f5f9; padding: 14px; font-weight: 700; text-align: center; border-bottom: 2px solid #cbd5e1; }}
+        .article-content td {{ padding: 13px 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }}
+        .article-content ul, .article-content ol {{ margin-bottom: 1.8rem; padding-left: 1.8rem; }}
+        .article-content li {{ margin-bottom: 0.6rem; }}
 
-        .tts-player-box { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-        .toc-box { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }
-        .toc-box a { color: #4b5563; text-decoration: none; font-weight: 600; }
-        .toc-box a:hover { color: #2563eb; text-decoration: underline; }
+        .tts-player-box {{ background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }}
+        .toc-box {{ background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }}
+        .toc-box a {{ color: #4b5563; text-decoration: none; font-weight: 600; }}
+        .toc-box a:hover {{ color: #2563eb; text-decoration: underline; }}
     </style>
 </head>
 <body>
@@ -214,12 +225,12 @@ HTML_LAYOUT = """<!DOCTYPE html>
             <a class="navbar-brand" href="/"><i class="fa-solid fa-newspaper me-2 text-primary"></i>인사이트 데일리</a>
             <div class="d-flex align-items-center">
                 <span class="badge bg-success-subtle text-success border border-success-subtle me-2 px-2 py-1"><i class="fa-solid fa-circle-dot me-1"></i>하루 4회 무인 자동 발행</span>
-                <a href="/write" class="btn btn-primary btn-sm me-2 fw-semibold"><i class="fa-solid fa-plus me-1"></i>수동 즉시 발행</a>
+                <a href="/write" class="btn btn-primary btn-sm me-2 fw-semibold"><i class="fa-solid fa-plus me-1"></i>수동 기사 발행</a>
                 <a href="/admin/stats" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-chart-line me-1"></i>관리자 통계</a>
             </div>
         </div>
     </nav>
-    __CONTENT__
+    {body_content}
     <footer class="bg-white border-top py-4 mt-5 text-center text-muted small">
         <div class="container">
             <p class="mb-1 fw-semibold text-secondary">© 인사이트 데일리 웹진. All Rights Reserved.</p>
@@ -227,17 +238,17 @@ HTML_LAYOUT = """<!DOCTYPE html>
         </div>
     </footer>
 </body>
-</html>
-"""
+</html>"""
+    return HTMLResponse(content=html)
 
 # ======================================================
-# 4. 라우트 정의
+# 4. 페이지 라우트 (메인 / 기사 보기 / 수동 작성)
 # ======================================================
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 def index():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM articles ORDER BY id DESC")
+    cursor.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles ORDER BY id DESC")
     articles = cursor.fetchall()
     conn.close()
 
@@ -245,10 +256,10 @@ def index():
     for row in articles:
         cards_html += f"""
         <div class="col-md-4 mb-4">
-            <div class="card article-card p-4">
+            <div class="card article-card p-4 d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <span class="badge badge-cat px-2 py-1">{row['category']}</span>
-                    <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>{row['created_at'][:10]}</small>
+                    <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>{str(row['created_at'])[:10]}</small>
                 </div>
                 <h5 class="card-title fw-bold mb-3 lh-base">
                     <a href="/article/{row['id']}" class="text-decoration-none text-dark">{row['title']}</a>
@@ -256,16 +267,16 @@ def index():
                 <p class="card-text text-secondary small flex-grow-1" style="line-height: 1.65;">{row['summary']}</p>
                 <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center">
                     <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>조회 {row['views']}회</span>
-                    <a href="/article/{row['id']}" class="btn btn-sm btn-outline-primary fw-semibold">심층 가이드 읽기 →</a>
+                    <a href="/article/{row['id']}" class="btn btn-sm btn-outline-primary fw-semibold">기사 읽기 →</a>
                 </div>
             </div>
         </div>
         """
 
     if not cards_html:
-        cards_html = '<div class="col-12 text-center py-5 text-muted">기사를 준비 중입니다. 잠시 후 새로고침해 주세요.</div>'
+        cards_html = '<div class="col-12 text-center py-5 text-muted">발행된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
 
-    content = f"""
+    body = f"""
     <div class="hero-section text-center">
         <div class="container">
             <h1 class="fw-bold mb-2 display-6">인사이트 데일리 웹진</h1>
@@ -278,9 +289,9 @@ def index():
         </div>
     </div>
     """
-    return HTML_LAYOUT.replace("__PAGE_TITLE__", "메인").replace("__CONTENT__", content)
+    return render_page("메인", body)
 
-@app.get("/article/{article_id}", response_class=HTMLResponse)
+@app.get("/article/{article_id}")
 def view_article(article_id: int):
     increase_article_view(article_id)
 
@@ -293,6 +304,7 @@ def view_article(article_id: int):
         conn.close()
         return HTMLResponse("존재하지 않는 기사입니다.", status_code=404)
 
+    # 관련 기사 3개
     cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? AND category = ? ORDER BY id DESC LIMIT 3", (article_id, row['category']))
     related_articles = cursor.fetchall()
     if len(related_articles) < 3:
@@ -307,7 +319,7 @@ def view_article(article_id: int):
             <div class="card h-100 p-3 border-0 shadow-sm rounded-3">
                 <span class="badge badge-cat w-auto align-self-start mb-2">{rel['category']}</span>
                 <h6 class="fw-bold"><a href="/article/{rel['id']}" class="text-decoration-none text-dark">{rel['title']}</a></h6>
-                <small class="text-muted mt-auto pt-2">{rel['created_at'][:10]}</small>
+                <small class="text-muted mt-auto pt-2">{str(rel['created_at'])[:10]}</small>
             </div>
         </div>
         """
@@ -315,8 +327,9 @@ def view_article(article_id: int):
     content_len = len(row['content'])
     est_minutes = max(2, round(content_len / 450))
     body_html = row['content']
+    likes_count = row['likes'] if 'likes' in row.keys() and row['likes'] is not None else 0
 
-    content = f"""
+    body = f"""
     <div class="container py-5" style="max-width: 860px;">
         <div class="mb-4">
             <div class="d-flex gap-2 align-items-center mb-2">
@@ -327,6 +340,7 @@ def view_article(article_id: int):
             <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.15rem; letter-spacing: -0.03em;">{row['title']}</h1>
         </div>
 
+        <!-- 아나운서 TTS & 글자 조절 바 -->
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <button id="ttsPlayBtn" class="btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
@@ -334,42 +348,47 @@ def view_article(article_id: int):
                 </button>
                 <div class="btn-group btn-group-sm" role="group">
                     <button type="button" class="btn btn-outline-primary" onclick="setSpeed(0.85)">0.8x</button>
-                    <button type="button" class="btn btn-primary active" id="speedNormal" onclick="setSpeed(1.0)">1.0x (표준)</button>
+                    <button type="button" class="btn btn-primary active" id="speedNormal" onclick="setSpeed(1.0)">1.0x</button>
                     <button type="button" class="btn btn-outline-primary" onclick="setSpeed(1.2)">1.2x</button>
                 </div>
-                <small id="ttsStatus" class="text-secondary fw-semibold">편안하고 또렷한 음성으로 읽어드립니다.</small>
+                <small id="ttsStatus" class="text-secondary fw-semibold">편안하고 또렷한 음성으로 낭독합니다.</small>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <span class="text-muted small fw-semibold">글자 크기:</span>
-                <button class="btn btn-light btn-sm border rounded-circle" onclick="changeFontSize(1)" title="글자 확대"><i class="fa-solid fa-plus"></i></button>
-                <button class="btn btn-light btn-sm border rounded-circle" onclick="changeFontSize(-1)" title="글자 축소"><i class="fa-solid fa-minus"></i></button>
+                <span class="text-muted small fw-semibold">글자:</span>
+                <button class="btn btn-light btn-sm border rounded-circle" onclick="changeFontSize(1)" title="확대"><i class="fa-solid fa-plus"></i></button>
+                <button class="btn btn-light btn-sm border rounded-circle" onclick="changeFontSize(-1)" title="축소"><i class="fa-solid fa-minus"></i></button>
             </div>
         </div>
 
+        <!-- 핵심 3줄 요약 -->
         <div class="p-4 mb-4 bg-white rounded-4 border-start border-5 border-primary shadow-sm">
             <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-bolt me-2"></i>핵심 3줄 브리핑</h6>
-            <div class="text-secondary fw-medium lh-base" style="font-size: 1.08rem;">{row['summary']}</div>
+            <div class="text-secondary fw-medium lh-base" style="font-size: 1.06rem;">{row['summary']}</div>
         </div>
 
+        <!-- 자동 목차 -->
         <div class="toc-box">
             <div class="fw-bold text-dark mb-2"><i class="fa-solid fa-list-check me-2 text-primary"></i>이 기사의 주요 목차</div>
             <ul id="tocList" class="mb-0 ps-3 small" style="line-height: 1.9;"></ul>
         </div>
 
+        <!-- 기사 본문 -->
         <article id="articleBody" class="article-content bg-white p-4 p-md-5 rounded-4 shadow-sm mb-5">
             {body_html}
         </article>
 
+        <!-- 하단 공감 & 공유 -->
         <div class="d-flex justify-content-between align-items-center bg-white p-3 p-md-4 rounded-4 shadow-sm mb-5 border">
             <button id="likeBtn" class="btn btn-outline-danger btn-sm px-3 fw-bold rounded-pill" onclick="likePost()">
-                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">{row['likes'] if 'likes' in row.keys() else 0}</span>
+                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">{likes_count}</span>
             </button>
             <div class="d-flex gap-2">
-                <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="copyCurrentUrl()"><i class="fa-solid fa-link me-1"></i>기사 주소 복사</button>
+                <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="copyCurrentUrl()"><i class="fa-solid fa-link me-1"></i>기사 링크 복사</button>
                 <a href="/" class="btn btn-primary btn-sm rounded-pill px-3"><i class="fa-solid fa-list me-1"></i>목록으로</a>
             </div>
         </div>
 
+        <!-- 추천 기사 -->
         <div class="mt-5 pt-3">
             <h4 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-newspaper me-2 text-primary"></i>함께 읽으면 유익한 추천 가이드</h4>
             <div class="row">
@@ -413,14 +432,14 @@ def view_article(article_id: int):
             if (!speechSynth) return null;
             var voices = speechSynth.getVoices();
             for (var i = 0; i < voices.length; i++) {{
-                if (voices[i].lang.includes('ko') || voices[i].lang.includes('KO')) {{
-                    if (voices[i].name.includes('Google') || voices[i].name.includes('Natural') || voices[i].name.includes('Online')) {{
+                if (voices[i].lang.indexOf('ko') !== -1 || voices[i].lang.indexOf('KO') !== -1) {{
+                    if (voices[i].name.indexOf('Google') !== -1 || voices[i].name.indexOf('Natural') !== -1) {{
                         return voices[i];
                     }}
                 }}
             }}
             for (var j = 0; j < voices.length; j++) {{
-                if (voices[j].lang.includes('ko') || voices[j].lang.includes('KO')) return voices[j];
+                if (voices[j].lang.indexOf('ko') !== -1 || voices[j].lang.indexOf('KO') !== -1) return voices[j];
             }}
             return null;
         }}
@@ -441,7 +460,7 @@ def view_article(article_id: int):
 
         function toggleTTS() {{
             if (!speechSynth) {{
-                alert("현재 브라우저는 음성 재생 기능을 지원하지 않습니다.");
+                alert("음성 재생을 지원하지 않는 브라우저입니다.");
                 return;
             }}
 
@@ -450,7 +469,7 @@ def view_article(article_id: int):
                 isSpeaking = false;
                 document.getElementById('ttsBtnText').innerText = "뉴스 아나운서 음성 듣기";
                 document.getElementById('ttsPlayBtn').className = "btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "재생이 멈췄습니다.";
+                document.getElementById('ttsStatus').innerText = "재생이 정지되었습니다.";
             }} else {{
                 var rawText = document.getElementById('articleBody').innerText;
                 var cleanText = rawText.replace(/\\s+/g, ' ').trim();
@@ -478,7 +497,7 @@ def view_article(article_id: int):
             }}
         }}
 
-        var currentSize = 1.18;
+        var currentSize = 1.16;
         function changeFontSize(delta) {{
             currentSize = Math.max(0.95, Math.min(1.65, currentSize + (delta * 0.1)));
             document.getElementById('articleBody').style.fontSize = currentSize + 'rem';
@@ -498,12 +517,12 @@ def view_article(article_id: int):
         }}
     </script>
     """
-    return HTML_LAYOUT.replace("__PAGE_TITLE__", row['title']).replace("__CONTENT__", content)
+    return render_page(row['title'], body)
 
-# 수동 즉시 생성 폼
-@app.get("/write", response_class=HTMLResponse)
+# 수동 기사 작성 페이지
+@app.get("/write")
 def write_form():
-    form_html = """
+    body = """
     <div class="container py-5" style="max-width: 760px;">
         <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
             <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
@@ -531,7 +550,7 @@ def write_form():
         </div>
     </div>
     """
-    return HTML_LAYOUT.replace("__PAGE_TITLE__", "기사 수동 발행").replace("__CONTENT__", form_html)
+    return render_page("기사 수동 발행", body)
 
 @app.post("/write")
 def write_submit(category: str = Form(...), topic: str = Form(...)):
@@ -588,7 +607,7 @@ def rss_feed():
 # ======================================================
 # 6. 비공개 관리자 통계 대시보드
 # ======================================================
-@app.get("/admin/stats", response_class=HTMLResponse)
+@app.get("/admin/stats")
 def admin_stats(pw: str = ""):
     if pw != ADMIN_STATS_PASSWORD:
         login_html = """
@@ -603,7 +622,7 @@ def admin_stats(pw: str = ""):
             </div>
         </div>
         """
-        return HTML_LAYOUT.replace("__PAGE_TITLE__", "관리자 로그인").replace("__CONTENT__", login_html)
+        return render_page("관리자 로그인", login_html)
 
     conn = get_db()
     cursor = conn.cursor()
@@ -621,7 +640,7 @@ def admin_stats(pw: str = ""):
             <td class="text-center"><span class="badge badge-cat">{row['category']}</span></td>
             <td class="text-center text-primary fw-bold">{row['views']:,} 회</td>
             <td class="text-center text-danger fw-bold">{row['likes']:,} 개</td>
-            <td class="text-center text-muted small">{row['created_at'][:10]}</td>
+            <td class="text-center text-muted small">{str(row['created_at'])[:10]}</td>
         </tr>
         """
 
@@ -664,7 +683,7 @@ def admin_stats(pw: str = ""):
         </div>
     </div>
     """
-    return HTML_LAYOUT.replace("__PAGE_TITLE__", "관리자 통계").replace("__CONTENT__", dashboard_html)
+    return render_page("관리자 통계", dashboard_html)
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
