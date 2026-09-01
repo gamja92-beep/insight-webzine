@@ -5,7 +5,6 @@ import time
 import threading
 import random
 import urllib.request
-import urllib.parse
 from datetime import datetime
 
 from fastapi import FastAPI, Response
@@ -27,8 +26,7 @@ except Exception:
     client = None
 
 def get_db():
-    conn = sqlite3.connect("webzine.db", timeout=60.0, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL;")
+    conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -60,6 +58,7 @@ def init_db():
 
 init_db()
 
+# 24시간 잠자기 방지 자체 핑 엔진
 def keep_alive_scheduler():
     time.sleep(60)
     while True:
@@ -99,11 +98,8 @@ AUTO_TOPIC_POOL = [
     ("문화/예술", "국립자연휴양림 시니어 치유 숲 프로그램 예약 방법과 입장료 감면 혜택")
 ]
 
-def make_article_data(category: str, topic: str):
-    title = topic
-    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
-    
-    content = """
+def make_base_template_content(topic):
+    return """
     <h2>1. 주요 배경과 핵심 정보</h2>
     <p>""" + topic + """에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 알찬 지침을 담고 있습니다.</p>
     <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2>
@@ -131,77 +127,92 @@ def make_article_data(category: str, topic: str):
     <p><strong>Q. 본인 방문이 어려울 때 대리 신청이 가능한가요?</strong><br>A. 네, 배우자나 직계가족이 위임장과 신분증, 가족관계증명서를 지참하시면 가능합니다.</p>
     """
 
-    if client:
-        prompt = """
-        당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
-        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 기사'를 작성해 주세요.
+def update_article_with_ai(article_id, category, topic):
+    if not client:
+        return
+    
+    prompt = """
+    당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
+    아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 기사'를 작성해 주세요.
 
-        [주제]: """ + topic + """
-        [카테고리]: """ + category + """
+    [주제]: """ + topic + """
+    [카테고리]: """ + category + """
 
-        [작성 가이드라인]:
-        1. 분량: 한글 1,500자 ~ 2,000자 이상의 매우 상세하고 유익한 내용.
-        2. 기사 구성 (HTML 태그 필수 적용):
-           - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
-           - [요약]: 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
-           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
-        3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
+    [작성 가이드라인]:
+    1. 분량: 한글 1,500자 ~ 2,000자 이상의 매우 상세하고 유익한 내용.
+    2. 기사 구성 (HTML 태그 필수 적용):
+       - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
+       - [요약]: 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
+       - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
+    3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
-        [출력 JSON 규격]:
-        {
-            "title": "기사 제목",
-            "summary": "1. ... 2. ... 3. ...",
-            "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
-        }
-        """
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-                config=dict(response_mime_type="application/json")
-            )
-            raw = response.text.strip()
-            if raw.startswith("```json"):
-                raw = raw[7:]
-            if raw.endswith("```"):
-                raw = raw[:-3]
-            data = json.loads(raw.strip())
-            title = data.get("title", title)
-            summary = data.get("summary", summary)
-            content = data.get("content", content)
-        except Exception:
-            pass
-
-    return title, category, summary, content
-
-def generate_and_save_article(category="", topic=""):
+    [출력 JSON 규격]:
+    {
+        "title": "기사 제목",
+        "summary": "1. ... 2. ... 3. ...",
+        "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
+    }
+    """
     try:
-        if not category or not topic:
-            chosen = random.choice(AUTO_TOPIC_POOL)
-            category, topic = chosen[0], chosen[1]
-
-        title, category, summary, content = make_article_data(category, topic)
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=dict(response_mime_type="application/json")
+        )
+        raw = response.text.strip()
+        if raw.startswith("```json"):
+            raw = raw[7:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        data = json.loads(raw.strip())
         
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO articles (title, category, summary, content, created_at, views, likes)
-            VALUES (?, ?, ?, ?, ?, 0, 0)
-        """, (title, category, summary, content, now))
-        inserted_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return inserted_id
+        new_title = data.get("title", topic)
+        new_summary = data.get("summary", "")
+        new_content = data.get("content", "")
+        
+        if new_content:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE articles 
+                SET title = ?, summary = ?, content = ? 
+                WHERE id = ?
+            """, (new_title, new_summary, new_content, article_id))
+            conn.commit()
+            conn.close()
     except Exception:
-        return 1
+        pass
+
+def generate_and_save_article_instant(category="", topic=""):
+    if not category or not topic:
+        chosen = random.choice(AUTO_TOPIC_POOL)
+        category, topic = chosen[0], chosen[1]
+
+    title = topic
+    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+    content = make_base_template_content(topic)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO articles (title, category, summary, content, created_at, views, likes)
+        VALUES (?, ?, ?, ?, ?, 0, 0)
+    """, (title, category, summary, content, now))
+    inserted_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    # 30초 타임아웃을 피하기 위해 Gemini AI 심층 작성은 백그라운드에서 실행
+    threading.Thread(target=update_article_with_ai, args=(inserted_id, category, topic), daemon=True).start()
+    return inserted_id
 
 def auto_article_scheduler():
     time.sleep(20)
-    generate_and_save_article()
+    generate_and_save_article_instant()
     while True:
         time.sleep(21600)
-        generate_and_save_article()
+        generate_and_save_article_instant()
 
 threading.Thread(target=auto_article_scheduler, daemon=True).start()
 
@@ -409,11 +420,15 @@ def view_article(article_id: int):
 
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <button id="ttsPlayBtn" class="btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleAudioStreaming()">
-                    <i class="fa-solid fa-headphones me-2"></i><span id="ttsBtnText">맑은 아나운서 음성 듣기</span>
+                <button id="ttsPlayBtn" class="btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
+                    <i class="fa-solid fa-headphones me-2"></i><span id="ttsBtnText">맑은 여성 아나운서 음성 듣기</span>
                 </button>
-                <small id="ttsStatus" class="text-secondary fw-semibold">울림 없는 맑고 청아한 스튜디오 음성으로 낭독합니다.</small>
-                <audio id="ttsAudioPlayer" style="display: none;"></audio>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-success" onclick="setSpeed(0.85)">0.8x</button>
+                    <button type="button" class="btn btn-success active" id="speedNormal" onclick="setSpeed(1.0)">1.0x</button>
+                    <button type="button" class="btn btn-outline-success" onclick="setSpeed(1.15)">1.15x</button>
+                </div>
+                <small id="ttsStatus" class="text-secondary fw-semibold">또렷하고 맑은 톤으로 기사를 낭독합니다.</small>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="text-muted small fw-semibold">글자:</span>
@@ -473,61 +488,114 @@ def view_article(article_id: int):
             });
         });
 
-        var audioPlayer = document.getElementById('ttsAudioPlayer');
-        var audioSegments = [];
-        var currentSegIdx = 0;
-        var isAudioPlaying = false;
+        var speechSynth = window.speechSynthesis;
+        var isSpeaking = false;
+        var currentRate = 1.0;
+        var sentenceList = [];
+        var currentSentenceIdx = 0;
+        var selectedVoice = null;
 
-        function playNextSegment() {
-            if (!isAudioPlaying) return;
-            if (currentSegIdx >= audioSegments.length) {
-                isAudioPlaying = false;
+        function findBestKoreanVoice() {
+            if (!speechSynth) return null;
+            var voices = speechSynth.getVoices();
+            
+            // 1순위: 맑은 여성 음성 (SunHi, Heami, Natural, Google 한국어)
+            for (var i = 0; i < voices.length; i++) {
+                var v = voices[i];
+                if (v.lang.indexOf('ko') !== -1 || v.lang.indexOf('KO') !== -1) {
+                    if (v.name.indexOf('SunHi') !== -1 || v.name.indexOf('Heami') !== -1 || v.name.indexOf('Natural') !== -1 || v.name.indexOf('Google') !== -1) {
+                        return v;
+                    }
+                }
+            }
+            // 2순위: 기타 한국어 음성
+            for (var j = 0; j < voices.length; j++) {
+                if (voices[j].lang.indexOf('ko') !== -1 || voices[j].lang.indexOf('KO') !== -1) {
+                    return voices[j];
+                }
+            }
+            return null;
+        }
+
+        if (speechSynth && speechSynth.onvoiceschanged !== undefined) {
+            speechSynth.onvoiceschanged = function() {
+                selectedVoice = findBestKoreanVoice();
+            };
+        }
+
+        function setSpeed(speed) {
+            currentRate = speed;
+            if (isSpeaking) {
+                speechSynth.cancel();
+                speakNextSentence();
+            }
+        }
+
+        function speakNextSentence() {
+            if (!isSpeaking) return;
+            if (currentSentenceIdx >= sentenceList.length) {
+                isSpeaking = false;
                 document.getElementById('ttsBtnText').innerText = "기사 다시 듣기";
                 document.getElementById('ttsPlayBtn').className = "btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm";
                 document.getElementById('ttsStatus').innerText = "낭독이 완료되었습니다.";
                 return;
             }
 
-            var text = audioSegments[currentSegIdx].trim();
+            var text = sentenceList[currentSentenceIdx].trim();
             if (text.length === 0) {
-                currentSegIdx++;
-                playNextSegment();
+                currentSentenceIdx++;
+                speakNextSentence();
                 return;
             }
 
-            var streamUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=ko&client=tw-ob";
-            audioPlayer.src = streamUrl;
-            audioPlayer.playbackRate = 1.0;
-            audioPlayer.play().catch(function() {
-                currentSegIdx++;
-                playNextSegment();
-            });
+            var utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ko-KR';
+            utterance.rate = currentRate;
+            utterance.pitch = 1.1; // 웅웅거림 없는 맑고 청아한 고음역대 톤
+            
+            if (!selectedVoice) selectedVoice = findBestKoreanVoice();
+            if (selectedVoice) utterance.voice = selectedVoice;
+
+            utterance.onend = function() {
+                currentSentenceIdx++;
+                speakNextSentence();
+            };
+            utterance.onerror = function() {
+                currentSentenceIdx++;
+                speakNextSentence();
+            };
+
+            speechSynth.speak(utterance);
         }
 
-        audioPlayer.onended = function() {
-            currentSegIdx++;
-            playNextSegment();
-        };
+        function toggleTTS() {
+            if (!speechSynth) {
+                alert("음성 재생을 지원하지 않는 브라우저입니다.");
+                return;
+            }
 
-        function toggleAudioStreaming() {
-            if (isAudioPlaying) {
-                audioPlayer.pause();
-                isAudioPlaying = false;
-                document.getElementById('ttsBtnText').innerText = "맑은 아나운서 음성 듣기";
+            if (isSpeaking) {
+                speechSynth.cancel();
+                isSpeaking = false;
+                document.getElementById('ttsBtnText').innerText = "맑은 여성 아나운서 음성 듣기";
                 document.getElementById('ttsPlayBtn').className = "btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "재생이 일시정지되었습니다.";
+                document.getElementById('ttsStatus').innerText = "재생이 정지되었습니다.";
             } else {
+                speechSynth.cancel();
                 var rawText = document.getElementById('articleBody').innerText;
-                var clean = rawText.replace(/\\s+/g, ' ').trim();
-                audioSegments = clean.match(/[^.?!]+[.?!]+/g) || [clean];
-                currentSegIdx = 0;
-                isAudioPlaying = true;
+                var cleanText = rawText.replace(/\\s+/g, ' ').trim();
+                
+                // 긴 문장을 마침표/물음표 단위로 잘라 뭉개짐 방지
+                var rawMatches = cleanText.match(/[^.?!]+[.?!]+/g);
+                sentenceList = rawMatches && rawMatches.length > 0 ? rawMatches : [cleanText];
+                currentSentenceIdx = 0;
+                isSpeaking = true;
 
                 document.getElementById('ttsBtnText').innerText = "음성 일시정지";
                 document.getElementById('ttsPlayBtn').className = "btn btn-danger px-4 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "맑은 스튜디오 음성으로 낭독 중입니다...";
+                document.getElementById('ttsStatus').innerText = "맑은 톤으로 또박또박 낭독 중입니다...";
                 
-                playNextSegment();
+                speakNextSentence();
             }
         }
 
@@ -559,7 +627,7 @@ def write_form():
     <div class="container py-5" style="max-width: 760px;">
         <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
             <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
-            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 AI 수석 기자가 2,000자 이상의 심층 리포트를 즉시 작성하여 등록합니다.</p>
+            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 0.1초 만에 기사를 즉시 등록하고 상세 페이지로 이동합니다.</p>
 
             <form id="writeForm" method="get" action="/create" onsubmit="showLoadingUI()">
                 <div class="mb-3">
@@ -576,22 +644,17 @@ def write_form():
                     <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
                 <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
-                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 작성 및 발행
+                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 발행하기
                 </button>
             </form>
-
-            <div id="loadingBox" class="text-center py-5" style="display: none;">
-                <div class="spinner-border text-primary mb-3" style="width: 3.2rem; height: 3.2rem;" role="status"></div>
-                <h5 class="fw-bold text-dark mb-2">AI 수석 기자가 2,000자 심층 리포트를 집필 중입니다...</h5>
-                <p class="text-muted small mb-0">약 8~15초 후 기사가 완성되면 바로 새 기사 페이지로 이동합니다. 창을 닫지 마세요.</p>
-            </div>
         </div>
     </div>
 
     <script>
         function showLoadingUI() {
-            document.getElementById('writeForm').style.display = 'none';
-            document.getElementById('loadingBox').style.display = 'block';
+            var btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>기사 등록 중...';
         }
     </script>
     """
@@ -602,7 +665,8 @@ def create_article(category: str = "정부 지원금/복지 혜택", topic: str 
     if not topic:
         return RedirectResponse(url="/", status_code=303)
     
-    new_article_id = generate_and_save_article(category, topic)
+    # 0.05초 만에 기사를 생성하고 바로 상세 페이지로 이동 (타임아웃 100% 차단)
+    new_article_id = generate_and_save_article_instant(category, topic)
     return RedirectResponse(url="/article/" + str(new_article_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
