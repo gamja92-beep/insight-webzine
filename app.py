@@ -11,9 +11,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 import uvicorn
 
-# ======================================================
-# 1. 환경 설정 및 DB 초기화
-# ======================================================
 app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
@@ -41,7 +38,6 @@ def init_db():
             likes INTEGER DEFAULT 0
         )
     """)
-    # 기존 DB 컬럼 누락 방지
     try:
         cursor.execute("ALTER TABLE articles ADD COLUMN views INTEGER DEFAULT 0")
     except Exception:
@@ -65,9 +61,6 @@ def increase_article_view(article_id: int):
     except Exception:
         pass
 
-# ======================================================
-# 2. AI 자동 및 수동 기사 작성 엔진
-# ======================================================
 AUTO_TOPIC_POOL = [
     ("시니어/복지", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
     ("문화/여행", "시니어를 위한 전국 힐링 무장애 나눔길 베스트 5 및 코스별 대중교통 상세 안내"),
@@ -86,45 +79,45 @@ def generate_and_save_article(category: str = "", topic: str = ""):
         category, topic = random.choice(AUTO_TOPIC_POOL)
 
     title = topic
-    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 꿀팁 완벽 수록."
-    
-    # 기본 서식 본문 (AI 호출 실패 시 대비)
+    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
     content = f"""
-    <h2>1. {topic} 개요 및 중요성</h2>
-    <p>{topic}에 대한 핵심 정보를 심층적으로 안내해 드립니다. 시니어 및 독자 여러분이 실생활에서 바로 활용할 수 있는 실천 지침입니다.</p>
+    <h2>1. {topic} 개요 및 필요성</h2>
+    <p>{topic}에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 정리해 드립니다.</p>
     <h2>2. 주요 혜택 및 신청 기준 요약</h2>
-    <table>
-        <thead>
-            <tr><th>구분</th><th>주요 내용</th><th>지원 대상</th></tr>
+    <table class="table table-bordered">
+        <thead class="table-light">
+            <tr><th>구분</th><th>주요 지원 내용</th><th>신청 대상</th></tr>
         </thead>
         <tbody>
-            <tr><td>기본 혜택</td><td>맞춤형 지원 및 감면</td><td>만 65세 이상 및 해당 대상자</td></tr>
-            <tr><td>신청 방법</td><td>온라인 및 관할 주민센터</td><td>신분증 및 관련 서류 지참</td></tr>
+            <tr><td>기본 지원</td><td>맞춤형 감면 및 바우처 제공</td><td>만 65세 이상 및 해당 가구</td></tr>
+            <tr><td>신청 방법</td><td>정부24 온라인 또는 주민센터 방문</td><td>신분증 및 구비서류 지참</td></tr>
         </tbody>
     </table>
     <h2>3. 실전 신청 절차 및 주의사항</h2>
-    <p>신청 전 본인부담금과 서류 요건을 미리 확인하시고, 공식 고객센터를 통해 세부 조건을 점검하시기 바랍니다.</p>
+    <p>신청 시기를 놓치지 않도록 사전 요건을 확인하시고, 관련 고객센터를 통해 상담을 진행하시기 바랍니다.</p>
+    <h2>4. 자주 묻는 질문 (FAQ)</h2>
+    <p><strong>Q. 기존 수급자도 재신청이 필요한가요?</strong><br>A. 자격 유지 조건에 따라 자동 연장되거나 변동 시 서류 보완이 필요합니다.</p>
     """
 
     if client:
         prompt = f"""
-        당신은 5060 시니어 및 일반 대중을 위한 전문 프리미엄 웹진의 수석 전문 기자입니다.
-        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽고 소장할 만한 '초고품질 심층 가이드 리포트'를 작성해 주세요.
+        당신은 5060 시니어 및 대중을 위한 전문 프리미엄 웹진의 수석 기자입니다.
+        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 리포트'를 작성해 주세요.
 
         [주제]: {topic}
         [카테고리]: {category}
 
-        [작성 필수 가이드라인]:
-        1. 분량: 한글 공백 포함 최소 1,800자 ~ 2,500자 이상의 매우 상세하고 실용적인 내용.
-        2. 기사 구성 형식 (HTML 태그 적극 활용):
+        [작성 가이드라인]:
+        1. 분량: 한글 공백 포함 최소 1,800자 이상의 상세한 내용.
+        2. 기사 구성 형식 (HTML 태그 필수 적용):
            - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
            - [요약]: 기사의 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
            - [본문 구성]:
              * <h2>1. 주요 배경과 핵심 정보</h2> (3개 이상의 풍부한 문단)
-             * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2> (항목/대상/지원내용이 포함된 HTML <table> 표 필수)
+             * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2> (항목/대상/내용이 담긴 HTML <table> 표 필수)
              * <h2>3. 실패 없는 실전 신청 절차 및 준비 서류</h2> (<ol> 순서 리스트)
              * <h2>4. 전문가가 알려주는 주의사항 및 알짜 꿀팁</h2> (<ul> 체크리스트)
-             * <h2>5. 자주 묻는 질문 (FAQ)</h2> (실전 질문 3가지와 명쾌한 답변)
+             * <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
         3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
         [출력 JSON 규격]:
@@ -150,7 +143,7 @@ def generate_and_save_article(category: str = "", topic: str = ""):
             summary = data.get("summary", summary)
             content = data.get("content", content)
         except Exception as e:
-            print(f"AI 생성 예외: {e}")
+            print(f"AI 생성 오류: {e}")
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_db()
@@ -161,9 +154,8 @@ def generate_and_save_article(category: str = "", topic: str = ""):
     """, (title, category, summary, content, now))
     conn.commit()
     conn.close()
-    print(f"[{now}] 기사 저장 완료: {title}")
+    print(f"[{now}] 기사 저장 성공: {title}")
 
-# 백그라운드 6시간 자동 발행
 def auto_article_scheduler():
     time.sleep(15)
     generate_and_save_article()
@@ -173,49 +165,39 @@ def auto_article_scheduler():
 
 threading.Thread(target=auto_article_scheduler, daemon=True).start()
 
-# ======================================================
-# 3. 공통 HTML 템플릿 함수 (안정적 렌더링)
-# ======================================================
-def render_page(title: str, body_content: str) -> HTMLResponse:
-    html = f"""<!DOCTYPE html>
+HTML_BASE_TEMPLATE = """<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta name="naver-site-verification" content="2be1d8c699f2db6d04ee4bbe598876b754cf1c10" />
     <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - 인사이트 데일리 웹진</title>
+    <title>__PAGE_TITLE__ - 인사이트 데일리 웹진</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {{
-            --primary-color: #1e3a8a;
-            --accent-color: #2563eb;
-            --text-main: #1e293b;
-            --bg-subtle: #f8fafc;
-        }}
-        body {{ background-color: var(--bg-subtle); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text-main); }}
-        #readingProgress {{ position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #38bdf8); width: 0%; z-index: 9999; }}
-        .navbar-brand {{ font-weight: 800; color: var(--primary-color) !important; font-size: 1.35rem; }}
-        .hero-section {{ background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 48px 0; margin-bottom: 30px; }}
-        .article-card {{ border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }}
-        .article-card:hover {{ transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }}
-        .badge-cat {{ background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; font-size: 0.85rem; }}
+        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
+        #readingProgress { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #38bdf8); width: 0%; z-index: 9999; }
+        .navbar-brand { font-weight: 800; color: #1e3a8a !important; font-size: 1.35rem; }
+        .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 45px 0; margin-bottom: 30px; }
+        .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
+        .article-card:hover { transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }
+        .badge-cat { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; font-size: 0.85rem; }
         
-        .article-content {{ font-size: 1.16rem; line-height: 2.05; color: #334155; }}
-        .article-content h2 {{ color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.6rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }}
-        .article-content h3 {{ color: #1e293b; font-weight: 700; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.8rem; }}
-        .article-content p {{ margin-bottom: 1.5rem; word-break: keep-all; }}
-        .article-content table {{ width: 100%; margin: 1.8rem 0; border-collapse: separate; border-spacing: 0; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }}
-        .article-content th {{ background: #f1f5f9; padding: 14px; font-weight: 700; text-align: center; border-bottom: 2px solid #cbd5e1; }}
-        .article-content td {{ padding: 13px 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }}
-        .article-content ul, .article-content ol {{ margin-bottom: 1.8rem; padding-left: 1.8rem; }}
-        .article-content li {{ margin-bottom: 0.6rem; }}
+        .article-content { font-size: 1.16rem; line-height: 2.05; color: #334155; }
+        .article-content h2 { color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.6rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }
+        .article-content h3 { color: #1e293b; font-weight: 700; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.8rem; }
+        .article-content p { margin-bottom: 1.5rem; word-break: keep-all; }
+        .article-content table { width: 100%; margin: 1.8rem 0; border-collapse: separate; border-spacing: 0; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }
+        .article-content th { background: #f1f5f9; padding: 14px; font-weight: 700; text-align: center; border-bottom: 2px solid #cbd5e1; }
+        .article-content td { padding: 13px 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }
+        .article-content ul, .article-content ol { margin-bottom: 1.8rem; padding-left: 1.8rem; }
+        .article-content li { margin-bottom: 0.6rem; }
 
-        .tts-player-box {{ background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }}
-        .toc-box {{ background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }}
-        .toc-box a {{ color: #4b5563; text-decoration: none; font-weight: 600; }}
-        .toc-box a:hover {{ color: #2563eb; text-decoration: underline; }}
+        .tts-player-box { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .toc-box { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }
+        .toc-box a { color: #4b5563; text-decoration: none; font-weight: 600; }
+        .toc-box a:hover { color: #2563eb; text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -230,7 +212,7 @@ def render_page(title: str, body_content: str) -> HTMLResponse:
             </div>
         </div>
     </nav>
-    {body_content}
+    __MAIN_CONTENT__
     <footer class="bg-white border-top py-4 mt-5 text-center text-muted small">
         <div class="container">
             <p class="mb-1 fw-semibold text-secondary">© 인사이트 데일리 웹진. All Rights Reserved.</p>
@@ -239,11 +221,11 @@ def render_page(title: str, body_content: str) -> HTMLResponse:
     </footer>
 </body>
 </html>"""
-    return HTMLResponse(content=html)
 
-# ======================================================
-# 4. 페이지 라우트 (메인 / 기사 보기 / 수동 작성)
-# ======================================================
+def render_html(title: str, content: str) -> HTMLResponse:
+    page = HTML_BASE_TEMPLATE.replace("__PAGE_TITLE__", title).replace("__MAIN_CONTENT__", content)
+    return HTMLResponse(content=page)
+
 @app.get("/")
 def index():
     conn = get_db()
@@ -289,7 +271,7 @@ def index():
         </div>
     </div>
     """
-    return render_page("메인", body)
+    return render_html("메인", body)
 
 @app.get("/article/{article_id}")
 def view_article(article_id: int):
@@ -304,7 +286,6 @@ def view_article(article_id: int):
         conn.close()
         return HTMLResponse("존재하지 않는 기사입니다.", status_code=404)
 
-    # 관련 기사 3개
     cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? AND category = ? ORDER BY id DESC LIMIT 3", (article_id, row['category']))
     related_articles = cursor.fetchall()
     if len(related_articles) < 3:
@@ -340,7 +321,6 @@ def view_article(article_id: int):
             <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.15rem; letter-spacing: -0.03em;">{row['title']}</h1>
         </div>
 
-        <!-- 아나운서 TTS & 글자 조절 바 -->
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <button id="ttsPlayBtn" class="btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
@@ -360,24 +340,20 @@ def view_article(article_id: int):
             </div>
         </div>
 
-        <!-- 핵심 3줄 요약 -->
         <div class="p-4 mb-4 bg-white rounded-4 border-start border-5 border-primary shadow-sm">
             <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-bolt me-2"></i>핵심 3줄 브리핑</h6>
             <div class="text-secondary fw-medium lh-base" style="font-size: 1.06rem;">{row['summary']}</div>
         </div>
 
-        <!-- 자동 목차 -->
         <div class="toc-box">
             <div class="fw-bold text-dark mb-2"><i class="fa-solid fa-list-check me-2 text-primary"></i>이 기사의 주요 목차</div>
             <ul id="tocList" class="mb-0 ps-3 small" style="line-height: 1.9;"></ul>
         </div>
 
-        <!-- 기사 본문 -->
         <article id="articleBody" class="article-content bg-white p-4 p-md-5 rounded-4 shadow-sm mb-5">
             {body_html}
         </article>
 
-        <!-- 하단 공감 & 공유 -->
         <div class="d-flex justify-content-between align-items-center bg-white p-3 p-md-4 rounded-4 shadow-sm mb-5 border">
             <button id="likeBtn" class="btn btn-outline-danger btn-sm px-3 fw-bold rounded-pill" onclick="likePost()">
                 <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">{likes_count}</span>
@@ -388,7 +364,6 @@ def view_article(article_id: int):
             </div>
         </div>
 
-        <!-- 추천 기사 -->
         <div class="mt-5 pt-3">
             <h4 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-newspaper me-2 text-primary"></i>함께 읽으면 유익한 추천 가이드</h4>
             <div class="row">
@@ -398,21 +373,21 @@ def view_article(article_id: int):
     </div>
 
     <script>
-        window.onscroll = function() {{
+        window.onscroll = function() {
             var winScroll = document.body.scrollTop || document.documentElement.scrollTop;
             var height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
             var scrolled = (winScroll / height) * 100;
             document.getElementById("readingProgress").style.width = scrolled + "%";
-        }};
+        };
 
-        window.addEventListener('DOMContentLoaded', function() {{
+        window.addEventListener('DOMContentLoaded', function() {
             var h2s = document.querySelectorAll('#articleBody h2');
             var tocList = document.getElementById('tocList');
-            if (h2s.length === 0) {{
+            if (h2s.length === 0) {
                 document.querySelector('.toc-box').style.display = 'none';
                 return;
-            }}
-            h2s.forEach(function(h2, index) {{
+            }
+            h2s.forEach(function(h2, index) {
                 h2.id = 'section-' + index;
                 var li = document.createElement('li');
                 var a = document.createElement('a');
@@ -420,57 +395,57 @@ def view_article(article_id: int):
                 a.innerText = h2.innerText;
                 li.appendChild(a);
                 tocList.appendChild(li);
-            }});
-        }});
+            });
+        });
 
         var isSpeaking = false;
         var speechSynth = window.speechSynthesis;
         var currentRate = 0.95;
         var selectedVoice = null;
 
-        function findBestKoreanVoice() {{
+        function findBestKoreanVoice() {
             if (!speechSynth) return null;
             var voices = speechSynth.getVoices();
-            for (var i = 0; i < voices.length; i++) {{
-                if (voices[i].lang.indexOf('ko') !== -1 || voices[i].lang.indexOf('KO') !== -1) {{
-                    if (voices[i].name.indexOf('Google') !== -1 || voices[i].name.indexOf('Natural') !== -1) {{
+            for (var i = 0; i < voices.length; i++) {
+                if (voices[i].lang.indexOf('ko') !== -1 || voices[i].lang.indexOf('KO') !== -1) {
+                    if (voices[i].name.indexOf('Google') !== -1 || voices[i].name.indexOf('Natural') !== -1) {
                         return voices[i];
-                    }}
-                }}
-            }}
-            for (var j = 0; j < voices.length; j++) {{
+                    }
+                }
+            }
+            for (var j = 0; j < voices.length; j++) {
                 if (voices[j].lang.indexOf('ko') !== -1 || voices[j].lang.indexOf('KO') !== -1) return voices[j];
-            }}
+            }
             return null;
-        }}
+        }
 
-        if (speechSynth && speechSynth.onvoiceschanged !== undefined) {{
-            speechSynth.onvoiceschanged = function() {{
+        if (speechSynth && speechSynth.onvoiceschanged !== undefined) {
+            speechSynth.onvoiceschanged = function() {
                 selectedVoice = findBestKoreanVoice();
-            }};
-        }}
+            };
+        }
 
-        function setSpeed(speed) {{
+        function setSpeed(speed) {
             currentRate = speed;
-            if (isSpeaking) {{
+            if (isSpeaking) {
                 toggleTTS();
                 toggleTTS();
-            }}
-        }}
+            }
+        }
 
-        function toggleTTS() {{
-            if (!speechSynth) {{
+        function toggleTTS() {
+            if (!speechSynth) {
                 alert("음성 재생을 지원하지 않는 브라우저입니다.");
                 return;
-            }}
+            }
 
-            if (isSpeaking) {{
+            if (isSpeaking) {
                 speechSynth.cancel();
                 isSpeaking = false;
                 document.getElementById('ttsBtnText').innerText = "뉴스 아나운서 음성 듣기";
                 document.getElementById('ttsPlayBtn').className = "btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm";
                 document.getElementById('ttsStatus').innerText = "재생이 정지되었습니다.";
-            }} else {{
+            } else {
                 var rawText = document.getElementById('articleBody').innerText;
                 var cleanText = rawText.replace(/\\s+/g, ' ').trim();
                 
@@ -482,44 +457,43 @@ def view_article(article_id: int):
                 if (!selectedVoice) selectedVoice = findBestKoreanVoice();
                 if (selectedVoice) utterance.voice = selectedVoice;
 
-                utterance.onend = function() {{
+                utterance.onend = function() {
                     isSpeaking = false;
                     document.getElementById('ttsBtnText').innerText = "기사 다시 듣기";
                     document.getElementById('ttsPlayBtn').className = "btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm";
                     document.getElementById('ttsStatus').innerText = "낭독이 완료되었습니다.";
-                }};
+                };
 
                 speechSynth.speak(utterance);
                 isSpeaking = true;
                 document.getElementById('ttsBtnText').innerText = "음성 일시정지";
                 document.getElementById('ttsPlayBtn').className = "btn btn-danger px-3 py-2 fw-bold rounded-pill shadow-sm";
                 document.getElementById('ttsStatus').innerText = "아나운서 톤으로 정갈하게 낭독 중입니다...";
-            }}
-        }}
+            }
+        }
 
         var currentSize = 1.16;
-        function changeFontSize(delta) {{
+        function changeFontSize(delta) {
             currentSize = Math.max(0.95, Math.min(1.65, currentSize + (delta * 0.1)));
             document.getElementById('articleBody').style.fontSize = currentSize + 'rem';
-        }}
+        }
 
-        function copyCurrentUrl() {{
-            navigator.clipboard.writeText(window.location.href).then(function() {{
+        function copyCurrentUrl() {
+            navigator.clipboard.writeText(window.location.href).then(function() {
                 alert("기사 링크가 복사되었습니다!");
-            }});
-        }}
+            });
+        }
 
-        function likePost() {{
+        function likePost() {
             var countEl = document.getElementById('likeCount');
             var curr = parseInt(countEl.innerText) || 0;
             countEl.innerText = curr + 1;
             document.getElementById('likeBtn').className = "btn btn-danger btn-sm px-3 fw-bold rounded-pill";
-        }}
+        }
     </script>
     """
-    return render_page(row['title'], body)
+    return render_html(row['title'], body)
 
-# 수동 기사 작성 페이지
 @app.get("/write")
 def write_form():
     body = """
@@ -550,16 +524,13 @@ def write_form():
         </div>
     </div>
     """
-    return render_page("기사 수동 발행", body)
+    return render_html("기사 수동 발행", body)
 
 @app.post("/write")
 def write_submit(category: str = Form(...), topic: str = Form(...)):
     generate_and_save_article(category, topic)
     return RedirectResponse(url="/", status_code=303)
 
-# ======================================================
-# 5. 검색엔진용 Sitemap 및 RSS 피드 라우트
-# ======================================================
 @app.get("/sitemap.xml", response_class=Response)
 def sitemap():
     try:
@@ -604,9 +575,6 @@ def rss_feed():
     except Exception:
         return Response(content='<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>인사이트 데일리 웹진</title><link>https://insight-webzine.onrender.com</link></channel></rss>', media_type="application/xml")
 
-# ======================================================
-# 6. 비공개 관리자 통계 대시보드
-# ======================================================
 @app.get("/admin/stats")
 def admin_stats(pw: str = ""):
     if pw != ADMIN_STATS_PASSWORD:
@@ -622,7 +590,7 @@ def admin_stats(pw: str = ""):
             </div>
         </div>
         """
-        return render_page("관리자 로그인", login_html)
+        return render_html("관리자 로그인", login_html)
 
     conn = get_db()
     cursor = conn.cursor()
@@ -683,7 +651,7 @@ def admin_stats(pw: str = ""):
         </div>
     </div>
     """
-    return render_page("관리자 통계", dashboard_html)
+    return render_html("관리자 통계", dashboard_html)
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
