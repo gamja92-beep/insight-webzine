@@ -17,7 +17,7 @@ try:
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
     if gemini_key:
         from google import genai
-        client = genai.Client(api_key=gemini_key)
+        client = gemini_key and genai.Client(api_key=gemini_key)
 except Exception:
     client = None
 
@@ -35,6 +35,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             category TEXT NOT NULL,
+            cat_slug TEXT DEFAULT 'welfare',
             summary TEXT NOT NULL,
             content TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -42,9 +43,9 @@ def init_db():
             likes INTEGER DEFAULT 0
         )
     """)
-    for col in ["views", "likes"]:
+    for col, definition in [("cat_slug", "TEXT DEFAULT 'welfare'"), ("views", "INTEGER DEFAULT 0"), ("likes", "INTEGER DEFAULT 0")]:
         try:
-            c.execute("ALTER TABLE articles ADD COLUMN " + col + " INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE articles ADD COLUMN " + col + " " + definition)
         except Exception:
             pass
     conn.commit()
@@ -61,14 +62,23 @@ TOPICS = [
     ("시니어 건강/식품", "혈관 나이를 10년 젊게 만드는 아침 식습관과 필수 항산화 식단")
 ]
 
+def get_cat_slug(category):
+    if "복지" in category or "지원" in category:
+        return "welfare"
+    elif "경제" in category or "세무" in category:
+        return "economy"
+    elif "건강" in category or "식품" in category:
+        return "health"
+    return "culture"
+
 def make_default_content(topic):
     return (
         "<h2>1. 주요 배경과 핵심 정보</h2>"
-        "<p>" + topic + "에 대한 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 핵심 지침을 담고 있습니다.</p>"
+        "<p>" + topic + "에 대한 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 알찬 지침을 담고 있습니다.</p>"
         "<h2>2. 세부 혜택 요약</h2>"
         "<table class='table table-bordered my-3'>"
         "<thead class='table-light'><tr><th>구분</th><th>지원 내용</th><th>대상</th></tr></thead>"
-        "<tbody><tr><td>기본 지원</td><td>맞춤형 혜택 및 본인부담금 대폭 감면</td><td>만 65세 이상 및 해당 가구</td></tr>"
+        "<tbody><tr><td>기본 지원</td><td>맞춤형 혜택 및 감면</td><td>만 65세 이상 및 해당 가구</td></tr>"
         "<tr><td>신청처</td><td>정부24 온라인 또는 관할 주민센터 방문</td><td>신분증 지참</td></tr></tbody>"
         "</table>"
         "<h2>3. 신청 절차 및 가이드</h2>"
@@ -117,19 +127,23 @@ def save_article_instant(category="", topic=""):
     if not category or not topic:
         chosen = random.choice(TOPICS)
         category, topic = chosen[0], chosen[1]
+    
+    cat_slug = get_cat_slug(category)
     summary = "실생활에 즉시 도움 되는 핵심 가이드 및 신청 방법 안내."
     content = make_default_content(topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     conn = get_db()
     c = conn.cursor()
-    c.execute("INSERT INTO articles (title, category, summary, content, created_at, views, likes) VALUES (?, ?, ?, ?, ?, 0, 0)",
-              (topic, category, summary, content, now))
+    # cat_slug 컬럼 누락 에러 해결
+    c.execute("""
+        INSERT INTO articles (title, category, cat_slug, summary, content, created_at, views, likes) 
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+    """, (topic, category, cat_slug, summary, content, now))
     new_id = c.lastrowid
     conn.commit()
     conn.close()
 
-    # AI 심층 글쓰기는 백그라운드 스레드에서 조용히 수행 (0.05초 만에 완료 반환)
     threading.Thread(target=background_ai_enrichment, args=(new_id, category, topic), daemon=True).start()
     return new_id
 
@@ -406,7 +420,6 @@ def write_form():
 def create_article(category: str = "정부 지원금/복지 혜택", topic: str = ""):
     if not topic:
         return RedirectResponse(url="/", status_code=303)
-    # 0.05초 만에 DB에 등록 후 바로 새 기사 화면으로 이동 (타임아웃 100% 차단)
     new_id = save_article_instant(category, topic)
     return RedirectResponse(url="/article/" + str(new_id), status_code=303)
 
