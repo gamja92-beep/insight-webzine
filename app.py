@@ -14,7 +14,7 @@ app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
 
-# Gemini API 클라이언트 초기화
+# Gemini API 클라이언트
 client = None
 try:
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -22,7 +22,7 @@ try:
         from google import genai
         client = genai.Client(api_key=gemini_api_key)
 except Exception as e:
-    print("Gemini 초기화 오류:", e)
+    print("Gemini 클라이언트 로드 오류:", e)
 
 def get_db():
     conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
@@ -68,16 +68,14 @@ def increase_article_view(article_id: int):
         pass
 
 AUTO_TOPIC_POOL = [
-    ("시니어/복지", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
-    ("문화/여행", "시니어를 위한 전국 힐링 무장애 나눔길 베스트 5 및 코스별 대중교통 상세 안내"),
-    ("경제/재테크", "기초연금 수급자격 및 소득인정액 모의계산법과 2026년 인상 혜택 총정리"),
-    ("건강/의학", "시니어 무릎 관절염 예방 걷기 운동법과 연골 부담 줄이는 생활 수칙"),
-    ("시니어/복지", "문화누리카드 지원금 100% 알찬 활용법과 KTX 기차여행 할인 연계 꿀팁"),
-    ("IT/디지털", "어르신을 위한 스마트폰 모바일 신분증 발급 및 병원 본인확인 간편 활용법"),
-    ("경제/재테크", "주택연금 가입조건과 내 집으로 받는 평생 월 지급금 수령액 비교 분석"),
-    ("건강/의학", "뇌세포를 깨우는 치매 예방 식습관 7가지와 일상 속 인지재활 트레이닝"),
-    ("문화/여행", "국립자연휴양림 시니어 치유 숲 프로그램 예약 방법과 입장료 감면 혜택"),
-    ("시니어/복지", "2026년 노인일자리 및 사회활동 지원사업 신청기간 및 맞춤 직종 종합 안내")
+    ("정부 지원금/복지 혜택", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
+    ("문화/예술", "시니어를 위한 전국 힐링 무장애 나눔길 베스트 5 및 코스별 대중교통 상세 안내"),
+    ("생활 경제/세무 상식", "2026년 기초연금 수급자격 및 소득인정액 모의계산법과 인상 혜택 총정리"),
+    ("시니어 건강/식품", "시니어 무릎 관절염 예방 걷기 운동법과 연골 부담 줄이는 생활 수칙"),
+    ("정부 지원금/복지 혜택", "문화누리카드 지원금 100% 알찬 활용법과 KTX 기차여행 할인 연계 꿀팁"),
+    ("생활 경제/세무 상식", "주택연금 가입조건과 내 집으로 받는 평생 월 지급금 수령액 비교 분석"),
+    ("시니어 건강/식품", "혈관 나이를 10년 젊게 만드는 아침 식습관과 필수 항산화 식단 가이드"),
+    ("문화/예술", "국립자연휴양림 시니어 치유 숲 프로그램 예약 방법과 입장료 감면 혜택")
 ]
 
 def generate_and_save_article(category: str = "", topic: str = ""):
@@ -86,50 +84,51 @@ def generate_and_save_article(category: str = "", topic: str = ""):
         category, topic = chosen[0], chosen[1]
 
     title = topic
-    summary = "1. 실생활에 즉시 도움 되는 핵심 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+    summary = "1. 실생활에 즉시 도움 되는 심층 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 완벽 수록."
+    
     content = """
     <h2>1. 주요 배경과 핵심 정보</h2>
-    <p>본 기사는 독자 여러분이 실생활에서 바로 활용할 수 있는 핵심 정책 및 실전 정보를 상세히 안내해 드립니다.</p>
-    <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2>
+    <p>""" + topic + """에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 정리해 드립니다. 실생활에서 즉시 활용할 수 있는 필수 가이드입니다.</p>
+    <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2>
     <table class="table table-bordered my-3">
         <thead class="table-light">
-            <tr><th>구분</th><th>주요 지원 내용</th><th>지원 대상</th></tr>
+            <tr><th>구분</th><th>주요 지원 내용</th><th>신청 대상 및 조건</th></tr>
         </thead>
         <tbody>
-            <tr><td>기본 혜택</td><td>맞춤형 지원금 및 본인부담금 감면</td><td>만 65세 이상 어르신 및 해당 가구</td></tr>
-            <tr><td>신청 방법</td><td>정부24 온라인 신청 또는 관할 주민센터 방문</td><td>신분증 및 구비서류 지참</td></tr>
+            <tr><td>기본 지원</td><td>맞춤형 혜택 및 감면 제공</td><td>만 65세 이상 및 해당 대상자</td></tr>
+            <tr><td>신청 방법</td><td>정부24 온라인 또는 주민센터 방문</td><td>신분증 및 관련 서류 지참</td></tr>
         </tbody>
     </table>
-    <h2>3. 실패 없는 실전 신청 절차</h2>
+    <h2>3. 실패 없는 실전 신청 절차 및 준비 서류</h2>
     <ol>
-        <li>신청 자격 및 해당 연도 소득인정액 기준을 확인합니다.</li>
-        <li>필수 지참 서류(신분증, 통장사본 등)를 지참하여 신청 기관에 접수합니다.</li>
-        <li>심사 결과 확인 후 혜택을 수령하고 정기 자격 변동 여부를 점검합니다.</li>
+        <li>신청 자격 및 본인 소득인정액 기준을 확인합니다.</li>
+        <li>필수 지참 서류를 구비하여 관할 기관 또는 온라인으로 신청합니다.</li>
+        <li>결과 통보 후 혜택을 수령하고 정기적 변동 사항을 확인합니다.</li>
     </ol>
     <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2>
     <ul>
-        <li>신청 시기를 놓칠 경우 소급 적용이 불가할 수 있으므로 사전 신청 기간을 반드시 확인하세요.</li>
-        <li>타 복지 지원 사업과의 중복 수혜 가능 여부를 관할 상담 센터에 사전 문의하시기 바랍니다.</li>
+        <li>신청 시기를 놓치면 소급 지원이 어려울 수 있으니 일정을 꼭 확인하세요.</li>
+        <li>타 복지 지원 사업과의 중복 혜택 여부를 고객센터에 사전 문의하시기 바랍니다.</li>
     </ul>
     <h2>5. 자주 묻는 질문 (FAQ)</h2>
-    <p><strong>Q1. 본인 직접 방문이 어려운 경우 대리 신청이 가능한가요?</strong><br>A1. 네, 배우자나 직계가족이 위임장과 가족관계증명서를 지참하시면 대리 신청이 가능합니다.</p>
+    <p><strong>Q. 대리 신청이 가능한가요?</strong><br>A. 네, 위임장과 신분증, 가족관계증명서를 지참하시면 직계가족 대리 신청이 가능합니다.</p>
     """
 
     if client:
         prompt = """
-        당신은 5060 시니어 및 대중을 위한 전문 프리미엄 웹진의 수석 기자입니다.
-        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 리포트'를 작성해 주세요.
+        당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
+        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 기사'를 작성해 주세요.
 
         [주제]: """ + topic + """
         [카테고리]: """ + category + """
 
         [작성 가이드라인]:
-        1. 분량: 한글 공백 포함 최소 1,800자 이상의 상세한 내용.
-        2. 기사 구성 (HTML 태그 필수 적용):
-           - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
-           - [요약]: 기사의 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
-           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 답변)
-        3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
+        1. 분량: 한글 1,500자 ~ 2,000자 이상의 상세한 내용.
+        2. 기사 구성 (HTML 태그 필수):
+           - [제목]: 신뢰감 있는 헤드라인
+           - [요약]: 핵심 3줄 요약 (1., 2., 3.)
+           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 필수), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문과 답변)
+        3. 어조: 뉴스 아나운서처럼 정중하고 명쾌한 어조 ('~합니다', '~하세요').
 
         [출력 JSON 규격]:
         {
@@ -144,17 +143,17 @@ def generate_and_save_article(category: str = "", topic: str = ""):
                 contents=prompt,
                 config=dict(response_mime_type="application/json")
             )
-            raw_text = response.text.strip()
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            data = json.loads(raw_text.strip())
+            raw = response.text.strip()
+            if raw.startswith("```json"):
+                raw = raw[7:]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            data = json.loads(raw.strip())
             title = data.get("title", title)
             summary = data.get("summary", summary)
             content = data.get("content", content)
         except Exception as e:
-            print("AI 생성 오류:", e)
+            print("Gemini 생성 오류 (기본 서식으로 안전 저장):", e)
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_db()
@@ -165,7 +164,7 @@ def generate_and_save_article(category: str = "", topic: str = ""):
     """, (title, category, summary, content, now))
     conn.commit()
     conn.close()
-    print(f"[{now}] 기사 발행 성공: {title}")
+    print(f"[{now}] 기사 저장 완료: {title}")
 
 def auto_article_scheduler():
     time.sleep(15)
@@ -183,12 +182,11 @@ HTML_BASE_TEMPLATE = """<!DOCTYPE html>
     <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>__PAGE_TITLE__ - 인사이트 데일리 웹진</title>
+    <title>__PAGE_TITLE__ - 인사이트 데일리</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
-        #readingProgress { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #38bdf8); width: 0%; z-index: 9999; }
         .navbar-brand { font-weight: 800; color: #1e3a8a !important; font-size: 1.35rem; }
         .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 45px 0; margin-bottom: 30px; }
         .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
@@ -212,7 +210,6 @@ HTML_BASE_TEMPLATE = """<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <div id="readingProgress"></div>
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm sticky-top">
         <div class="container">
             <a class="navbar-brand" href="/"><i class="fa-solid fa-newspaper me-2 text-primary"></i>인사이트 데일리</a>
@@ -247,20 +244,27 @@ def index():
 
     cards_html = ""
     for row in articles:
-        cards_html += """
+        art_id = str(row['id'])
+        art_title = str(row['title'])
+        art_cat = str(row['category'])
+        art_sum = str(row['summary'])
+        art_date = str(row['created_at'])[:10]
+        art_views = str(row['views'])
+
+        cards_html += f"""
         <div class="col-md-4 mb-4">
             <div class="card article-card p-4 d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="badge badge-cat px-2 py-1">""" + str(row['category']) + """</span>
-                    <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>""" + str(row['created_at'])[:10] + """</small>
+                    <span class="badge badge-cat px-2 py-1">{art_cat}</span>
+                    <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>{art_date}</small>
                 </div>
                 <h5 class="card-title fw-bold mb-3 lh-base">
-                    <a href="/article/""" + str(row['id']) + """" class="text-decoration-none text-dark">""" + str(row['title']) + """</a>
+                    <a href="/article/{art_id}" class="text-decoration-none text-dark">{art_title}</a>
                 </h5>
-                <p class="card-text text-secondary small flex-grow-1" style="line-height: 1.65;">""" + str(row['summary']) + """</p>
+                <p class="card-text text-secondary small flex-grow-1" style="line-height: 1.65;">{art_sum}</p>
                 <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center">
-                    <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>조회 """ + str(row['views']) + """회</span>
-                    <a href="/article/""" + str(row['id']) + """" class="btn btn-sm btn-outline-primary fw-semibold">기사 읽기 →</a>
+                    <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>조회 {art_views}회</span>
+                    <a href="/article/{art_id}" class="btn btn-sm btn-outline-primary fw-semibold">기사 읽기 →</a>
                 </div>
             </div>
         </div>
@@ -269,7 +273,7 @@ def index():
     if not cards_html:
         cards_html = '<div class="col-12 text-center py-5 text-muted">발행된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
 
-    body = """
+    body = f"""
     <div class="hero-section text-center">
         <div class="container">
             <h1 class="fw-bold mb-2 display-6">인사이트 데일리 웹진</h1>
@@ -278,7 +282,7 @@ def index():
     </div>
     <div class="container">
         <div class="row">
-            """ + cards_html + """
+            {cards_html}
         </div>
     </div>
     """
@@ -295,7 +299,7 @@ def view_article(article_id: int):
 
     if not row:
         conn.close()
-        return HTMLResponse("존재하지 않는 기사입니다.", status_code=404)
+        return HTMLResponse("존재하지 않는 기사입니다. <a href='/'>메인으로</a>", status_code=404)
 
     cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? AND category = ? ORDER BY id DESC LIMIT 3", (article_id, row['category']))
     related_articles = cursor.fetchall()
@@ -306,12 +310,16 @@ def view_article(article_id: int):
 
     related_html = ""
     for rel in related_articles:
-        related_html += """
+        rel_id = str(rel['id'])
+        rel_title = str(rel['title'])
+        rel_cat = str(rel['category'])
+        rel_date = str(rel['created_at'])[:10]
+        related_html += f"""
         <div class="col-md-4 mb-3">
             <div class="card h-100 p-3 border-0 shadow-sm rounded-3">
-                <span class="badge badge-cat w-auto align-self-start mb-2">""" + str(rel['category']) + """</span>
-                <h6 class="fw-bold"><a href="/article/""" + str(rel['id']) + """" class="text-decoration-none text-dark">""" + str(rel['title']) + """</a></h6>
-                <small class="text-muted mt-auto pt-2">""" + str(rel['created_at'])[:10] + """</small>
+                <span class="badge badge-cat w-auto align-self-start mb-2">{rel_cat}</span>
+                <h6 class="fw-bold"><a href="/article/{rel_id}" class="text-decoration-none text-dark">{rel_title}</a></h6>
+                <small class="text-muted mt-auto pt-2">{rel_date}</small>
             </div>
         </div>
         """
@@ -321,15 +329,15 @@ def view_article(article_id: int):
     body_html = row['content']
     likes_count = row['likes'] if 'likes' in row.keys() and row['likes'] is not None else 0
 
-    body = """
+    body = f"""
     <div class="container py-5" style="max-width: 860px;">
         <div class="mb-4">
             <div class="d-flex gap-2 align-items-center mb-2">
-                <span class="badge badge-cat px-3 py-2 fs-6">""" + str(row['category']) + """</span>
-                <span class="text-muted small"><i class="fa-regular fa-clock me-1"></i>""" + str(row['created_at']) + """</span>
-                <span class="badge bg-light text-dark border ms-auto"><i class="fa-solid fa-book-open-reader me-1 text-primary"></i>약 """ + str(est_minutes) + """분 분량 (""" + f"{content_len:,}" + """자)</span>
+                <span class="badge badge-cat px-3 py-2 fs-6">{row['category']}</span>
+                <span class="text-muted small"><i class="fa-regular fa-clock me-1"></i>{row['created_at']}</span>
+                <span class="badge bg-light text-dark border ms-auto"><i class="fa-solid fa-book-open-reader me-1 text-primary"></i>약 {est_minutes}분 분량 ({content_len:,}자)</span>
             </div>
-            <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.15rem; letter-spacing: -0.03em;">""" + str(row['title']) + """</h1>
+            <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.15rem; letter-spacing: -0.03em;">{row['title']}</h1>
         </div>
 
         <div class="tts-player-box mb-4 shadow-sm">
@@ -353,7 +361,7 @@ def view_article(article_id: int):
 
         <div class="p-4 mb-4 bg-white rounded-4 border-start border-5 border-primary shadow-sm">
             <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-bolt me-2"></i>핵심 3줄 브리핑</h6>
-            <div class="text-secondary fw-medium lh-base" style="font-size: 1.06rem;">""" + str(row['summary']) + """</div>
+            <div class="text-secondary fw-medium lh-base" style="font-size: 1.06rem;">{row['summary']}</div>
         </div>
 
         <div class="toc-box">
@@ -362,12 +370,12 @@ def view_article(article_id: int):
         </div>
 
         <article id="articleBody" class="article-content bg-white p-4 p-md-5 rounded-4 shadow-sm mb-5">
-            """ + str(body_html) + """
+            {body_html}
         </article>
 
         <div class="d-flex justify-content-between align-items-center bg-white p-3 p-md-4 rounded-4 shadow-sm mb-5 border">
             <button id="likeBtn" class="btn btn-outline-danger btn-sm px-3 fw-bold rounded-pill" onclick="likePost()">
-                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">""" + str(likes_count) + """</span>
+                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">{likes_count}</span>
             </button>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="copyCurrentUrl()"><i class="fa-solid fa-link me-1"></i>기사 링크 복사</button>
@@ -378,19 +386,12 @@ def view_article(article_id: int):
         <div class="mt-5 pt-3">
             <h4 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-newspaper me-2 text-primary"></i>함께 읽으면 유익한 추천 가이드</h4>
             <div class="row">
-                """ + (related_html if related_html else '<p class="text-muted small">추천 기사가 준비 중입니다.</p>') + """
+                {related_html if related_html else '<p class="text-muted small">추천 기사가 준비 중입니다.</p>'}
             </div>
         </div>
     </div>
 
     <script>
-        window.onscroll = function() {
-            var winScroll = document.body.scrollTop || document.documentElement.scrollTop;
-            var height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-            var scrolled = (winScroll / height) * 100;
-            document.getElementById("readingProgress").style.width = scrolled + "%";
-        };
-
         window.addEventListener('DOMContentLoaded', function() {
             var h2s = document.querySelectorAll('#articleBody h2');
             var tocList = document.getElementById('tocList');
@@ -517,11 +518,10 @@ def write_form():
                 <div class="mb-3">
                     <label class="form-label fw-bold">카테고리</label>
                     <select name="category" class="form-select py-2">
-                        <option value="시니어/복지">시니어 / 복지 혜택</option>
-                        <option value="문화/여행">문화 / 힐링 여행</option>
-                        <option value="경제/재테크">경제 / 생활 재테크</option>
-                        <option value="건강/의학">건강 / 웰에이징</option>
-                        <option value="IT/디지털">스마트폰 / IT 생활가이드</option>
+                        <option value="정부 지원금/복지 혜택">정부 지원금/복지 혜택</option>
+                        <option value="생활 경제/세무 상식">생활 경제/세무 상식</option>
+                        <option value="시니어 건강/식품">시니어 건강/식품</option>
+                        <option value="문화/예술">문화/예술</option>
                     </select>
                 </div>
                 <div class="mb-3">
@@ -539,7 +539,8 @@ def write_form():
 
 @app.post("/write")
 def write_submit(category: str = Form(...), topic: str = Form(...)):
-    generate_and_save_article(category, topic)
+    # 500 에러를 방지하기 위해 기사 저장을 백그라운드 스레드로 즉시 안전하게 수행
+    threading.Thread(target=generate_and_save_article, args=(category, topic), daemon=True).start()
     return RedirectResponse(url="/", status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
@@ -555,7 +556,7 @@ def sitemap():
         xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         xml += '  <url><loc>https://insight-webzine.onrender.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n'
         for row in articles:
-            xml += '  <url><loc>https://insight-webzine.onrender.com/article/' + str(row["id"]) + '</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
+            xml += f'  <url><loc>https://insight-webzine.onrender.com/article/{row["id"]}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
         xml += '</urlset>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -577,9 +578,9 @@ def rss_feed():
         xml += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
         for row in articles:
             xml += '  <item>\n'
-            xml += '    <title><![CDATA[' + str(row["title"]) + ']]></title>\n'
-            xml += '    <link>https://insight-webzine.onrender.com/article/' + str(row["id"]) + '</link>\n'
-            xml += '    <description><![CDATA[' + str(row["summary"]) + ']]></description>\n'
+            xml += f'    <title><![CDATA[{row["title"]}]]></title>\n'
+            xml += f'    <link>https://insight-webzine.onrender.com/article/{row["id"]}</link>\n'
+            xml += f'    <description><![CDATA[{row["summary"]}]]></description>\n'
             xml += '  </item>\n'
         xml += '</channel>\n</rss>'
         return Response(content=xml, media_type="application/xml")
@@ -612,34 +613,34 @@ def admin_stats(pw: str = ""):
 
     rows_html = ""
     for idx, row in enumerate(articles, 1):
-        rows_html += """
+        rows_html += f"""
         <tr>
-            <td class="text-center fw-bold text-muted">""" + str(idx) + """</td>
-            <td><a href="/article/""" + str(row['id']) + """" target="_blank" class="text-decoration-none text-dark fw-semibold">""" + str(row['title']) + """</a></td>
-            <td class="text-center"><span class="badge badge-cat">""" + str(row['category']) + """</span></td>
-            <td class="text-center text-primary fw-bold">""" + f"{row['views']:,}" + """ 회</td>
-            <td class="text-center text-danger fw-bold">""" + f"{row['likes']:,}" + """ 개</td>
-            <td class="text-center text-muted small">""" + str(row['created_at'])[:10] + """</td>
+            <td class="text-center fw-bold text-muted">{idx}</td>
+            <td><a href="/article/{row['id']}" target="_blank" class="text-decoration-none text-dark fw-semibold">{row['title']}</a></td>
+            <td class="text-center"><span class="badge badge-cat">{row['category']}</span></td>
+            <td class="text-center text-primary fw-bold">{row['views']:,} 회</td>
+            <td class="text-center text-danger fw-bold">{row['likes']:,} 개</td>
+            <td class="text-center text-muted small">{str(row['created_at'])[:10]}</td>
         </tr>
         """
 
     if not rows_html:
         rows_html = '<tr><td colspan="6" class="text-center py-4 text-muted">등록된 기사가 없습니다.</td></tr>'
 
-    dashboard_html = """
+    dashboard_html = f"""
     <div class="container py-5" style="max-width: 960px;">
         <h3 class="fw-bold mb-4">📊 기사 조회수 및 방문 통계</h3>
         <div class="row g-3 mb-4">
             <div class="col-md-6">
                 <div class="card p-4 shadow-sm border-0 text-center rounded-4">
                     <div class="text-muted small mb-1">총 누적 기사 조회수</div>
-                    <div class="fs-1 fw-bold text-primary">""" + f"{total_views:,}" + """ <span class="fs-6 text-muted">회</span></div>
+                    <div class="fs-1 fw-bold text-primary">{total_views:,} <span class="fs-6 text-muted">회</span></div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="card p-4 shadow-sm border-0 text-center rounded-4">
                     <div class="text-muted small mb-1">총 발행 기사 수</div>
-                    <div class="fs-1 fw-bold text-secondary">""" + f"{len(articles):,}" + """ <span class="fs-6 text-muted">개</span></div>
+                    <div class="fs-1 fw-bold text-secondary">{len(articles):,} <span class="fs-6 text-muted">개</span></div>
                 </div>
             </div>
         </div>
@@ -656,7 +657,7 @@ def admin_stats(pw: str = ""):
                     </tr>
                 </thead>
                 <tbody>
-                    """ + rows_html + """
+                    {rows_html}
                 </tbody>
             </table>
         </div>
