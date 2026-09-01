@@ -41,6 +41,11 @@ def init_db():
             likes INTEGER DEFAULT 0
         )
     """)
+    for col in ["views", "likes"]:
+        try:
+            c.execute("ALTER TABLE articles ADD COLUMN " + col + " INTEGER DEFAULT 0")
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
@@ -180,23 +185,31 @@ def index(cat: str = ""):
     conn = get_db()
     c = conn.cursor()
     if cat:
-        c.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles WHERE category LIKE ? ORDER BY id DESC", ('%' + cat + '%',))
+        c.execute("SELECT * FROM articles WHERE category LIKE ? ORDER BY id DESC", ('%' + cat + '%',))
     else:
-        c.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles ORDER BY id DESC")
+        c.execute("SELECT * FROM articles ORDER BY id DESC")
     articles = c.fetchall()
     conn.close()
 
     cards_list = []
     for r in articles:
+        row = dict(r)
+        art_id = str(row.get('id', ''))
+        art_cat = str(row.get('category', ''))
+        art_date = str(row.get('created_at', ''))[:10]
+        art_title = str(row.get('title', ''))
+        art_sum = str(row.get('summary', ''))
+        art_views = str(row.get('views', 0))
+
         card_html = (
             '<div class="col-md-4 mb-4">'
             '<div class="card-art d-flex flex-column">'
-            '<div class="d-flex justify-content-between mb-2">' + get_badge(r['category']) + '<small class="text-muted">' + r['created_at'][:10] + '</small></div>'
-            '<h5 class="fw-bold mb-2"><a href="/article/' + str(r['id']) + '" class="text-decoration-none text-dark">' + r['title'] + '</a></h5>'
-            '<p class="text-secondary small flex-grow-1">' + r['summary'] + '</p>'
+            '<div class="d-flex justify-content-between mb-2">' + get_badge(art_cat) + '<small class="text-muted">' + art_date + '</small></div>'
+            '<h5 class="fw-bold mb-2"><a href="/article/' + art_id + '" class="text-decoration-none text-dark">' + art_title + '</a></h5>'
+            '<p class="text-secondary small flex-grow-1">' + art_sum + '</p>'
             '<div class="d-flex justify-content-between align-items-center pt-2 border-top mt-2">'
-            '<span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>' + str(r['views']) + '회</span>'
-            '<a href="/article/' + str(r['id']) + '" class="btn btn-outline-primary btn-sm">읽기 →</a>'
+            '<span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>' + art_views + '회</span>'
+            '<a href="/article/' + art_id + '" class="btn btn-outline-primary btn-sm">읽기 →</a>'
             '</div></div></div>'
         )
         cards_list.append(card_html)
@@ -226,10 +239,10 @@ ARTICLE_VIEW_TEMPLATE = """
     
     <div class="p-3 bg-white border rounded-3 d-flex align-items-center justify-content-between mb-4 shadow-sm flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
-            <button id="ttsBtn" class="btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill" onclick="toggleSpeech()">
+            <button id="ttsBtn" class="btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm" onclick="toggleSpeech()">
                 <i class="fa-solid fa-volume-high me-1 text-warning"></i> <span id="ttsText">차분한 아나운서 음성 듣기</span>
             </button>
-            <small id="ttsStatus" class="text-muted">또박또박한 뉴스 낭독</small>
+            <small id="ttsStatus" class="text-secondary fw-semibold">차분하고 편안한 브리핑 톤</small>
         </div>
         <div class="d-flex gap-1">
             <button class="btn btn-light btn-sm border" onclick="resizeFont(1)">A+</button>
@@ -282,13 +295,14 @@ ARTICLE_VIEW_TEMPLATE = """
         if (!isSpeaking || sIdx >= sList.length) {
             isSpeaking = false;
             document.getElementById('ttsText').innerText = "기사 다시 듣기";
-            document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill";
+            document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm";
+            document.getElementById('ttsStatus').innerText = "낭독이 완료되었습니다.";
             return;
         }
         var u = new SpeechSynthesisUtterance(sList[sIdx].trim());
         u.lang = 'ko-KR';
-        u.rate = 0.95;
-        u.pitch = 1.05;
+        u.rate = 0.90;
+        u.pitch = 0.92;
         if (!bestVoice) bestVoice = getVoice();
         if (bestVoice) u.voice = bestVoice;
         u.onend = function() { sIdx++; speakNext(); };
@@ -302,7 +316,8 @@ ARTICLE_VIEW_TEMPLATE = """
             synth.cancel();
             isSpeaking = false;
             document.getElementById('ttsText').innerText = "차분한 아나운서 음성 듣기";
-            document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill";
+            document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm";
+            document.getElementById('ttsStatus').innerText = "재생이 일시정지되었습니다.";
         } else {
             synth.cancel();
             var text = document.getElementById('artBody').innerText.replace(/\\s+/g, ' ').trim();
@@ -310,7 +325,8 @@ ARTICLE_VIEW_TEMPLATE = """
             sIdx = 0;
             isSpeaking = true;
             document.getElementById('ttsText').innerText = "일시정지";
-            document.getElementById('ttsBtn').className = "btn btn-danger btn-sm fw-bold px-3 py-2 rounded-pill";
+            document.getElementById('ttsBtn').className = "btn btn-danger btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm";
+            document.getElementById('ttsStatus').innerText = "차분하고 정중한 어조로 낭독 중입니다...";
             speakNext();
         }
     }
@@ -337,21 +353,22 @@ def view_article(art_id: int):
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT * FROM articles WHERE id = ?", (art_id,))
-    row = c.fetchone()
+    r = c.fetchone()
     conn.close()
-    if not row:
+    if not r:
         return HTMLResponse("기사를 찾을 수 없습니다. <a href='/'>홈으로</a>", status_code=404)
 
+    row = dict(r)
     body = (
         ARTICLE_VIEW_TEMPLATE
-        .replace("__BADGE__", get_badge(row['category']))
-        .replace("__CREATED_AT__", row['created_at'])
-        .replace("__ARTICLE_TITLE__", row['title'])
-        .replace("__SUMMARY__", row['summary'])
-        .replace("__CONTENT__", row['content'])
-        .replace("__LIKES__", str(row['likes']))
+        .replace("__BADGE__", get_badge(str(row.get('category', ''))))
+        .replace("__CREATED_AT__", str(row.get('created_at', '')))
+        .replace("__ARTICLE_TITLE__", str(row.get('title', '')))
+        .replace("__SUMMARY__", str(row.get('summary', '')))
+        .replace("__CONTENT__", str(row.get('content', '')))
+        .replace("__LIKES__", str(row.get('likes', 0)))
     )
-    return render(row['title'], body)
+    return render(str(row.get('title', '기사 보기')), body)
 
 @app.get("/write")
 def write_form():
@@ -413,7 +430,7 @@ def rss_feed():
         conn.close()
         xml = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>인사이트 데일리</title><link>https://insight-webzine.onrender.com</link>'
         for r in rows:
-            xml += '<item><title><![CDATA[' + r['title'] + ']]></title><link>https://insight-webzine.onrender.com/article/' + str(r['id']) + '</link><description><![CDATA[' + r['summary'] + ']]></description></item>'
+            xml += '<item><title><![CDATA[' + str(r['title']) + ']]></title><link>https://insight-webzine.onrender.com/article/' + str(r['id']) + '</link><description><![CDATA[' + str(r['summary']) + ']]></description></item>'
         xml += '</channel></rss>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -433,14 +450,15 @@ def admin_stats(pw=""):
         return render("로그인", body)
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT id, title, category, views, likes, created_at FROM articles ORDER BY views DESC")
+    c.execute("SELECT * FROM articles ORDER BY views DESC")
     rows = c.fetchall()
     conn.close()
     
     tr_list = []
     for r in rows:
+        row = dict(r)
         tr_list.append(
-            '<tr><td>' + str(r['id']) + '</td><td><a href="/article/' + str(r['id']) + '">' + r['title'] + '</a></td><td>' + r['category'] + '</td><td>' + str(r['views']) + '회</td><td>' + r['created_at'][:10] + '</td></tr>'
+            '<tr><td>' + str(row.get('id', '')) + '</td><td><a href="/article/' + str(row.get('id', '')) + '">' + str(row.get('title', '')) + '</a></td><td>' + str(row.get('category', '')) + '</td><td>' + str(row.get('views', 0)) + '회</td><td>' + str(row.get('created_at', ''))[:10] + '</td></tr>'
         )
     table_rows = "".join(tr_list)
     body = '<div class="container py-4"><h3>📊 통계</h3><table class="table table-bordered bg-white mt-3"><thead><tr><th>ID</th><th>제목</th><th>분류</th><th>조회수</th><th>일자</th></tr></thead><tbody>' + table_rows + '</tbody></table></div>'
