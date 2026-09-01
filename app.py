@@ -58,7 +58,7 @@ TOPICS = [
 def make_default_content(topic):
     return (
         "<h2>1. 주요 배경과 핵심 정보</h2>"
-        f"<p>{topic}에 대한 핵심 정보를 상세히 안내해 드립니다.</p>"
+        "<p>" + topic + "에 대한 핵심 정보를 상세히 안내해 드립니다.</p>"
         "<h2>2. 세부 혜택 요약</h2>"
         "<table class='table table-bordered my-3'>"
         "<thead class='table-light'><tr><th>구분</th><th>지원 내용</th><th>대상</th></tr></thead>"
@@ -74,7 +74,7 @@ def update_with_ai(art_id, category, topic):
     if not client:
         return
     prompt = (
-        f"당신은 시니어 전문 웹진 수석 에디터입니다. 주제 '{topic}'(카테고리: {category})에 대해 "
+        "당신은 시니어 전문 웹진 수석 에디터입니다. 주제 '" + topic + "'(카테고리: " + category + ")에 대해 "
         "한글 1500자 이상의 심층 가이드를 작성하세요. HTML 태그(h2, p, table, ol, ul)를 사용하세요. "
         "출력 JSON 규격: {'title': '제목', 'summary': '요약 3줄', 'content': 'HTML본문'}"
     )
@@ -85,7 +85,15 @@ def update_with_ai(art_id, category, topic):
             config=dict(response_mime_type="application/json")
         )
         raw = res.text.strip()
-        data = json.loads(raw)
+        triple_ticks = chr(96) * 3
+        if raw.startswith(triple_ticks + "json"):
+            raw = raw[len(triple_ticks) + 4:]
+        elif raw.startswith(triple_ticks):
+            raw = raw[len(triple_ticks):]
+        if raw.endswith(triple_ticks):
+            raw = raw[:-len(triple_ticks)]
+
+        data = json.loads(raw.strip())
         title = data.get("title", topic)
         summary = data.get("summary", "")
         content = data.get("content", "")
@@ -156,8 +164,9 @@ def get_badge(cat):
     c = "primary"
     for k, v in colors.items():
         if k in cat:
-            c = v; break
-    return f'<span class="badge bg-{c}-subtle text-{c} border border-{c}-subtle px-2 py-1">{cat}</span>'
+            c = v
+            break
+    return '<span class="badge bg-' + c + '-subtle text-' + c + ' border border-' + c + '-subtle px-2 py-1">' + cat + '</span>'
 
 def render(title, body):
     return HTMLResponse(BASE_HTML.replace("__TITLE__", title).replace("__BODY__", body))
@@ -171,39 +180,148 @@ def index(cat: str = ""):
     conn = get_db()
     c = conn.cursor()
     if cat:
-        c.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles WHERE category LIKE ? ORDER BY id DESC", (f'%{cat}%',))
+        c.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles WHERE category LIKE ? ORDER BY id DESC", ('%' + cat + '%',))
     else:
         c.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles ORDER BY id DESC")
     articles = c.fetchall()
     conn.close()
 
-    cards = "".join([
-        f"""<div class="col-md-4 mb-4">
-            <div class="card-art d-flex flex-column">
-                <div class="d-flex justify-content-between mb-2">{get_badge(r['category'])}<small class="text-muted">{r['created_at'][:10]}</small></div>
-                <h5 class="fw-bold mb-2"><a href="/article/{r['id']}" class="text-decoration-none text-dark">{r['title']}</a></h5>
-                <p class="text-secondary small flex-grow-1">{r['summary']}</p>
-                <div class="d-flex justify-content-between align-items-center pt-2 border-top mt-2">
-                    <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>{r['views']}회</span>
-                    <a href="/article/{r['id']}" class="btn btn-outline-primary btn-sm">읽기 →</a>
-                </div>
-            </div>
-        </div>""" for r in articles
-    ]) or '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다.</div>'
+    cards_list = []
+    for r in articles:
+        card_html = (
+            '<div class="col-md-4 mb-4">'
+            '<div class="card-art d-flex flex-column">'
+            '<div class="d-flex justify-content-between mb-2">' + get_badge(r['category']) + '<small class="text-muted">' + r['created_at'][:10] + '</small></div>'
+            '<h5 class="fw-bold mb-2"><a href="/article/' + str(r['id']) + '" class="text-decoration-none text-dark">' + r['title'] + '</a></h5>'
+            '<p class="text-secondary small flex-grow-1">' + r['summary'] + '</p>'
+            '<div class="d-flex justify-content-between align-items-center pt-2 border-top mt-2">'
+            '<span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>' + str(r['views']) + '회</span>'
+            '<a href="/article/' + str(r['id']) + '" class="btn btn-outline-primary btn-sm">읽기 →</a>'
+            '</div></div></div>'
+        )
+        cards_list.append(card_html)
 
-    cat_nav = f"""
-    <div class="d-flex justify-content-center flex-wrap mb-4">
-        <a href="/" class="cat-btn {'active' if not cat else ''}">전체보기</a>
-        <a href="/?cat=복지" class="cat-btn {'active' if cat=='복지' else ''}">🏛️ 정부지원·복지</a>
-        <a href="/?cat=경제" class="cat-btn {'active' if cat=='경제' else ''}">📈 생활경제·재테크</a>
-        <a href="/?cat=건강" class="cat-btn {'active' if cat=='건강' else ''}">🩺 시니어건강·식품</a>
-        <a href="/?cat=문화" class="cat-btn {'active' if cat=='문화' else ''}">🎨 문화·힐링여행</a>
-    </div>"""
+    cards = "".join(cards_list) if cards_list else '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다.</div>'
 
-    body = f"""
-    <div class="hero text-center"><div class="container"><h1 class="fw-bold">인사이트 데일리 웹진</h1><p class="mb-0 text-white-50">시니어 복지 · 실전 재테크 · 건강 심층 가이드</p></div></div>
-    <div class="container">{cat_nav}<div class="row">{cards}</div></div>"""
+    cat_nav = (
+        '<div class="d-flex justify-content-center flex-wrap mb-4">'
+        '<a href="/" class="cat-btn ' + ('active' if not cat else '') + '">전체보기</a>'
+        '<a href="/?cat=복지" class="cat-btn ' + ('active' if cat == '복지' else '') + '">🏛️ 정부지원·복지</a>'
+        '<a href="/?cat=경제" class="cat-btn ' + ('active' if cat == '경제' else '') + '">📈 생활경제·재테크</a>'
+        '<a href="/?cat=건강" class="cat-btn ' + ('active' if cat == '건강' else '') + '">🩺 시니어건강·식품</a>'
+        '<a href="/?cat=문화" class="cat-btn ' + ('active' if cat == '문화' else '') + '">🎨 문화·힐링여행</a>'
+        '</div>'
+    )
+
+    body = (
+        '<div class="hero text-center"><div class="container"><h1 class="fw-bold">인사이트 데일리 웹진</h1><p class="mb-0 text-white-50">시니어 복지 · 실전 재테크 · 건강 심층 가이드</p></div></div>'
+        '<div class="container">' + cat_nav + '<div class="row">' + cards + '</div></div>'
+    )
     return render("홈", body)
+
+ARTICLE_VIEW_TEMPLATE = """
+<div class="container py-4" style="max-width: 820px;">
+    <div class="mb-3">__BADGE__ <span class="text-muted small ms-2">__CREATED_AT__</span></div>
+    <h1 class="fw-bold text-dark mb-4">__ARTICLE_TITLE__</h1>
+    
+    <div class="p-3 bg-white border rounded-3 d-flex align-items-center justify-content-between mb-4 shadow-sm flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <button id="ttsBtn" class="btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill" onclick="toggleSpeech()">
+                <i class="fa-solid fa-volume-high me-1 text-warning"></i> <span id="ttsText">차분한 아나운서 음성 듣기</span>
+            </button>
+            <small id="ttsStatus" class="text-muted">또박또박한 뉴스 낭독</small>
+        </div>
+        <div class="d-flex gap-1">
+            <button class="btn btn-light btn-sm border" onclick="resizeFont(1)">A+</button>
+            <button class="btn btn-light btn-sm border" onclick="resizeFont(-1)">A-</button>
+        </div>
+    </div>
+
+    <div class="p-3 bg-white border-start border-4 border-primary rounded-2 shadow-sm mb-4">
+        <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-bolt me-1"></i>핵심 요약</div>
+        <div class="text-secondary small">__SUMMARY__</div>
+    </div>
+
+    <article id="artBody" class="art-body bg-white p-4 rounded-3 shadow-sm mb-4 border">
+        __CONTENT__
+    </article>
+
+    <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded-3 border">
+        <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="this.innerHTML='❤️ 유익해요 ' + (parseInt(this.innerText.replace(/[^0-9]/g,'')||0)+1)">
+            ❤️ 유익해요 __LIKES__
+        </button>
+        <a href="/" class="btn btn-primary btn-sm rounded-pill px-3">목록으로</a>
+    </div>
+</div>
+<script>
+    var synth = window.speechSynthesis;
+    var isSpeaking = false;
+    var sList = [];
+    var sIdx = 0;
+    var bestVoice = null;
+
+    function getVoice() {
+        if (!synth) return null;
+        var vs = synth.getVoices();
+        for (var i = 0; i < vs.length; i++) {
+            if (vs[i].lang.indexOf('ko') !== -1 && (vs[i].name.indexOf('SunHi') !== -1 || vs[i].name.indexOf('Natural') !== -1 || vs[i].name.indexOf('Google') !== -1)) {
+                return vs[i];
+            }
+        }
+        for (var j = 0; j < vs.length; j++) {
+            if (vs[j].lang.indexOf('ko') !== -1) return vs[j];
+        }
+        return null;
+    }
+
+    if (synth && synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = function() { bestVoice = getVoice(); };
+    }
+
+    function speakNext() {
+        if (!isSpeaking || sIdx >= sList.length) {
+            isSpeaking = false;
+            document.getElementById('ttsText').innerText = "기사 다시 듣기";
+            document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill";
+            return;
+        }
+        var u = new SpeechSynthesisUtterance(sList[sIdx].trim());
+        u.lang = 'ko-KR';
+        u.rate = 0.95;
+        u.pitch = 1.05;
+        if (!bestVoice) bestVoice = getVoice();
+        if (bestVoice) u.voice = bestVoice;
+        u.onend = function() { sIdx++; speakNext(); };
+        u.onerror = function() { sIdx++; speakNext(); };
+        synth.speak(u);
+    }
+
+    function toggleSpeech() {
+        if (!synth) return alert("음성을 지원하지 않는 브라우저입니다.");
+        if (isSpeaking) {
+            synth.cancel();
+            isSpeaking = false;
+            document.getElementById('ttsText').innerText = "차분한 아나운서 음성 듣기";
+            document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill";
+        } else {
+            synth.cancel();
+            var text = document.getElementById('artBody').innerText.replace(/\\s+/g, ' ').trim();
+            sList = text.match(/[^.?!]+[.?!]+/g) || [text];
+            sIdx = 0;
+            isSpeaking = true;
+            document.getElementById('ttsText').innerText = "일시정지";
+            document.getElementById('ttsBtn').className = "btn btn-danger btn-sm fw-bold px-3 py-2 rounded-pill";
+            speakNext();
+        }
+    }
+
+    var curSize = 1.15;
+    function resizeFont(d) {
+        curSize = Math.max(0.95, Math.min(1.5, curSize + (d * 0.1)));
+        document.getElementById('artBody').style.fontSize = curSize + 'rem';
+    }
+</script>
+"""
 
 @app.get("/article/{art_id}")
 def view_article(art_id: int):
@@ -224,114 +342,41 @@ def view_article(art_id: int):
     if not row:
         return HTMLResponse("기사를 찾을 수 없습니다. <a href='/'>홈으로</a>", status_code=404)
 
-    body = f"""
-    <div class="container py-4" style="max-width: 820px;">
-        <div class="mb-3">{get_badge(row['category'])} <span class="text-muted small ms-2">{row['created_at']}</span></div>
-        <h1 class="fw-bold text-dark mb-4">{row['title']}</h1>
-        
-        <div class="p-3 bg-white border rounded-3 d-flex align-items-center justify-content-between mb-4 shadow-sm flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <button id="ttsBtn" class="btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill" onclick="toggleSpeech()">
-                    <i class="fa-solid fa-volume-high me-1 text-warning"></i> <span id="ttsText">차분한 아나운서 음성 듣기</span>
-                </button>
-                <small id="ttsStatus" class="text-muted">또박또박한 뉴스 낭독</small>
-            </div>
-            <div class="d-flex gap-1">
-                <button class="btn btn-light btn-sm border" onclick="resizeFont(1)">A+</button>
-                <button class="btn btn-light btn-sm border" onclick="resizeFont(-1)">A-</button>
-            </div>
-        </div>
-
-        <div class="p-3 bg-white border-start border-4 border-primary rounded-2 shadow-sm mb-4">
-            <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-bolt me-1"></i>핵심 요약</div>
-            <div class="text-secondary small">{row['summary']}</div>
-        </div>
-
-        <article id="artBody" class="art-body bg-white p-4 rounded-3 shadow-sm mb-4 border">
-            {row['content']}
-        </article>
-
-        <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded-3 border">
-            <button class="btn btn-outline-danger btn-sm rounded-pill" onclick="this.innerHTML='❤️ 유익해요 ' + (parseInt(this.innerText.replace(/[^0-9]/g,'')||0)+1)">
-                ❤️ 유익해요 {row['likes']}
-            </button>
-            <a href="/" class="btn btn-primary btn-sm rounded-pill px-3">목록으로</a>
-        </div>
-    </div>
-    <script>
-        var synth = window.speechSynthesis, isSpeaking = false, sList = [], sIdx = 0, bestVoice = null;
-        function getVoice() {
-            var vs = synth.getVoices();
-            for (var i = 0; i < vs.length; i++) {
-                if (vs[i].lang.indexOf('ko') !== -1 && (vs[i].name.indexOf('SunHi') !== -1 || vs[i].name.indexOf('Natural') !== -1 || vs[i].name.indexOf('Google') !== -1)) return vs[i];
-            }
-            for (var j = 0; j < vs.length; j++) if (vs[j].lang.indexOf('ko') !== -1) return vs[j];
-            return null;
-        }
-        if (synth && synth.onvoiceschanged !== undefined) synth.onvoiceschanged = function() { bestVoice = getVoice(); };
-        function speakNext() {
-            if (!isSpeaking || sIdx >= sList.length) {
-                isSpeaking = false;
-                document.getElementById('ttsText').innerText = "기사 다시 듣기";
-                document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill";
-                return;
-            }
-            var u = new SpeechSynthesisUtterance(sList[sIdx].trim());
-            u.lang = 'ko-KR'; u.rate = 0.95; u.pitch = 1.05;
-            if (!bestVoice) bestVoice = getVoice();
-            if (bestVoice) u.voice = bestVoice;
-            u.onend = function() { sIdx++; speakNext(); };
-            u.onerror = function() { sIdx++; speakNext(); };
-            synth.speak(u);
-        }
-        function toggleSpeech() {
-            if (!synth) return alert("음성을 지원하지 않는 브라우저입니다.");
-            if (isSpeaking) {
-                synth.cancel(); isSpeaking = false;
-                document.getElementById('ttsText').innerText = "차분한 아나운서 음성 듣기";
-                document.getElementById('ttsBtn').className = "btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill";
-            } else {
-                synth.cancel();
-                var text = document.getElementById('artBody').innerText.replace(/\\s+/g, ' ').trim();
-                sList = text.match(/[^.?!]+[.?!]+/g) || [text];
-                sIdx = 0; isSpeaking = true;
-                document.getElementById('ttsText').innerText = "일시정지";
-                document.getElementById('ttsBtn').className = "btn btn-danger btn-sm fw-bold px-3 py-2 rounded-pill";
-                speakNext();
-            }
-        }
-        var curSize = 1.15;
-        function resizeFont(d) {
-            curSize = Math.max(0.95, Math.min(1.5, curSize + (d * 0.1)));
-            document.getElementById('artBody').style.fontSize = curSize + 'rem';
-        }
-    </script>"""
+    body = (
+        ARTICLE_VIEW_TEMPLATE
+        .replace("__BADGE__", get_badge(row['category']))
+        .replace("__CREATED_AT__", row['created_at'])
+        .replace("__ARTICLE_TITLE__", row['title'])
+        .replace("__SUMMARY__", row['summary'])
+        .replace("__CONTENT__", row['content'])
+        .replace("__LIKES__", str(row['likes']))
+    )
     return render(row['title'], body)
 
 @app.get("/write")
 def write_form():
-    body = """
-    <div class="container py-5" style="max-width: 600px;">
-        <div class="card p-4 shadow-sm border-0 rounded-3">
-            <h4 class="fw-bold mb-3"><i class="fa-solid fa-pen text-primary me-2"></i>기사 수동 발행</h4>
-            <form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText='발행 중...';">
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">카테고리</label>
-                    <select name="category" class="form-select">
-                        <option value="정부 지원금/복지 혜택">🏛️ 정부 지원금/복지 혜택</option>
-                        <option value="생활 경제/세무 상식">📈 생활 경제/세무 상식</option>
-                        <option value="시니어 건강/식품">🩺 시니어 건강/식품</option>
-                        <option value="문화/예술">🎨 문화/예술</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold small">기사 주제</label>
-                    <input type="text" name="topic" class="form-control" placeholder="주제를 입력하세요" required>
-                </div>
-                <button type="submit" name="btn" class="btn btn-primary w-100 py-2 fw-bold">즉시 발행하기</button>
-            </form>
-        </div>
-    </div>"""
+    body = (
+        '<div class="container py-5" style="max-width: 600px;">'
+        '<div class="card p-4 shadow-sm border-0 rounded-3">'
+        '<h4 class="fw-bold mb-3"><i class="fa-solid fa-pen text-primary me-2"></i>기사 수동 발행</h4>'
+        '<form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText=\'발행 중...\';">'
+        '<div class="mb-3">'
+        '<label class="form-label fw-bold small">카테고리</label>'
+        '<select name="category" class="form-select">'
+        '<option value="정부 지원금/복지 혜택">🏛️ 정부 지원금/복지 혜택</option>'
+        '<option value="생활 경제/세무 상식">📈 생활 경제/세무 상식</option>'
+        '<option value="시니어 건강/식품">🩺 시니어 건강/식품</option>'
+        '<option value="문화/예술">🎨 문화/예술</option>'
+        '</select>'
+        '</div>'
+        '<div class="mb-3">'
+        '<label class="form-label fw-bold small">기사 주제</label>'
+        '<input type="text" name="topic" class="form-control" placeholder="주제를 입력하세요" required>'
+        '</div>'
+        '<button type="submit" name="btn" class="btn btn-primary w-100 py-2 fw-bold">즉시 발행하기</button>'
+        '</form>'
+        '</div></div>'
+    )
     return render("기사 수동 발행", body)
 
 @app.get("/create")
@@ -339,7 +384,7 @@ def create_article(category: str = "정부 지원금/복지 혜택", topic: str 
     if not topic:
         return RedirectResponse(url="/", status_code=303)
     new_id = save_article(category, topic)
-    return RedirectResponse(url=f"/article/{new_id}", status_code=303)
+    return RedirectResponse(url="/article/" + str(new_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
 def sitemap():
@@ -352,7 +397,7 @@ def sitemap():
         xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         xml += '  <url><loc>https://insight-webzine.onrender.com/</loc><priority>1.0</priority></url>\n'
         for r in rows:
-            xml += f'  <url><loc>https://insight-webzine.onrender.com/article/{r["id"]}</loc><priority>0.8</priority></url>\n'
+            xml += '  <url><loc>https://insight-webzine.onrender.com/article/' + str(r["id"]) + '</loc><priority>0.8</priority></url>\n'
         xml += '</urlset>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -368,7 +413,7 @@ def rss_feed():
         conn.close()
         xml = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>인사이트 데일리</title><link>https://insight-webzine.onrender.com</link>'
         for r in rows:
-            xml += f'<item><title><![CDATA[{r["title"]}]]></title><link>https://insight-webzine.onrender.com/article/{r["id"]}</link><description><![CDATA[{r["summary"]}]]></description></item>'
+            xml += '<item><title><![CDATA[' + r['title'] + ']]></title><link>https://insight-webzine.onrender.com/article/' + str(r['id']) + '</link><description><![CDATA[' + r['summary'] + ']]></description></item>'
         xml += '</channel></rss>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -377,20 +422,29 @@ def rss_feed():
 @app.get("/admin/stats")
 def admin_stats(pw=""):
     if pw != ADMIN_PW:
-        return render("로그인", f"""<div class="container py-5 text-center" style="max-width:320px;">
-            <h5 class="fw-bold mb-3">관리자 로그인</h5>
-            <form method="get" action="/admin/stats">
-                <input type="password" name="pw" class="form-control mb-2" placeholder="비밀번호" required>
-                <button type="submit" class="btn btn-primary w-100">접속</button>
-            </form>
-        </div>""")
+        body = (
+            '<div class="container py-5 text-center" style="max-width:320px;">'
+            '<h5 class="fw-bold mb-3">관리자 로그인</h5>'
+            '<form method="get" action="/admin/stats">'
+            '<input type="password" name="pw" class="form-control mb-2" placeholder="비밀번호" required>'
+            '<button type="submit" class="btn btn-primary w-100">접속</button>'
+            '</form></div>'
+        )
+        return render("로그인", body)
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT id, title, category, views, likes, created_at FROM articles ORDER BY views DESC")
     rows = c.fetchall()
     conn.close()
-    table_rows = "".join([f"<tr><td>{r['id']}</td><td><a href='/article/{r['id']}'>{r['title']}</a></td><td>{r['category']}</td><td>{r['views']}회</td><td>{r['created_at'][:10]}</td></tr>" for r in rows])
-    return render("통계", f"""<div class="container py-4"><h3>📊 통계</h3><table class="table table-bordered bg-white mt-3"><thead><tr><th>ID</th><th>제목</th><th>분류</th><th>조회수</th><th>일자</th></tr></thead><tbody>{table_rows}</tbody></table></div>""")
+    
+    tr_list = []
+    for r in rows:
+        tr_list.append(
+            '<tr><td>' + str(r['id']) + '</td><td><a href="/article/' + str(r['id']) + '">' + r['title'] + '</a></td><td>' + r['category'] + '</td><td>' + str(r['views']) + '회</td><td>' + r['created_at'][:10] + '</td></tr>'
+        )
+    table_rows = "".join(tr_list)
+    body = '<div class="container py-4"><h3>📊 통계</h3><table class="table table-bordered bg-white mt-3"><thead><tr><th>ID</th><th>제목</th><th>분류</th><th>조회수</th><th>일자</th></tr></thead><tbody>' + table_rows + '</tbody></table></div>'
+    return render("통계", body)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
