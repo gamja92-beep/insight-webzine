@@ -25,7 +25,7 @@ except Exception as e:
     print("Gemini 초기화 오류:", e)
 
 def get_db():
-    conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
+    conn = sqlite3.connect("webzine.db", timeout=10.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -57,15 +57,17 @@ def init_db():
 
 init_db()
 
-def increase_article_view(article_id: int):
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE articles SET views = COALESCE(views, 0) + 1 WHERE id = ?", (article_id,))
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
+def increase_article_view_async(article_id: int):
+    def _run():
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE articles SET views = COALESCE(views, 0) + 1 WHERE id = ?", (article_id,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
 
 AUTO_TOPIC_POOL = [
     ("정부 지원금/복지 혜택", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
@@ -78,57 +80,53 @@ AUTO_TOPIC_POOL = [
     ("문화/예술", "국립자연휴양림 시니어 치유 숲 프로그램 예약 방법과 입장료 감면 혜택")
 ]
 
-def generate_and_save_article(category="", topic=""):
-    if not category or not topic:
-        chosen = random.choice(AUTO_TOPIC_POOL)
-        category, topic = chosen[0], chosen[1]
-
+def make_article_data(category: str, topic: str):
     title = topic
-    summary = "1. 실생활에 즉시 도움 되는 핵심 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+    summary = "1. 실생활에 즉시 도움 되는 심층 핵심 정보. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
     
     content = """
     <h2>1. 주요 배경과 핵심 정보</h2>
-    <p>본 가이드는 실생활에서 즉시 활용할 수 있는 핵심 정책 및 실전 정보를 상세히 안내해 드립니다.</p>
+    <p>""" + topic + """에 대해 독자 여러분이 반드시 알아야 할 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 알찬 지침을 담고 있습니다.</p>
     <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2>
     <table class="table table-bordered my-3">
         <thead class="table-light">
-            <tr><th>구분</th><th>주요 지원 내용</th><th>지원 대상</th></tr>
+            <tr><th>구분</th><th>주요 지원 내용</th><th>지원 대상 및 기준</th></tr>
         </thead>
         <tbody>
-            <tr><td>기본 지원</td><td>맞춤형 지원금 및 본인부담금 감면</td><td>만 65세 이상 및 해당 가구</td></tr>
-            <tr><td>신청 방법</td><td>정부24 온라인 또는 주민센터 방문</td><td>신분증 및 관련 서류 지참</td></tr>
+            <tr><td>기본 지원</td><td>맞춤형 혜택 및 본인부담금 대폭 감면</td><td>만 65세 이상 및 해당 가구</td></tr>
+            <tr><td>신청 방법</td><td>정부24 온라인 신청 또는 관할 주민센터 방문</td><td>신분증 및 구비서류 지참</td></tr>
         </tbody>
     </table>
     <h2>3. 실패 없는 실전 신청 절차</h2>
     <ol>
         <li>신청 자격 및 해당 연도 소득인정액 기준을 확인합니다.</li>
-        <li>필수 구비 서류를 지참하여 관할 기관에 신청서를 접수합니다.</li>
-        <li>심사 결과 확인 후 지원 혜택을 수령합니다.</li>
+        <li>필수 지참 서류를 구비하여 관할 기관 또는 공식 웹사이트에 접수합니다.</li>
+        <li>심사 통과 후 혜택을 수령하고 변동 사항을 주기적으로 확인합니다.</li>
     </ol>
     <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2>
     <ul>
-        <li>신청 기한을 넘길 경우 소급 혜택이 불가할 수 있으니 사전 접수 기간을 꼭 확인하세요.</li>
-        <li>기타 유사 복지 제도와의 중복 수혜 가능 여부를 사전 문의하시기 바랍니다.</li>
+        <li>신청 기한을 넘기면 소급 지원이 어려울 수 있으니 사전 신청 기간을 반드시 확인하세요.</li>
+        <li>기타 유사 복지 제도와의 중복 수혜 가능 여부를 전담 고객센터에 사전 문의하시기 바랍니다.</li>
     </ul>
     <h2>5. 자주 묻는 질문 (FAQ)</h2>
-    <p><strong>Q. 대리 신청도 가능한가요?</strong><br>A. 배우자나 직계가족이 위임장과 신분증, 가족관계증명서를 지참하시면 가능합니다.</p>
+    <p><strong>Q. 본인 방문이 어려울 때 대리 신청이 가능한가요?</strong><br>A. 네, 배우자나 직계가족이 위임장과 신분증, 가족관계증명서를 지참하시면 가능합니다.</p>
     """
 
     if client:
         prompt = """
-        당신은 5060 시니어 전문 웹진의 수석 기자입니다.
-        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 리포트'를 작성해 주세요.
+        당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
+        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 기사'를 작성해 주세요.
 
         [주제]: """ + topic + """
         [카테고리]: """ + category + """
 
         [작성 가이드라인]:
-        1. 분량: 한글 1,800자 이상의 상세한 내용.
-        2. 기사 구성 (HTML 태그 필수):
-           - [제목]: 신뢰감 있는 매력적인 헤드라인
-           - [요약]: 핵심 3줄 브리핑 (1., 2., 3.)
-           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문과 답변)
-        3. 어조: 뉴스 아나운서처럼 정중하고 명쾌한 어조 ('~합니다', '~하세요').
+        1. 분량: 한글 1,500자 ~ 2,000자 이상의 매우 상세하고 유익한 내용.
+        2. 기사 구성 (HTML 태그 필수 적용):
+           - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
+           - [요약]: 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
+           - [본문]: <h2>1. 주요 배경과 핵심 정보</h2>, <h2>2. 한눈에 비교하는 기준 및 혜택 요약</h2> (HTML <table> 표 포함), <h2>3. 실패 없는 실전 신청 절차</h2> (<ol> 리스트), <h2>4. 전문가 주의사항 및 알짜 꿀팁</h2> (<ul> 리스트), <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
+        3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
         [출력 JSON 규격]:
         {
@@ -153,21 +151,32 @@ def generate_and_save_article(category="", topic=""):
             summary = data.get("summary", summary)
             content = data.get("content", content)
         except Exception as e:
-            print("Gemini 생성 오류:", e)
+            print("Gemini 생성 예외:", e)
 
+    return title, category, summary, content
+
+def generate_and_save_article(category="", topic=""):
+    if not category or not topic:
+        chosen = random.choice(AUTO_TOPIC_POOL)
+        category, topic = chosen[0], chosen[1]
+
+    title, category, summary, content = make_article_data(category, topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO articles (title, category, summary, content, created_at, views, likes)
         VALUES (?, ?, ?, ?, ?, 0, 0)
     """, (title, category, summary, content, now))
+    inserted_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    print("[" + now + "] 기사 저장 완료: " + title)
+    print("[" + now + "] 기사 발행 완료 (ID: " + str(inserted_id) + "): " + title)
+    return inserted_id
 
 def auto_article_scheduler():
-    time.sleep(15)
+    time.sleep(20)
     generate_and_save_article()
     while True:
         time.sleep(21600)
@@ -186,17 +195,23 @@ HTML_BASE_TEMPLATE = """<!DOCTYPE html>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
+        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Pretendard", sans-serif; color: #1e293b; }
         .navbar-brand { font-weight: 800; color: #1e3a8a !important; font-size: 1.35rem; }
-        .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 45px 0; margin-bottom: 30px; }
+        .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 42px 0; margin-bottom: 25px; }
+        
+        .cat-nav-btn { font-size: 0.95rem; font-weight: 600; padding: 8px 16px; border-radius: 30px; margin: 3px; text-decoration: none; display: inline-block; color: #475569; background: #ffffff; border: 1px solid #e2e8f0; transition: all 0.2s; }
+        .cat-nav-btn:hover, .cat-nav-btn.active { background: #1e3a8a; color: #ffffff; border-color: #1e3a8a; }
+        
         .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
         .article-card:hover { transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }
-        .badge-cat { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; font-size: 0.85rem; }
+        
+        .badge-cat-복지 { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; }
+        .badge-cat-경제 { background-color: #ecfdf5; color: #047857; font-weight: 600; border: 1px solid #a7f3d0; }
+        .badge-cat-건강 { background-color: #fef2f2; color: #b91c1c; font-weight: 600; border: 1px solid #fecaca; }
+        .badge-cat-문화 { background-color: #faf5ff; color: #7e22ce; font-weight: 600; border: 1px solid #e9d5ff; }
         
         .article-content { font-size: 1.16rem; line-height: 2.05; color: #334155; }
         .article-content h2 { color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.6rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }
-        .article-content h3 { color: #1e293b; font-weight: 700; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.8rem; }
-        .article-content p { margin-bottom: 1.5rem; word-break: keep-all; }
         .article-content table { width: 100%; margin: 1.8rem 0; border-collapse: separate; border-spacing: 0; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }
         .article-content th { background: #f1f5f9; padding: 14px; font-weight: 700; text-align: center; border-bottom: 2px solid #cbd5e1; }
         .article-content td { padding: 13px 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }
@@ -230,15 +245,28 @@ HTML_BASE_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>"""
 
+def get_cat_badge(cat_name):
+    if "복지" in cat_name or "지원" in cat_name:
+        return '<span class="badge badge-cat-복지 px-2 py-1">🏛️ ' + cat_name + '</span>'
+    elif "경제" in cat_name or "세무" in cat_name:
+        return '<span class="badge badge-cat-경제 px-2 py-1">📈 ' + cat_name + '</span>'
+    elif "건강" in cat_name or "식품" in cat_name:
+        return '<span class="badge badge-cat-건강 px-2 py-1">🩺 ' + cat_name + '</span>'
+    else:
+        return '<span class="badge badge-cat-문화 px-2 py-1">🎨 ' + cat_name + '</span>'
+
 def render_html(title, content):
     page = HTML_BASE_TEMPLATE.replace("__PAGE_TITLE__", title).replace("__MAIN_CONTENT__", content)
     return HTMLResponse(content=page)
 
 @app.get("/")
-def index():
+def index(cat: str = ""):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles ORDER BY id DESC")
+    if cat:
+        cursor.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles WHERE category LIKE ? ORDER BY id DESC", ('%' + cat + '%',))
+    else:
+        cursor.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles ORDER BY id DESC")
     articles = cursor.fetchall()
     conn.close()
 
@@ -250,12 +278,13 @@ def index():
         art_sum = str(row['summary'])
         art_date = str(row['created_at'])[:10]
         art_views = str(row['views'])
+        badge_html = get_cat_badge(art_cat)
 
         cards_html += """
         <div class="col-md-4 mb-4">
             <div class="card article-card p-4 d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="badge badge-cat px-2 py-1">""" + art_cat + """</span>
+                    """ + badge_html + """
                     <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>""" + art_date + """</small>
                 </div>
                 <h5 class="card-title fw-bold mb-3 lh-base">
@@ -271,7 +300,17 @@ def index():
         """
 
     if not cards_html:
-        cards_html = '<div class="col-12 text-center py-5 text-muted">발행된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
+        cards_html = '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
+
+    cat_nav = """
+    <div class="d-flex justify-content-center flex-wrap mb-4">
+        <a href="/" class="cat-nav-btn """ + ('active' if not cat else '') + """">전체보기</a>
+        <a href="/?cat=복지" class="cat-nav-btn """ + ('active' if cat == '복지' else '') + """">🏛️ 정부지원·복지</a>
+        <a href="/?cat=경제" class="cat-nav-btn """ + ('active' if cat == '경제' else '') + """">📈 생활경제·재테크</a>
+        <a href="/?cat=건강" class="cat-nav-btn """ + ('active' if cat == '건강' else '') + """">🩺 시니어건강·식품</a>
+        <a href="/?cat=문화" class="cat-nav-btn """ + ('active' if cat == '문화' else '') + """">🎨 문화·힐링여행</a>
+    </div>
+    """
 
     body = """
     <div class="hero-section text-center">
@@ -281,6 +320,7 @@ def index():
         </div>
     </div>
     <div class="container">
+        """ + cat_nav + """
         <div class="row">
             """ + cards_html + """
         </div>
@@ -290,7 +330,8 @@ def index():
 
 @app.get("/article/{article_id}")
 def view_article(article_id: int):
-    increase_article_view(article_id)
+    # 조회수는 백그라운드에서 비동기로 올려 딜레이(0.1초 전환)를 없앰
+    increase_article_view_async(article_id)
 
     conn = get_db()
     cursor = conn.cursor()
@@ -314,10 +355,11 @@ def view_article(article_id: int):
         rel_title = str(rel['title'])
         rel_cat = str(rel['category'])
         rel_date = str(rel['created_at'])[:10]
+        badge_html = get_cat_badge(rel_cat)
         related_html += """
         <div class="col-md-4 mb-3">
             <div class="card h-100 p-3 border-0 shadow-sm rounded-3">
-                <span class="badge badge-cat w-auto align-self-start mb-2">""" + rel_cat + """</span>
+                <div class="mb-2">""" + badge_html + """</div>
                 <h6 class="fw-bold"><a href="/article/""" + rel_id + """" class="text-decoration-none text-dark">""" + rel_title + """</a></h6>
                 <small class="text-muted mt-auto pt-2">""" + rel_date + """</small>
             </div>
@@ -328,12 +370,13 @@ def view_article(article_id: int):
     est_minutes = max(2, round(content_len / 450))
     body_html = str(row['content'])
     likes_count = str(row['likes']) if 'likes' in row.keys() and row['likes'] is not None else "0"
+    badge_html = get_cat_badge(str(row['category']))
 
     body = """
     <div class="container py-5" style="max-width: 860px;">
         <div class="mb-4">
             <div class="d-flex gap-2 align-items-center mb-2">
-                <span class="badge badge-cat px-3 py-2 fs-6">""" + str(row['category']) + """</span>
+                """ + badge_html + """
                 <span class="text-muted small"><i class="fa-regular fa-clock me-1"></i>""" + str(row['created_at']) + """</span>
                 <span class="badge bg-light text-dark border ms-auto"><i class="fa-solid fa-book-open-reader me-1 text-primary"></i>약 """ + str(est_minutes) + """분 분량</span>
             </div>
@@ -420,7 +463,7 @@ def view_article(article_id: int):
             var voices = speechSynth.getVoices();
             for (var i = 0; i < voices.length; i++) {
                 if (voices[i].lang.indexOf('ko') !== -1 || voices[i].lang.indexOf('KO') !== -1) {
-                    if (voices[i].name.indexOf('Google') !== -1 || voices[i].name.indexOf('Natural') !== -1) {
+                    if (voices[i].name.indexOf('Google') !== -1 || voices[i].name.indexOf('Natural') !== -1 || voices[i].name.indexOf('Online') !== -1) {
                         return voices[i];
                     }
                 }
@@ -464,7 +507,7 @@ def view_article(article_id: int):
                 var utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = 'ko-KR';
                 utterance.rate = currentRate;
-                utterance.pitch = 1.05;
+                utterance.pitch = 1.0;
                 
                 if (!selectedVoice) selectedVoice = findBestKoreanVoice();
                 if (selectedVoice) utterance.voice = selectedVoice;
@@ -514,33 +557,46 @@ def write_form():
             <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
             <p class="text-muted small mb-4">원하는 특정 주제가 있을 때 입력하시면 즉시 2,000자 이상의 심층 리포트를 작성하여 웹진에 자동 등록합니다.</p>
 
-            <form method="post" action="/write">
+            <form id="writeForm" method="post" action="/write" onsubmit="showLoading()">
                 <div class="mb-3">
                     <label class="form-label fw-bold">카테고리</label>
                     <select name="category" class="form-select py-2">
-                        <option value="정부 지원금/복지 혜택">정부 지원금/복지 혜택</option>
-                        <option value="생활 경제/세무 상식">생활 경제/세무 상식</option>
-                        <option value="시니어 건강/식품">시니어 건강/식품</option>
-                        <option value="문화/예술">문화/예술</option>
+                        <option value="정부 지원금/복지 혜택">🏛️ 정부 지원금/복지 혜택</option>
+                        <option value="생활 경제/세무 상식">📈 생활 경제/세무 상식</option>
+                        <option value="시니어 건강/식품">🩺 시니어 건강/식품</option>
+                        <option value="문화/예술">🎨 문화/예술</option>
                     </select>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold">기사 주제</label>
                     <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
-                <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
+                <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
                     <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 작성 및 발행
                 </button>
             </form>
+
+            <div id="loadingBox" class="text-center py-4 mt-3" style="display: none;">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <h5 class="fw-bold text-dark">AI 기자가 2,000자 심층 가이드를 집필 중입니다...</h5>
+                <p class="text-muted small mb-0">약 5~10초 후 완성된 기사로 바로 이동합니다. 창을 닫지 마세요.</p>
+            </div>
         </div>
     </div>
+
+    <script>
+        function showLoading() {
+            document.getElementById('writeForm').style.display = 'none';
+            document.getElementById('loadingBox').style.display = 'block';
+        }
+    </script>
     """
     return render_html("기사 수동 발행", body)
 
 @app.post("/write")
 def write_submit(category: str = Form(...), topic: str = Form(...)):
-    threading.Thread(target=generate_and_save_article, args=(category, topic), daemon=True).start()
-    return RedirectResponse(url="/", status_code=303)
+    new_article_id = generate_and_save_article(category, topic)
+    return RedirectResponse(url="/article/" + str(new_article_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
 def sitemap():
@@ -612,11 +668,12 @@ def admin_stats(pw=""):
 
     rows_html = ""
     for idx, row in enumerate(articles, 1):
+        badge_html = get_cat_badge(str(row['category']))
         rows_html += """
         <tr>
             <td class="text-center fw-bold text-muted">""" + str(idx) + """</td>
             <td><a href="/article/""" + str(row['id']) + """" target="_blank" class="text-decoration-none text-dark fw-semibold">""" + str(row['title']) + """</a></td>
-            <td class="text-center"><span class="badge badge-cat">""" + str(row['category']) + """</span></td>
+            <td class="text-center">""" + badge_html + """</td>
             <td class="text-center text-primary fw-bold">""" + str(row['views']) + """ 회</td>
             <td class="text-center text-danger fw-bold">""" + str(row['likes']) + """ 개</td>
             <td class="text-center text-muted small">""" + str(row['created_at'])[:10] + """</td>
@@ -649,10 +706,10 @@ def admin_stats(pw=""):
                     <tr>
                         <th class="text-center" style="width: 60px;">순위</th>
                         <th>기사 제목</th>
-                        <th class="text-center" style="width: 130px;">카테고리</th>
-                        <th class="text-center" style="width: 110px;">조회수</th>
-                        <th class="text-center" style="width: 100px;">좋아요</th>
-                        <th class="text-center" style="width: 120px;">작성일</th>
+                        <th class="text-center" style="width: 150px;">카테고리</th>
+                        <th class="text-center" style="width: 100px;">조회수</th>
+                        <th class="text-center" style="width: 90px;">좋아요</th>
+                        <th class="text-center" style="width: 110px;">작성일</th>
                     </tr>
                 </thead>
                 <tbody>
