@@ -12,7 +12,7 @@ from google import genai
 import uvicorn
 
 # ======================================================
-# 1. 환경 설정 및 DB 초기화
+# 1. 환경 설정 및 DB 초기화 (안정성 강화)
 # ======================================================
 app = FastAPI()
 
@@ -24,7 +24,8 @@ gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
 def get_db():
-    conn = sqlite3.connect("webzine.db", check_same_thread=False)
+    # 데이터베이스 잠금 방지를 위해 timeout을 30초로 설정
+    conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -43,6 +44,7 @@ def init_db():
             likes INTEGER DEFAULT 0
         )
     """)
+    # 기존 DB 테이블 구조 자동 업그레이드
     try:
         cursor.execute("ALTER TABLE articles ADD COLUMN views INTEGER DEFAULT 0")
     except Exception:
@@ -67,7 +69,7 @@ def increase_article_view(article_id: int):
         pass
 
 # ======================================================
-# 2. 고품격 심층 기사 자동 생성 엔진 (2,000자+ 전문 리포트)
+# 2. 고품격 심층 기사 자동 생성 엔진 (오류 철통 방어)
 # ======================================================
 AUTO_TOPIC_POOL = [
     ("시니어/복지", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
@@ -83,73 +85,76 @@ AUTO_TOPIC_POOL = [
 ]
 
 def generate_and_save_article(category: str = "", topic: str = ""):
-    if not category or not topic:
-        category, topic = random.choice(AUTO_TOPIC_POOL)
+    try:
+        if not category or not topic:
+            category, topic = random.choice(AUTO_TOPIC_POOL)
 
-    title = topic
-    summary = "1. 실생활에 즉시 도움 되는 심층 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
-    content = f"<h2>1. {topic} 핵심 개요</h2><p>본 기사는 독자 여러분께 꼭 필요한 정확하고 실용적인 정보를 안내합니다.</p>"
+        title = topic
+        summary = "1. 실생활에 즉시 도움 되는 심층 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+        content = f"<h2>1. {topic} 핵심 개요</h2><p>본 기사는 독자 여러분께 꼭 필요한 정확하고 실용적인 정보를 다룹니다.</p><h2>2. 상세 혜택 및 신청 방법</h2><p>해당 지원 혜택의 구체적인 내용과 관할 기관을 꼼꼼히 확인하시기 바랍니다.</p>"
 
-    if client:
-        prompt = f"""
-        당신은 5060 시니어 및 일반 대중을 위한 전문 프리미엄 웹진의 수석 전문 기자입니다.
-        아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽고 소장할 만한 '초고품질 심층 가이드 리포트'를 작성해 주세요.
+        if client:
+            prompt = f"""
+            당신은 5060 시니어 및 일반 대중을 위한 전문 프리미엄 웹진의 수석 기자입니다.
+            아래 [주제]와 [카테고리]에 대해 독자가 5분 이상 깊이 읽을 '초고품질 심층 가이드 리포트'를 작성해 주세요.
 
-        [주제]: {topic}
-        [카테고리]: {category}
+            [주제]: {topic}
+            [카테고리]: {category}
 
-        [작성 필수 가이드라인 - 엄격 준수]:
-        1. 분량: 한글 공백 포함 최소 2,000자 ~ 3,000자 이상의 매우 방대하고 디테일한 분량. (절대 몇 줄 요약으로 끝내지 마세요)
-        2. 기사 구성 형식 (HTML 태그 필수 적용):
-           - [제목]: 신뢰감 있고 호기심을 유발하는 고품격 헤드라인 (30자 내외)
-           - [요약]: 기사의 핵심을 찌르는 3줄 브리핑 (1., 2., 3. 번호 포함)
-           - [본문 구성]:
-             * <h2>1. 주요 배경과 꼭 알아야 할 핵심 포인트</h2>
-               (구체적인 정책 배경, 수혜 조건, 금액 수치 등을 3개 이상의 상세 문단으로 깊이 있게 서술)
-             * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2>
-               (독자의 가독성을 위해 항목/대상/지원내용/비고가 포함된 깔끔한 HTML <table> 표를 반드시 작성)
-             * <h2>3. 실패 없는 실전 신청 절차 및 준비 서류 가이드</h2>
-               (온라인 신청처, 관할 주민센터 방문 방법, 고객센터 대표번호, 필수 지참 서류를 <ol> 순서 리스트로 상세 설명)
-             * <h2>4. 전문가가 알려주는 주의사항 및 알짜 꿀팁</h2>
-               (신청 시 놓치기 쉬운 감액 조건, 유효기간, 중복 수혜 가능 여부 등을 <ul> 체크리스트로 작성)
-             * <h2>5. 자주 묻는 질문 (FAQ)</h2>
-               (실제 시니어 독자들이 가장 궁금해하는 핵심 질문 3가지와 명쾌한 해결 답변을 <p><strong>Q1...</strong></p><p>A1...</p> 형태로 수록)
-        3. 어조: 뉴스 아나운서처럼 정중하고 정확하며 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
+            [작성 필수 가이드라인]:
+            1. 분량: 한글 공백 포함 최소 2,000자 이상의 매우 상세하고 실용적인 내용.
+            2. 기사 구성 형식 (HTML 태그 필수 적용):
+               - [제목]: 신뢰감 있고 매력적인 고품격 헤드라인
+               - [요약]: 기사의 핵심 3줄 브리핑 (1., 2., 3. 번호 포함)
+               - [본문 구성]:
+                 * <h2>1. 주요 배경과 꼭 알아야 할 핵심 포인트</h2> (3개 이상의 풍부한 문단)
+                 * <h2>2. 한눈에 비교하는 주요 기준 및 혜택 요약</h2> (항목/대상/지원내용이 담긴 HTML <table> 표 필수)
+                 * <h2>3. 실패 없는 실전 신청 절차 및 준비 서류 가이드</h2> (<ol> 순서 리스트)
+                 * <h2>4. 전문가가 알려주는 주의사항 및 알짜 꿀팁</h2> (<ul> 체크리스트)
+                 * <h2>5. 자주 묻는 질문 (FAQ)</h2> (질문 3가지와 명쾌한 답변)
+            3. 어조: 뉴스 아나운서처럼 정중하고 신뢰를 주는 어조 ('~합니다', '~하시기 바랍니다').
 
-        [출력 JSON 규격]:
-        {{
-            "title": "기사 제목",
-            "summary": "1. ... 2. ... 3. ...",
-            "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
-        }}
-        """
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-                config=dict(response_mime_type="application/json")
-            )
-            data = json.loads(response.text)
-            title = data.get("title", title)
-            summary = data.get("summary", summary)
-            content = data.get("content", content)
-        except Exception as e:
-            print(f"AI 심층 기사 생성 오류: {e}")
+            [출력 JSON 규격]:
+            {{
+                "title": "기사 제목",
+                "summary": "1. ... 2. ... 3. ...",
+                "content": "<h2>1. ...</h2><p>...</p><table>...</table><h2>3. ...</h2><ol>...</ol><h2>4. ...</h2><ul>...</ul><h2>5. 자주 묻는 질문 (FAQ)</h2><p><strong>Q1...</strong></p><p>A1...</p>"
+            }}
+            """
+            try:
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=prompt,
+                    config=dict(response_mime_type="application/json")
+                )
+                raw_text = response.text.strip()
+                if raw_text.startswith("```json"):
+                    raw_text = raw_text[7:]
+                if raw_text.endswith("```"):
+                    raw_text = raw_text[:-3]
+                data = json.loads(raw_text.strip())
+                title = data.get("title", title)
+                summary = data.get("summary", summary)
+                content = data.get("content", content)
+            except Exception as e:
+                print(f"AI 생성 예외 (기본 서식 적용): {e}")
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO articles (title, category, summary, content, created_at, views, likes)
-        VALUES (?, ?, ?, ?, ?, 0, 0)
-    """, (title, category, summary, content, now))
-    conn.commit()
-    conn.close()
-    print(f"[{now}] 고품질 심층 기사 자동 발행 완료: {title}")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO articles (title, category, summary, content, created_at, views, likes)
+            VALUES (?, ?, ?, ?, ?, 0, 0)
+        """, (title, category, summary, content, now))
+        conn.commit()
+        conn.close()
+        print(f"[{now}] 기사 저장 성공: {title}")
+    except Exception as e:
+        print(f"기사 저장 전체 오류: {e}")
 
-# 백그라운드 자동 스케줄러 (6시간 = 21600초마다 1편씩 무인 발행)
+# 백그라운드 자동 스케줄러 (6시간마다 자동 발행)
 def auto_article_scheduler():
-    time.sleep(10)  # 서버 시작 10초 후 1편 자동 발행
+    time.sleep(15)  # 서버 기동 15초 후 첫 기사 자동 생성
     generate_and_save_article()
     while True:
         time.sleep(21600)
@@ -158,7 +163,7 @@ def auto_article_scheduler():
 threading.Thread(target=auto_article_scheduler, daemon=True).start()
 
 # ======================================================
-# 3. 공통 HTML 레이아웃 (반응형 & 시니어 최적화)
+# 3. 공통 HTML 레이아웃
 # ======================================================
 HTML_LAYOUT = """<!DOCTYPE html>
 <html lang="ko">
@@ -177,18 +182,15 @@ HTML_LAYOUT = """<!DOCTYPE html>
             --text-main: #1e293b;
             --bg-subtle: #f8fafc;
         }
-        body { background-color: var(--bg-subtle); font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text-main); -webkit-font-smoothing: antialiased; }
+        body { background-color: var(--bg-subtle); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--text-main); -webkit-font-smoothing: antialiased; }
         
-        /* 읽기 진행바 */
         #readingProgress { position: fixed; top: 0; left: 0; height: 4px; background: linear-gradient(90deg, #2563eb, #38bdf8); width: 0%; z-index: 9999; transition: width 0.1s ease; }
-
         .navbar-brand { font-weight: 800; color: var(--primary-color) !important; font-size: 1.35rem; }
         .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 48px 0; margin-bottom: 30px; }
         .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
         .article-card:hover { transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }
         .badge-cat { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; }
         
-        /* 기사 본문 스타일링 */
         .article-content { font-size: 1.18rem; line-height: 2.05; color: #334155; }
         .article-content h2 { color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.8rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }
         .article-content h3 { color: #1e293b; font-weight: 700; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 0.8rem; }
@@ -199,10 +201,7 @@ HTML_LAYOUT = """<!DOCTYPE html>
         .article-content ul, .article-content ol { margin-bottom: 1.8rem; padding-left: 1.8rem; }
         .article-content li { margin-bottom: 0.7rem; }
 
-        /* 뉴스 브리핑 아나운서 TTS 바 */
         .tts-player-box { background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-        
-        /* 자동 목차 박스 */
         .toc-box { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }
         .toc-box a { color: #4b5563; text-decoration: none; font-weight: 600; }
         .toc-box a:hover { color: #2563eb; text-decoration: underline; }
@@ -232,7 +231,7 @@ HTML_LAYOUT = """<!DOCTYPE html>
 """
 
 # ======================================================
-# 4. 사이트 메인 & 기사 뷰 라우트
+# 4. 라우트 정의
 # ======================================================
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -264,7 +263,7 @@ def index():
         """
 
     if not cards_html:
-        cards_html = '<div class="col-12 text-center py-5 text-muted">첫 기사를 생성하고 있습니다. 잠시 후 새로고침해 주세요.</div>'
+        cards_html = '<div class="col-12 text-center py-5 text-muted">기사를 준비 중입니다. 잠시 후 새로고침해 주세요.</div>'
 
     content = f"""
     <div class="hero-section text-center">
@@ -294,7 +293,6 @@ def view_article(article_id: int):
         conn.close()
         return HTMLResponse("존재하지 않는 기사입니다.", status_code=404)
 
-    # 관련 기사 3편
     cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? AND category = ? ORDER BY id DESC LIMIT 3", (article_id, row['category']))
     related_articles = cursor.fetchall()
     if len(related_articles) < 3:
@@ -320,7 +318,6 @@ def view_article(article_id: int):
 
     content = f"""
     <div class="container py-5" style="max-width: 860px;">
-        <!-- 상단 헤더 -->
         <div class="mb-4">
             <div class="d-flex gap-2 align-items-center mb-2">
                 <span class="badge badge-cat px-3 py-2 fs-6">{row['category']}</span>
@@ -330,7 +327,6 @@ def view_article(article_id: int):
             <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.15rem; letter-spacing: -0.03em;">{row['title']}</h1>
         </div>
 
-        <!-- 고품질 아나운서 TTS 바 & 폰트 조절 컨트롤러 -->
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <button id="ttsPlayBtn" class="btn btn-primary px-3 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
@@ -350,27 +346,23 @@ def view_article(article_id: int):
             </div>
         </div>
 
-        <!-- 핵심 3줄 브리핑 카드 -->
         <div class="p-4 mb-4 bg-white rounded-4 border-start border-5 border-primary shadow-sm">
             <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-bolt me-2"></i>핵심 3줄 브리핑</h6>
             <div class="text-secondary fw-medium lh-base" style="font-size: 1.08rem;">{row['summary']}</div>
         </div>
 
-        <!-- 스마트 인터랙티브 목차 -->
         <div class="toc-box">
             <div class="fw-bold text-dark mb-2"><i class="fa-solid fa-list-check me-2 text-primary"></i>이 기사의 주요 목차</div>
             <ul id="tocList" class="mb-0 ps-3 small" style="line-height: 1.9;"></ul>
         </div>
 
-        <!-- 심층 기사 본문 영역 -->
         <article id="articleBody" class="article-content bg-white p-4 p-md-5 rounded-4 shadow-sm mb-5">
             {body_html}
         </article>
 
-        <!-- 독자 공감 & 공유 버튼 -->
         <div class="d-flex justify-content-between align-items-center bg-white p-3 p-md-4 rounded-4 shadow-sm mb-5 border">
             <button id="likeBtn" class="btn btn-outline-danger btn-sm px-3 fw-bold rounded-pill" onclick="likePost()">
-                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">{row['likes']}</span>
+                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">{row['likes'] if 'likes' in row.keys() else 0}</span>
             </button>
             <div class="d-flex gap-2">
                 <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="copyCurrentUrl()"><i class="fa-solid fa-link me-1"></i>기사 주소 복사</button>
@@ -378,7 +370,6 @@ def view_article(article_id: int):
             </div>
         </div>
 
-        <!-- 관련 기사 추천 섹션 -->
         <div class="mt-5 pt-3">
             <h4 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-newspaper me-2 text-primary"></i>함께 읽으면 유익한 추천 가이드</h4>
             <div class="row">
@@ -387,9 +378,7 @@ def view_article(article_id: int):
         </div>
     </div>
 
-    <!-- 스크립트: 아나운서 고품질 음성 엔진 & 목차 자동생성 & 스크롤바 -->
     <script>
-        // 1. 읽기 스크롤 진행바
         window.onscroll = function() {{
             var winScroll = document.body.scrollTop || document.documentElement.scrollTop;
             var height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
@@ -397,7 +386,6 @@ def view_article(article_id: int):
             document.getElementById("readingProgress").style.width = scrolled + "%";
         }};
 
-        // 2. 본문 제목(h2) 기반 자동 목차 생성
         window.addEventListener('DOMContentLoaded', function() {{
             var h2s = document.querySelectorAll('#articleBody h2');
             var tocList = document.getElementById('tocList');
@@ -416,7 +404,6 @@ def view_article(article_id: int):
             }});
         }});
 
-        // 3. 고품질 뉴스 아나운서 TTS 엔진
         var isSpeaking = false;
         var speechSynth = window.speechSynthesis;
         var currentRate = 0.95;
@@ -425,7 +412,6 @@ def view_article(article_id: int):
         function findBestKoreanVoice() {{
             if (!speechSynth) return null;
             var voices = speechSynth.getVoices();
-            // 가장 자연스러운 음성 우선순위 탐색 (구글 한국어 > MS 하이미/선희/인준 > 일반 ko-KR)
             for (var i = 0; i < voices.length; i++) {{
                 if (voices[i].lang.includes('ko') || voices[i].lang.includes('KO')) {{
                     if (voices[i].name.includes('Google') || voices[i].name.includes('Natural') || voices[i].name.includes('Online')) {{
@@ -472,7 +458,7 @@ def view_article(article_id: int):
                 var utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = 'ko-KR';
                 utterance.rate = currentRate;
-                utterance.pitch = 1.05; // 명쾌하고 또렷한 아나운서 음조
+                utterance.pitch = 1.05;
                 
                 if (!selectedVoice) selectedVoice = findBestKoreanVoice();
                 if (selectedVoice) utterance.voice = selectedVoice;
@@ -492,21 +478,18 @@ def view_article(article_id: int):
             }}
         }}
 
-        // 4. 글자 크기 조절
         var currentSize = 1.18;
         function changeFontSize(delta) {{
             currentSize = Math.max(0.95, Math.min(1.65, currentSize + (delta * 0.1)));
             document.getElementById('articleBody').style.fontSize = currentSize + 'rem';
         }}
 
-        // 5. 링크 복사
         function copyCurrentUrl() {{
             navigator.clipboard.writeText(window.location.href).then(function() {{
                 alert("기사 링크가 복사되었습니다!");
             }});
         }}
 
-        // 6. 좋아요 반응
         function likePost() {{
             var countEl = document.getElementById('likeCount');
             var curr = parseInt(countEl.innerText) || 0;
@@ -539,7 +522,7 @@ def write_form():
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold">기사 주제</label>
-                    <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 틀니 건강보험 혜택 및 신청방법 총정리" required>
+                    <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
                 <button type="submit" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
                     <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 작성 및 발행
