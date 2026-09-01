@@ -110,7 +110,9 @@ def generate_rich_article(topic_or_raw: str, category_name: str, source_name: st
 # ==========================================================
 HTML_LAYOUT = """<!DOCTYPE html>
 <html lang="ko">
-<head>
+<head><head>
+    <meta name="naver-site-verification" content="2be1d8c699f2db6d04ee4bbe598876b754cf1c10" />
+    <meta charset="UTF-8">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>__PAGE_TITLE__ - 인사이트 데일리 웹진</title>
