@@ -81,7 +81,7 @@ def generate_and_save_article(category: str = "", topic: str = ""):
     if not category or not topic:
         category, topic = random.choice(AUTO_TOPIC_POOL)
 
-    title = f"{topic}"
+    title = topic
     summary = "1. 실생활에 즉시 도움 되는 핵심 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 정리. 3. 주의사항 및 실전 활용 꿀팁 완벽 수록."
     content = f"<h2>1. {topic} 개요 및 중요성</h2><p>본 기사는 독자 여러분께 꼭 필요한 핵심 정보를 제공합니다.</p>"
 
@@ -139,10 +139,10 @@ def generate_and_save_article(category: str = "", topic: str = ""):
 
 # 백그라운드 자동 발행 스케줄러 (6시간 = 21600초마다 1개 자동 생성)
 def auto_article_scheduler():
-    time.sleep(10)  # 서버 시작 10초 후 즉시 첫 기사 1개 발행
+    time.sleep(10)  # 서버 시작 10초 후 첫 기사 자동 발행
     generate_and_save_article()
     while True:
-        time.sleep(21600)  # 6시간 대기 후 다음 기사 자동 발행
+        time.sleep(21600)  # 6시간 대기
         generate_and_save_article()
 
 threading.Thread(target=auto_article_scheduler, daemon=True).start()
@@ -340,59 +340,59 @@ def view_article(article_id: int):
     </div>
 
     <script>
-        let isSpeaking = false;
-        let speechSynth = window.speechSynthesis;
-        let utterance = null;
+        var isSpeaking = false;
+        var speechSynth = window.speechSynthesis;
+        var utterance = null;
 
-        function toggleTTS() {
-            if (!speechSynth) {
+        function toggleTTS() {{
+            if (!speechSynth) {{
                 alert("현재 브라우저는 음성 듣기를 지원하지 않습니다.");
                 return;
-            }
+            }}
 
-            if (isSpeaking) {
+            if (isSpeaking) {{
                 speechSynth.cancel();
                 isSpeaking = false;
                 document.getElementById('ttsBtnText').innerText = "기사 음성 듣기";
                 document.getElementById('ttsPlayBtn').className = "btn btn-primary btn-sm px-3 fw-bold rounded-pill";
                 document.getElementById('ttsStatus').innerText = "음성 재생이 중지되었습니다.";
-            } else {
-                const articleText = document.getElementById('articleBody').innerText;
+            }} else {{
+                var articleText = document.getElementById('articleBody').innerText;
                 utterance = new SpeechSynthesisUtterance(articleText);
                 utterance.lang = 'ko-KR';
                 utterance.rate = 0.95;
 
-                utterance.onend = function() {
+                utterance.onend = function() {{
                     isSpeaking = false;
                     document.getElementById('ttsBtnText').innerText = "기사 다시 듣기";
                     document.getElementById('ttsPlayBtn').className = "btn btn-primary btn-sm px-3 fw-bold rounded-pill";
                     document.getElementById('ttsStatus').innerText = "재생이 완료되었습니다.";
-                };
+                }};
 
                 speechSynth.speak(utterance);
                 isSpeaking = true;
                 document.getElementById('ttsBtnText').innerText = "음성 일시정지";
                 document.getElementById('ttsPlayBtn').className = "btn btn-danger btn-sm px-3 fw-bold rounded-pill";
                 document.getElementById('ttsStatus').innerText = "기사를 낭독하고 있습니다...";
-            }
-        }
+            }}
+        }}
 
-        let currentSize = 1.15;
-        function changeFontSize(delta) {
+        var currentSize = 1.15;
+        function changeFontSize(delta) {{
             currentSize = Math.max(0.9, Math.min(1.6, currentSize + (delta * 0.1)));
             document.getElementById('articleBody').style.fontSize = currentSize + 'rem';
-        }
+        }}
 
-        function copyCurrentUrl() {
-            navigator.clipboard.writeText(window.location.href).then(() => {
+        function copyCurrentUrl() {{
+            navigator.clipboard.writeText(window.location.href).then(function() {{
                 alert("기사 링크가 복사되었습니다! 원하는 곳에 붙여넣어 공유하세요.");
-            });
-        }
+            }});
+        }}
     </script>
     """
     return HTML_LAYOUT.replace("__PAGE_TITLE__", row['title']).replace("__CONTENT__", content)
 
-# 수동 즉시 생성 폼 (원할 때 수동 작성도 가능)
+# 수동 즉시 생성 폼
 @app.get("/write", response_class=HTMLResponse)
 def write_form():
     form_html = """
