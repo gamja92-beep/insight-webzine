@@ -409,38 +409,48 @@ if __name__ == "__main__":
 # ======================================================
 @app.get("/sitemap.xml", response_class=Response)
 def sitemap():
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, created_at FROM articles ORDER BY id DESC")
-    articles = cursor.fetchall()
-    conn.close()
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM articles ORDER BY id DESC")
+        articles = cursor.fetchall()
+        conn.close()
 
-    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    xml_content += '  <url><loc>https://insight-webzine.onrender.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n'
-    for row in articles:
-        xml_content += f'  <url><loc>https://insight-webzine.onrender.com/article/{row["id"]}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
-    xml_content += '</urlset>'
-    return Response(content=xml_content, media_type="application/xml")
+        xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        xml_content += '  <url><loc>https://insight-webzine.onrender.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n'
+        for row in articles:
+            art_id = row[0] if not isinstance(row, dict) else row["id"]
+            xml_content += f'  <url><loc>https://insight-webzine.onrender.com/article/{art_id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
+        xml_content += '</urlset>'
+        return Response(content=xml_content, media_type="application/xml")
+    except Exception as e:
+        return Response(content=f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://insight-webzine.onrender.com/</loc></url></urlset>', media_type="application/xml")
 
 @app.get("/rss", response_class=Response)
 def rss_feed():
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title, summary, created_at FROM articles ORDER BY id DESC LIMIT 30")
-    articles = cursor.fetchall()
-    conn.close()
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, summary FROM articles ORDER BY id DESC LIMIT 30")
+        articles = cursor.fetchall()
+        conn.close()
 
-    rss_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    rss_content += '<rss version="2.0">\n<channel>\n'
-    rss_content += '  <title>인사이트 데일리 웹진</title>\n'
-    rss_content += '  <link>https://insight-webzine.onrender.com</link>\n'
-    rss_content += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
-    for row in articles:
-        rss_content += '  <item>\n'
-        rss_content += f'    <title><![CDATA[{row["title"]}]]></title>\n'
-        rss_content += f'    <link>https://insight-webzine.onrender.com/article/{row["id"]}</link>\n'
-        rss_content += f'    <description><![CDATA[{row["summary"]}]]></description>\n'
-        rss_content += '  </item>\n'
-    rss_content += '</channel>\n</rss>'
-    return Response(content=rss_content, media_type="application/xml")
+        rss_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        rss_content += '<rss version="2.0">\n<channel>\n'
+        rss_content += '  <title>인사이트 데일리 웹진</title>\n'
+        rss_content += '  <link>https://insight-webzine.onrender.com</link>\n'
+        rss_content += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
+        for row in articles:
+            art_id = row[0] if not isinstance(row, dict) else row["id"]
+            art_title = row[1] if not isinstance(row, dict) else row["title"]
+            art_sum = row[2] if not isinstance(row, dict) else row["summary"]
+            rss_content += '  <item>\n'
+            rss_content += f'    <title><![CDATA[{art_title}]]></title>\n'
+            rss_content += f'    <link>https://insight-webzine.onrender.com/article/{art_id}</link>\n'
+            rss_content += f'    <description><![CDATA[{art_sum}]]></description>\n'
+            rss_content += '  </item>\n'
+        rss_content += '</channel>\n</rss>'
+        return Response(content=rss_content, media_type="application/xml")
+    except Exception as e:
+        return Response(content='<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>인사이트 데일리 웹진</title><link>https://insight-webzine.onrender.com</link></channel></rss>', media_type="application/xml")
