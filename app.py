@@ -82,7 +82,6 @@ HTML_LAYOUT = """<!DOCTYPE html>
         .btn-custom { background-color: #1e3a8a; color: white; }
         .btn-custom:hover { background-color: #172554; color: white; }
         
-        /* 기사 본문 전문 스타일링 */
         .article-content { font-size: 1.15rem; line-height: 1.95; color: #334155; }
         .article-content h2, .article-content h3 { color: #0f172a; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; border-left: 5px solid #2563eb; padding-left: 12px; }
         .article-content p { margin-bottom: 1.4rem; word-break: keep-all; }
@@ -92,7 +91,6 @@ HTML_LAYOUT = """<!DOCTYPE html>
         .article-content ul, .article-content ol { margin-bottom: 1.4rem; padding-left: 1.5rem; }
         .article-content li { margin-bottom: 0.5rem; }
         
-        /* TTS 플레이어 바 */
         .tts-player-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     </style>
 </head>
@@ -180,11 +178,9 @@ def view_article(article_id: int):
         conn.close()
         return HTMLResponse("존재하지 않는 기사입니다.", status_code=404)
 
-    # 관련 기사 추천 (동일 카테고리 기사 3개)
     cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? AND category = ? ORDER BY id DESC LIMIT 3", (article_id, row['category']))
     related_articles = cursor.fetchall()
     
-    # 부족하면 전체 기사 중 최신순으로 채움
     if len(related_articles) < 3:
         cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? ORDER BY id DESC LIMIT 3", (article_id,))
         related_articles = cursor.fetchall()
@@ -202,16 +198,12 @@ def view_article(article_id: int):
         </div>
         """
 
-    # 예상 읽는 시간 계산 (한글 기준 분당 약 500자)
     content_len = len(row['content'])
     est_minutes = max(1, round(content_len / 500))
-
-    # 본문 줄바꿈 처리 (HTML 마크업이 이미 적용된 경우 그대로 출력 지원)
     body_html = row['content'].replace('\n', '<br>') if '<p>' not in row['content'] and '<div>' not in row['content'] else row['content']
 
     content = f"""
     <div class="container py-5" style="max-width: 840px;">
-        <!-- 상단 헤더 -->
         <div class="mb-4">
             <div class="d-flex gap-2 align-items-center mb-2">
                 <span class="badge badge-cat px-3 py-2 fs-6">{row['category']}</span>
@@ -221,7 +213,6 @@ def view_article(article_id: int):
             <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.1rem;">{row['title']}</h1>
         </div>
 
-        <!-- TTS 음성 플레이어 & 글자 크기 조절 바 -->
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3">
                 <button id="ttsPlayBtn" class="btn btn-primary btn-sm px-3 fw-bold rounded-pill" onclick="toggleTTS()">
@@ -236,18 +227,15 @@ def view_article(article_id: int):
             </div>
         </div>
 
-        <!-- 3줄 핵심 요약 카드 -->
         <div class="p-4 mb-4 bg-white rounded-3 border-start border-4 border-primary shadow-sm">
-            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-circle-check me-2"></i>핵심 핵심 3줄 브리핑</h6>
+            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-circle-check me-2"></i>핵심 3줄 브리핑</h6>
             <div class="text-secondary fw-medium lh-base" style="font-size: 1.05rem;">{row['summary']}</div>
         </div>
 
-        <!-- 기사 본문 영역 -->
         <article id="articleBody" class="article-content bg-white p-4 p-md-5 rounded-4 shadow-sm mb-5">
             {body_html}
         </article>
 
-        <!-- 공유하기 & 액션 버튼 -->
         <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded-3 mb-5 border">
             <span class="fw-semibold text-secondary small"><i class="fa-solid fa-share-nodes me-1"></i>이 기사를 주변에 공유해 보세요</span>
             <div class="d-flex gap-2">
@@ -256,7 +244,6 @@ def view_article(article_id: int):
             </div>
         </div>
 
-        <!-- 관련 기사 추천 리스트 -->
         <div class="mt-5 pt-3">
             <h4 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-newspaper me-2 text-primary"></i>함께 읽으면 좋은 추천 가이드</h4>
             <div class="row">
@@ -265,7 +252,6 @@ def view_article(article_id: int):
         </div>
     </div>
 
-    <!-- 스크립트: Web Speech API (TTS) & 글자 조절 & 링크 복사 -->
     <script>
         let isSpeaking = false;
         let speechSynth = window.speechSynthesis;
@@ -287,7 +273,7 @@ def view_article(article_id: int):
                 const articleText = document.getElementById('articleBody').innerText;
                 utterance = new SpeechSynthesisUtterance(articleText);
                 utterance.lang = 'ko-KR';
-                utterance.rate = 0.95; // 편안한 시니어 맞춤 읽기 속도
+                utterance.rate = 0.95;
 
                 utterance.onend = function() {
                     isSpeaking = false;
@@ -320,7 +306,7 @@ def view_article(article_id: int):
     return HTML_LAYOUT.replace("__PAGE_TITLE__", row['title']).replace("__CONTENT__", content)
 
 # ======================================================
-# 4. 고도화된 AI 기사 작성 시스템 (Gemini 장문 생성)
+# 4. 고도화된 AI 기사 작성 시스템
 # ======================================================
 @app.get("/write", response_class=HTMLResponse)
 def write_form():
@@ -357,10 +343,9 @@ def write_form():
 @app.post("/write")
 def write_submit(category: str = Form(...), topic: str = Form(...)):
     if not client:
-        # API 키가 없는 경우 기본 서식 기사 작성
         title = f"[안내] {topic}"
         summary = "1. 주요 세부 정보 가이드. 2. 신청 방법 및 핵심 혜택 요약. 3. 꼭 알아두어야 할 주의사항 안내."
-        content = f"<h2>1. {topic} 개요 및 필요성</h2><p>본 기사는 {topic}에 대해 독자 여러분이 가장 궁금해하시는 핵심 정보를 다룹니다.</p><h2>2. 상세 혜택 및 이용 방법</h2><p>구체적인 지원 대상과 혜택 금액, 이용 절차를 숙지하시기 바랍니다.</p>"
+        content = f"<h2>1. {topic} 개요 및 필요성</h2><p>본 기사는 {topic}에 대해 다룹니다.</p>"
     else:
         prompt = f"""
         당신은 5060 시니어 및 일반 대중을 위한 전문 웹진의 수석 에디터입니다.
@@ -391,7 +376,7 @@ def write_submit(category: str = Form(...), topic: str = Form(...)):
         """
         try:
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.0-flash',
                 contents=prompt,
                 config=dict(response_mime_type="application/json")
             )
@@ -402,7 +387,7 @@ def write_submit(category: str = Form(...), topic: str = Form(...)):
         except Exception as e:
             title = f"{topic} 핵심 가이드"
             summary = "상세 내용 요약"
-            content = f"<p>AI 기사 생성 중 일시적인 오류가 발생했습니다: {str(e)}</p>"
+            content = f"<p>AI 기사 생성 중 오류: {str(e)}</p>"
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = get_db()
