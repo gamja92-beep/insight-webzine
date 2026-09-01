@@ -130,10 +130,483 @@ def update_article_with_ai(article_id, category, topic):
         )
         raw = response.text.strip()
         
-        # 문법 에러 원인이었던 문자열 닫기 완벽 수정
-        if raw.startswith("```json"):
-            raw = raw[7:]
-        elif raw.startswith("```"):
-            raw = raw[3:]
+        # 백틱 문자열 깨짐 원천 방지 (chr(96) 사용)
+        triple_ticks = chr(96) * 3
+        if raw.startswith(triple_ticks + "json"):
+            raw = raw[len(triple_ticks) + 4:]
+        elif raw.startswith(triple_ticks):
+            raw = raw[len(triple_ticks):]
             
-        if raw.endswith("
+        if raw.endswith(triple_ticks):
+            raw = raw[:-len(triple_ticks)]
+            
+        data = json.loads(raw.strip())
+        
+        new_title = data.get("title", topic)
+        new_summary = data.get("summary", "")
+        new_content = data.get("content", "")
+        
+        if new_content:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE articles 
+                SET title = ?, summary = ?, content = ? 
+                WHERE id = ?
+            """, (new_title, new_summary, new_content, article_id))
+            conn.commit()
+            conn.close()
+    except Exception:
+        pass
+
+def save_new_article_instant(category="", topic=""):
+    if not category or not topic:
+        chosen = random.choice(AUTO_TOPIC_POOL)
+        category, topic = chosen[0], chosen[1]
+
+    title = topic
+    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+    content = make_base_template_content(topic)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO articles (title, category, summary, content, created_at, views, likes)
+        VALUES (?, ?, ?, ?, ?, 0, 0)
+    """, (title, category, summary, content, now))
+    inserted_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    threading.Thread(target=update_article_with_ai, args=(inserted_id, category, topic), daemon=True).start()
+    return inserted_id
+
+HTML_BASE_TEMPLATE = """<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta name="naver-site-verification" content="2be1d8c699f2db6d04ee4bbe598876b754cf1c10" />
+    <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>__PAGE_TITLE__ - 인사이트 데일리</title>
+    <link href="[https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css](https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css)" rel="stylesheet">
+    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css)">
+    <style>
+        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Pretendard", sans-serif; color: #1e293b; }
+        .navbar-brand { font-weight: 800; color: #1e3a8a !important; font-size: 1.35rem; }
+        .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%); color: white; padding: 42px 0; margin-bottom: 25px; }
+        
+        .cat-nav-btn { font-size: 0.95rem; font-weight: 600; padding: 8px 16px; border-radius: 30px; margin: 3px; text-decoration: none; display: inline-block; color: #475569; background: #ffffff; border: 1px solid #e2e8f0; transition: all 0.2s; }
+        .cat-nav-btn:hover, .cat-nav-btn.active { background: #1e3a8a; color: #ffffff; border-color: #1e3a8a; }
+        
+        .article-card { border: none; border-radius: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; height: 100%; background: white; }
+        .article-card:hover { transform: translateY(-4px); box-shadow: 0 10px 22px rgba(0,0,0,0.09); }
+        
+        .badge-cat-복지 { background-color: #eff6ff; color: #1d4ed8; font-weight: 600; border: 1px solid #dbeafe; }
+        .badge-cat-경제 { background-color: #ecfdf5; color: #047857; font-weight: 600; border: 1px solid #a7f3d0; }
+        .badge-cat-건강 { background-color: #fef2f2; color: #b91c1c; font-weight: 600; border: 1px solid #fecaca; }
+        .badge-cat-문화 { background-color: #faf5ff; color: #7e22ce; font-weight: 600; border: 1px solid #e9d5ff; }
+        
+        .article-content { font-size: 1.16rem; line-height: 2.05; color: #334155; }
+        .article-content h2 { color: #0f172a; font-weight: 800; font-size: 1.45rem; margin-top: 2.6rem; margin-bottom: 1.2rem; border-left: 6px solid #2563eb; padding-left: 14px; }
+        .article-content table { width: 100%; margin: 1.8rem 0; border-collapse: separate; border-spacing: 0; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }
+        .article-content th { background: #f1f5f9; padding: 14px; font-weight: 700; text-align: center; border-bottom: 2px solid #cbd5e1; }
+        .article-content td { padding: 13px 15px; border-bottom: 1px solid #f1f5f9; font-size: 1.05rem; }
+        .article-content ul, .article-content ol { margin-bottom: 1.8rem; padding-left: 1.8rem; }
+        .article-content li { margin-bottom: 0.6rem; }
+
+        .tts-player-box { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #cbd5e1; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .toc-box { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }
+        .toc-box a { color: #4b5563; text-decoration: none; font-weight: 600; }
+        .toc-box a:hover { color: #2563eb; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fa-solid fa-newspaper me-2 text-primary"></i>인사이트 데일리</a>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-success-subtle text-success border border-success-subtle me-2 px-2 py-1"><i class="fa-solid fa-circle-dot me-1"></i>하루 4회 무인 자동 발행</span>
+                <a href="/write" class="btn btn-primary btn-sm me-2 fw-semibold"><i class="fa-solid fa-plus me-1"></i>수동 기사 발행</a>
+                <a href="/admin/stats" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-chart-line me-1"></i>관리자 통계</a>
+            </div>
+        </div>
+    </nav>
+    __MAIN_CONTENT__
+    <footer class="bg-white border-top py-4 mt-5 text-center text-muted small">
+        <div class="container">
+            <p class="mb-1 fw-semibold text-secondary">© 인사이트 데일리 웹진. All Rights Reserved.</p>
+            <p class="mb-0"><a href="/rss" class="text-decoration-none text-muted me-3">RSS 피드</a> <a href="/sitemap.xml" class="text-decoration-none text-muted">사이트맵</a></p>
+        </div>
+    </footer>
+</body>
+</html>"""
+
+def get_cat_badge(cat_name):
+    if "복지" in cat_name or "지원" in cat_name:
+        return '<span class="badge badge-cat-복지 px-2 py-1">🏛️ ' + cat_name + '</span>'
+    elif "경제" in cat_name or "세무" in cat_name:
+        return '<span class="badge badge-cat-경제 px-2 py-1">📈 ' + cat_name + '</span>'
+    elif "건강" in cat_name or "식품" in cat_name:
+        return '<span class="badge badge-cat-건강 px-2 py-1">🩺 ' + cat_name + '</span>'
+    else:
+        return '<span class="badge badge-cat-문화 px-2 py-1">🎨 ' + cat_name + '</span>'
+
+def render_html(title, content):
+    page = HTML_BASE_TEMPLATE.replace("__PAGE_TITLE__", title).replace("__MAIN_CONTENT__", content)
+    return HTMLResponse(content=page)
+
+@app.get("/ping")
+def ping():
+    return Response(content="pong", media_type="text/plain")
+
+@app.get("/")
+def index(cat: str = ""):
+    conn = get_db()
+    cursor = conn.cursor()
+    if cat:
+        cursor.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles WHERE category LIKE ? ORDER BY id DESC", ('%' + cat + '%',))
+    else:
+        cursor.execute("SELECT id, title, category, summary, created_at, COALESCE(views, 0) as views FROM articles ORDER BY id DESC")
+    articles = cursor.fetchall()
+    conn.close()
+
+    cards_html = ""
+    for row in articles:
+        art_id = str(row['id'])
+        art_title = str(row['title'])
+        art_cat = str(row['category'])
+        art_sum = str(row['summary'])
+        art_date = str(row['created_at'])[:10]
+        art_views = str(row['views'])
+        badge_html = get_cat_badge(art_cat)
+
+        cards_html += """
+        <div class="col-md-4 mb-4">
+            <div class="card article-card p-4 d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    """ + badge_html + """
+                    <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>""" + art_date + """</small>
+                </div>
+                <h5 class="card-title fw-bold mb-3 lh-base">
+                    <a href="/article/""" + art_id + """" class="text-decoration-none text-dark">""" + art_title + """</a>
+                </h5>
+                <p class="card-text text-secondary small flex-grow-1" style="line-height: 1.65;">""" + art_sum + """</p>
+                <div class="mt-3 pt-3 border-top d-flex justify-content-between align-items-center">
+                    <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>조회 """ + art_views + """회</span>
+                    <a href="/article/""" + art_id + """" class="btn btn-sm btn-outline-primary fw-semibold">기사 읽기 →</a>
+                </div>
+            </div>
+        </div>
+        """
+
+    if not cards_html:
+        cards_html = '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
+
+    cat_nav = """
+    <div class="d-flex justify-content-center flex-wrap mb-4">
+        <a href="/" class="cat-nav-btn """ + ('active' if not cat else '') + """">전체보기</a>
+        <a href="/?cat=복지" class="cat-nav-btn """ + ('active' if cat == '복지' else '') + """">🏛️ 정부지원·복지</a>
+        <a href="/?cat=경제" class="cat-nav-btn """ + ('active' if cat == '경제' else '') + """">📈 생활경제·재테크</a>
+        <a href="/?cat=건강" class="cat-nav-btn """ + ('active' if cat == '건강' else '') + """">🩺 시니어건강·식품</a>
+        <a href="/?cat=문화" class="cat-nav-btn """ + ('active' if cat == '문화' else '') + """">🎨 문화·힐링여행</a>
+    </div>
+    """
+
+    body = """
+    <div class="hero-section text-center">
+        <div class="container">
+            <h1 class="fw-bold mb-2 display-6">인사이트 데일리 웹진</h1>
+            <p class="lead mb-0 text-white-50">시니어 복지 혜택 · 실전 생활재테크 · 웰에이징 건강 심층 가이드</p>
+        </div>
+    </div>
+    <div class="container">
+        """ + cat_nav + """
+        <div class="row">
+            """ + cards_html + """
+        </div>
+    </div>
+    """
+    return render_html("메인", body)
+
+@app.get("/article/{article_id}")
+def view_article(article_id: int):
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE articles SET views = COALESCE(views, 0) + 1 WHERE id = ?", (article_id,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return HTMLResponse("존재하지 않는 기사입니다. <a href='/'>메인으로</a>", status_code=404)
+
+    cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? AND category = ? ORDER BY id DESC LIMIT 3", (article_id, row['category']))
+    related_articles = cursor.fetchall()
+    if len(related_articles) < 3:
+        cursor.execute("SELECT id, title, category, created_at FROM articles WHERE id != ? ORDER BY id DESC LIMIT 3", (article_id,))
+        related_articles = cursor.fetchall()
+    conn.close()
+
+    related_html = ""
+    for rel in related_articles:
+        rel_id = str(rel['id'])
+        rel_title = str(rel['title'])
+        rel_cat = str(rel['category'])
+        rel_date = str(rel['created_at'])[:10]
+        badge_html = get_cat_badge(rel_cat)
+        related_html += """
+        <div class="col-md-4 mb-3">
+            <div class="card h-100 p-3 border-0 shadow-sm rounded-3">
+                <div class="mb-2">""" + badge_html + """</div>
+                <h6 class="fw-bold"><a href="/article/""" + rel_id + """" class="text-decoration-none text-dark">""" + rel_title + """</a></h6>
+                <small class="text-muted mt-auto pt-2">""" + rel_date + """</small>
+            </div>
+        </div>
+        """
+
+    content_len = len(row['content'])
+    est_minutes = max(2, round(content_len / 450))
+    body_html = str(row['content'])
+    likes_count = str(row['likes']) if 'likes' in row.keys() and row['likes'] is not None else "0"
+    badge_html = get_cat_badge(str(row['category']))
+
+    body = """
+    <div class="container py-5" style="max-width: 860px;">
+        <div class="mb-4">
+            <div class="d-flex gap-2 align-items-center mb-2">
+                """ + badge_html + """
+                <span class="text-muted small"><i class="fa-regular fa-clock me-1"></i>""" + str(row['created_at']) + """</span>
+                <span class="badge bg-light text-dark border ms-auto"><i class="fa-solid fa-book-open-reader me-1 text-primary"></i>약 """ + str(est_minutes) + """분 분량</span>
+            </div>
+            <h1 class="fw-bold text-dark lh-base my-3" style="font-size: 2.15rem; letter-spacing: -0.03em;">""" + str(row['title']) + """</h1>
+        </div>
+
+        <div class="tts-player-box mb-4 shadow-sm">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <button id="ttsPlayBtn" class="btn btn-dark px-4 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleSpeech()">
+                    <i class="fa-solid fa-volume-high me-2 text-warning"></i><span id="ttsBtnText">차분한 아나운서 음성 듣기</span>
+                </button>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" onclick="setSpeed(0.85)">0.85x</button>
+                    <button type="button" class="btn btn-secondary active" id="speedNormal" onclick="setSpeed(0.95)">표준 낭독</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="setSpeed(1.1)">1.1x</button>
+                </div>
+                <small id="ttsStatus" class="text-secondary fw-semibold">울림 없이 차분하고 또박또박한 낭독</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small fw-semibold">글자:</span>
+                <button class="btn btn-light btn-sm border rounded-circle" onclick="changeFontSize(1)" title="확대"><i class="fa-solid fa-plus"></i></button>
+                <button class="btn btn-light btn-sm border rounded-circle" onclick="changeFontSize(-1)" title="축소"><i class="fa-solid fa-minus"></i></button>
+            </div>
+        </div>
+
+        <div class="p-4 mb-4 bg-white rounded-4 border-start border-5 border-primary shadow-sm">
+            <h6 class="fw-bold text-primary mb-2"><i class="fa-solid fa-bolt me-2"></i>핵심 3줄 브리핑</h6>
+            <div class="text-secondary fw-medium lh-base" style="font-size: 1.06rem;">""" + str(row['summary']) + """</div>
+        </div>
+
+        <div class="toc-box">
+            <div class="fw-bold text-dark mb-2"><i class="fa-solid fa-list-check me-2 text-primary"></i>이 기사의 주요 목차</div>
+            <ul id="tocList" class="mb-0 ps-3 small" style="line-height: 1.9;"></ul>
+        </div>
+
+        <article id="articleBody" class="article-content bg-white p-4 p-md-5 rounded-4 shadow-sm mb-5">
+            """ + body_html + """
+        </article>
+
+        <div class="d-flex justify-content-between align-items-center bg-white p-3 p-md-4 rounded-4 shadow-sm mb-5 border">
+            <button id="likeBtn" class="btn btn-outline-danger btn-sm px-3 fw-bold rounded-pill" onclick="likePost()">
+                <i class="fa-solid fa-heart me-1"></i> 유익해요 <span id="likeCount">""" + likes_count + """</span>
+            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="copyCurrentUrl()"><i class="fa-solid fa-link me-1"></i>기사 링크 복사</button>
+                <a href="/" class="btn btn-primary btn-sm rounded-pill px-3"><i class="fa-solid fa-list me-1"></i>목록으로</a>
+            </div>
+        </div>
+
+        <div class="mt-5 pt-3">
+            <h4 class="fw-bold mb-3 text-dark"><i class="fa-solid fa-newspaper me-2 text-primary"></i>함께 읽으면 유익한 추천 가이드</h4>
+            <div class="row">
+                """ + (related_html if related_html else '<p class="text-muted small">추천 기사가 준비 중입니다.</p>') + """
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', function() {
+            var h2s = document.querySelectorAll('#articleBody h2');
+            var tocList = document.getElementById('tocList');
+            if (h2s.length === 0) {
+                if (document.querySelector('.toc-box')) document.querySelector('.toc-box').style.display = 'none';
+                return;
+            }
+            h2s.forEach(function(h2, index) {
+                h2.id = 'section-' + index;
+                var li = document.createElement('li');
+                var a = document.createElement('a');
+                a.href = '#section-' + index;
+                a.innerText = h2.innerText;
+                li.appendChild(a);
+                tocList.appendChild(li);
+            });
+        });
+
+        var synth = window.speechSynthesis;
+        var isPlaying = false;
+        var currentRate = 0.95;
+        var sentences = [];
+        var currentIdx = 0;
+        var selectedVoice = null;
+
+        function pickBestVoice() {
+            if (!synth) return null;
+            var voices = synth.getVoices();
+            for (var i = 0; i < voices.length; i++) {
+                var v = voices[i];
+                if (v.lang.indexOf('ko') !== -1 || v.lang.indexOf('KO') !== -1) {
+                    if (v.name.indexOf('SunHi') !== -1 || v.name.indexOf('Natural') !== -1 || v.name.indexOf('Google') !== -1) {
+                        return v;
+                    }
+                }
+            }
+            for (var j = 0; j < voices.length; j++) {
+                if (voices[j].lang.indexOf('ko') !== -1 || voices[j].lang.indexOf('KO') !== -1) {
+                    return voices[j];
+                }
+            }
+            return null;
+        }
+
+        if (synth && synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = function() {
+                selectedVoice = pickBestVoice();
+            };
+        }
+
+        function setSpeed(speed) {
+            currentRate = speed;
+            if (isPlaying) {
+                synth.cancel();
+                speakNext();
+            }
+        }
+
+        function speakNext() {
+            if (!isPlaying) return;
+            if (currentIdx >= sentences.length) {
+                isPlaying = false;
+                document.getElementById('ttsBtnText').innerText = "기사 다시 듣기";
+                document.getElementById('ttsPlayBtn').className = "btn btn-dark px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsStatus').innerText = "낭독이 완료되었습니다.";
+                return;
+            }
+
+            var txt = sentences[currentIdx].trim();
+            if (txt.length === 0) {
+                currentIdx++;
+                speakNext();
+                return;
+            }
+
+            var u = new SpeechSynthesisUtterance(txt);
+            u.lang = 'ko-KR';
+            u.rate = currentRate;
+            u.pitch = 1.05;
+            
+            if (!selectedVoice) selectedVoice = pickBestVoice();
+            if (selectedVoice) u.voice = selectedVoice;
+
+            u.onend = function() {
+                currentIdx++;
+                speakNext();
+            };
+            u.onerror = function() {
+                currentIdx++;
+                speakNext();
+            };
+
+            synth.speak(u);
+        }
+
+        function toggleSpeech() {
+            if (!synth) {
+                alert("음성을 지원하지 않는 브라우저입니다.");
+                return;
+            }
+
+            if (isPlaying) {
+                synth.cancel();
+                isPlaying = false;
+                document.getElementById('ttsBtnText').innerText = "차분한 아나운서 음성 듣기";
+                document.getElementById('ttsPlayBtn').className = "btn btn-dark px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsStatus').innerText = "재생이 일시정지되었습니다.";
+            } else {
+                synth.cancel();
+                var raw = document.getElementById('articleBody').innerText;
+                var clean = raw.replace(/\\s+/g, ' ').trim();
+                
+                var matches = clean.match(/[^.?!]+[.?!]+/g);
+                sentences = matches && matches.length > 0 ? matches : [clean];
+                currentIdx = 0;
+                isPlaying = true;
+
+                document.getElementById('ttsBtnText').innerText = "음성 일시정지";
+                document.getElementById('ttsPlayBtn').className = "btn btn-danger px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsStatus').innerText = "차분하고 또렷한 톤으로 낭독 중입니다...";
+                
+                speakNext();
+            }
+        }
+
+        var currentSize = 1.16;
+        function changeFontSize(delta) {
+            currentSize = Math.max(0.95, Math.min(1.65, currentSize + (delta * 0.1)));
+            document.getElementById('articleBody').style.fontSize = currentSize + 'rem';
+        }
+
+        function copyCurrentUrl() {
+            navigator.clipboard.writeText(window.location.href).then(function() {
+                alert("기사 링크가 복사되었습니다!");
+            });
+        }
+
+        function likePost() {
+            var countEl = document.getElementById('likeCount');
+            var curr = parseInt(countEl.innerText) || 0;
+            countEl.innerText = curr + 1;
+            document.getElementById('likeBtn').className = "btn btn-danger btn-sm px-3 fw-bold rounded-pill";
+        }
+    </script>
+    """
+    return render_html(str(row['title']), body)
+
+@app.get("/write")
+def write_form():
+    body = """
+    <div class="container py-5" style="max-width: 760px;">
+        <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
+            <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
+            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 0.1초 만에 기사를 등록하고 상세 페이지로 즉시 이동합니다.</p>
+
+            <form method="get" action="/create" onsubmit="showLoadingUI()">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">카테고리</label>
+                    <select name="category" class="form-select py-2">
+                        <option value="정부 지원금/복지 혜택">🏛️ 정부 지원금/복지 혜택</option>
+                        <option value="생활 경제/세무 상식">📈 생활 경제/세무 상식</option>
+                        <option value="시니어 건강/식품">🩺 시니어 건강/식품</option>
+                        <option value="문화/예술">🎨 문화/예술</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">기사 주제</label>
