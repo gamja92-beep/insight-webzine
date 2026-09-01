@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import json
-import threading
 import random
 from datetime import datetime
 
@@ -12,14 +11,15 @@ import uvicorn
 app = FastAPI()
 ADMIN_PW = "admin1234"
 
+# Gemini API 클라이언트 초기화
 client = None
-try:
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
+gemini_key = os.environ.get("GEMINI_API_KEY", "")
+if gemini_key:
+    try:
         from google import genai
-        client = gemini_key and genai.Client(api_key=gemini_key)
-except Exception:
-    client = None
+        client = genai.Client(api_key=gemini_key)
+    except Exception:
+        client = None
 
 def get_db():
     conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
@@ -53,15 +53,6 @@ def init_db():
 
 init_db()
 
-TOPICS = [
-    ("정부 지원금/복지 혜택", "2026년 시니어 임플란트 및 틀니 건강보험 적용 혜택과 본인부담금 완벽 가이드"),
-    ("문화/예술", "시니어를 위한 전국 힐링 무장애 나눔길 베스트 5 및 코스별 대중교통 안내"),
-    ("생활 경제/세무 상식", "2026년 기초연금 수급자격 및 소득인정액 모의계산법 총정리"),
-    ("시니어 건강/식품", "시니어 무릎 관절염 예방 걷기 운동법과 연골 부담 줄이는 생활 수칙"),
-    ("생활 경제/세무 상식", "주택연금 가입조건과 내 집으로 받는 평생 월 지급금 수령액 비교"),
-    ("시니어 건강/식품", "혈관 나이를 10년 젊게 만드는 아침 식습관과 필수 항산화 식단")
-]
-
 def get_cat_slug(category):
     if "복지" in category or "지원" in category:
         return "welfare"
@@ -71,30 +62,33 @@ def get_cat_slug(category):
         return "health"
     return "culture"
 
-def make_default_content(topic):
-    return (
-        "<h2>1. 주요 배경과 핵심 정보</h2>"
-        "<p>" + topic + "에 대한 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 알찬 지침을 담고 있습니다.</p>"
-        "<h2>2. 세부 혜택 요약</h2>"
-        "<table class='table table-bordered my-3'>"
-        "<thead class='table-light'><tr><th>구분</th><th>지원 내용</th><th>대상</th></tr></thead>"
-        "<tbody><tr><td>기본 지원</td><td>맞춤형 혜택 및 감면</td><td>만 65세 이상 및 해당 가구</td></tr>"
-        "<tr><td>신청처</td><td>정부24 온라인 또는 관할 주민센터 방문</td><td>신분증 지참</td></tr></tbody>"
-        "</table>"
-        "<h2>3. 신청 절차 및 가이드</h2>"
-        "<ol><li>자격 요건 및 해당 연도 기준 확인</li><li>필수 구비 서류 준비 후 접수</li><li>심사 및 지원 혜택 수령</li></ol>"
-        "<h2>4. 전문가 주의사항</h2>"
-        "<ul><li>기한 내 미신청 시 소급 적용이 불가할 수 있으니 사전 기간을 꼭 확인하세요.</li></ul>"
-    )
-
-def background_ai_enrichment(art_id, category, topic):
+def request_gemini_article(category: str, topic: str):
     if not client:
-        return
-    prompt = (
-        "당신은 시니어 전문 웹진 수석 에디터입니다. 주제 '" + topic + "'(카테고리: " + category + ")에 대해 "
-        "한글 1500자 이상의 심층 가이드를 작성하세요. HTML 태그(h2, p, table, ol, ul)를 사용하세요. "
-        "출력 JSON 규격: {'title': '제목', 'summary': '요약 3줄', 'content': 'HTML본문'}"
-    )
+        # API 키가 없을 경우의 최소 안전 텍스트
+        title = topic
+        summary = "상세 안내 가이드입니다."
+        content = f"<h2>1. 개요</h2><p>{topic}에 대한 안내입니다.</p>"
+        return title, summary, content
+
+    prompt = f"""
+    당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
+    주제: "{topic}" (카테고리: {category})
+
+    시니어 독자가 읽고 즉시 따라 할 수 있는 실전 가이드 기사를 작성해 주세요.
+    주제에 전혀 맞지 않는 엉뚱한 행정기관 방문이나 서류 제출 같은 내용은 절대 쓰지 말고, 해당 주제의 특성에 맞는 구체적인 방법과 단계별 설명을 상세히 작성하세요.
+
+    [작성 규격]
+    1. 제목: 신뢰감을 주는 명확한 헤드라인
+    2. 요약: 핵심 내용 3줄 요약
+    3. 본문: HTML 태그(<h2>, <p>, <ol>, <ul>, <table> 등)를 적절히 활용하여 소제목별로 일목요연하게 구성
+
+    [출력 JSON 규격]
+    {{
+        "title": "기사 제목",
+        "summary": "1. 요약1\\n2. 요약2\\n3. 요약3",
+        "content": "<h2>1. ...</h2><p>...</p><h2>2. ...</h2>..."
+    }}
+    """
     try:
         res = client.models.generate_content(
             model='gemini-2.0-flash',
@@ -102,49 +96,28 @@ def background_ai_enrichment(art_id, category, topic):
             config=dict(response_mime_type="application/json")
         )
         raw = res.text.strip()
-        triple_ticks = chr(96) * 3
-        if raw.startswith(triple_ticks + "json"):
-            raw = raw[len(triple_ticks) + 4:]
-        elif raw.startswith(triple_ticks):
-            raw = raw[len(triple_ticks):]
-        if raw.endswith(triple_ticks):
-            raw = raw[:-len(triple_ticks)]
-
-        data = json.loads(raw.strip())
+        data = json.loads(raw)
         title = data.get("title", topic)
-        summary = data.get("summary", "")
-        content = data.get("content", "")
-        if content:
-            conn = get_db()
-            c = conn.cursor()
-            c.execute("UPDATE articles SET title=?, summary=?, content=? WHERE id=?", (title, summary, content, art_id))
-            conn.commit()
-            conn.close()
+        summary = data.get("summary", "핵심 실전 가이드 요약")
+        content = data.get("content", f"<p>{topic} 관련 상세 안내입니다.</p>")
+        return title, summary, content
     except Exception:
-        pass
+        return topic, "핵심 실전 가이드 요약", f"<h2>1. 안내</h2><p>{topic}에 대한 상세 정보입니다.</p>"
 
-def save_article_instant(category="", topic=""):
-    if not category or not topic:
-        chosen = random.choice(TOPICS)
-        category, topic = chosen[0], chosen[1]
-    
+def save_article_direct(category: str, topic: str):
     cat_slug = get_cat_slug(category)
-    summary = "실생활에 즉시 도움 되는 핵심 가이드 및 신청 방법 안내."
-    content = make_default_content(topic)
+    title, summary, content = request_gemini_article(category, topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     conn = get_db()
     c = conn.cursor()
-    # cat_slug 컬럼 누락 에러 해결
     c.execute("""
-        INSERT INTO articles (title, category, cat_slug, summary, content, created_at, views, likes) 
+        INSERT INTO articles (title, category, cat_slug, summary, content, created_at, views, likes)
         VALUES (?, ?, ?, ?, ?, ?, 0, 0)
-    """, (topic, category, cat_slug, summary, content, now))
+    """, (title, category, cat_slug, summary, content, now))
     new_id = c.lastrowid
     conn.commit()
     conn.close()
-
-    threading.Thread(target=background_ai_enrichment, args=(new_id, category, topic), daemon=True).start()
     return new_id
 
 BASE_HTML = """<!DOCTYPE html>
@@ -155,19 +128,22 @@ BASE_HTML = """<!DOCTYPE html>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background: #f8fafc; font-family: -apple-system, sans-serif; color: #1e293b; }
+        body { background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
         .hero { background: linear-gradient(135deg, #0f172a, #1e3a8a); color: white; padding: 35px 0; margin-bottom: 25px; }
         .cat-btn { font-size: 0.9rem; font-weight: 600; padding: 6px 14px; border-radius: 20px; text-decoration: none; margin: 2px; color: #475569; background: #fff; border: 1px solid #cbd5e1; }
         .cat-btn.active, .cat-btn:hover { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
         .card-art { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.04); background: #fff; height: 100%; padding: 20px; }
         .art-body { font-size: 1.15rem; line-height: 2.0; color: #334155; }
-        .art-body h2 { font-size: 1.35rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; border-left: 5px solid #2563eb; padding-left: 10px; }
-        .art-body table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-        .art-body th, .art-body td { border: 1px solid #e2e8f0; padding: 10px; }
+        .art-body h2 { font-size: 1.35rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; border-left: 5px solid #2563eb; padding-left: 10px; color: #0f172a; }
+        .art-body table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+        .art-body th { background: #f1f5f9; padding: 12px; font-weight: 700; border: 1px solid #cbd5e1; }
+        .art-body td { border: 1px solid #e2e8f0; padding: 12px; }
+        .art-body ol, .art-body ul { margin-bottom: 1.5rem; padding-left: 1.5rem; }
+        .art-body li { margin-bottom: 0.5rem; }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-light bg-white border-bottom shadow-sm">
+    <nav class="navbar navbar-light bg-white border-bottom shadow-sm sticky-top">
         <div class="container d-flex justify-content-between">
             <a class="navbar-brand fw-bold text-primary" href="/"><i class="fa-solid fa-newspaper me-2"></i>인사이트 데일리</a>
             <div>
@@ -190,7 +166,7 @@ def get_badge(cat):
         if k in cat:
             c = v
             break
-    return '<span class="badge bg-' + c + '-subtle text-' + c + ' border border-' + c + '-subtle px-2 py-1">' + cat + '</span>'
+    return f'<span class="badge bg-{c}-subtle text-{c} border border-{c}-subtle px-2 py-1">{cat}</span>'
 
 def render(title, body):
     return HTMLResponse(BASE_HTML.replace("__TITLE__", title).replace("__BODY__", body))
@@ -220,35 +196,37 @@ def index(cat: str = ""):
         art_sum = str(row.get('summary', ''))
         art_views = str(row.get('views', 0))
 
-        card_html = (
-            '<div class="col-md-4 mb-4">'
-            '<div class="card-art d-flex flex-column">'
-            '<div class="d-flex justify-content-between mb-2">' + get_badge(art_cat) + '<small class="text-muted">' + art_date + '</small></div>'
-            '<h5 class="fw-bold mb-2"><a href="/article/' + art_id + '" class="text-decoration-none text-dark">' + art_title + '</a></h5>'
-            '<p class="text-secondary small flex-grow-1">' + art_sum + '</p>'
-            '<div class="d-flex justify-content-between align-items-center pt-2 border-top mt-2">'
-            '<span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>' + art_views + '회</span>'
-            '<a href="/article/' + art_id + '" class="btn btn-outline-primary btn-sm">읽기 →</a>'
-            '</div></div></div>'
-        )
+        card_html = f"""
+        <div class="col-md-4 mb-4">
+            <div class="card-art d-flex flex-column">
+                <div class="d-flex justify-content-between mb-2">{get_badge(art_cat)}<small class="text-muted">{art_date}</small></div>
+                <h5 class="fw-bold mb-2"><a href="/article/{art_id}" class="text-decoration-none text-dark">{art_title}</a></h5>
+                <p class="text-secondary small flex-grow-1">{art_sum}</p>
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top mt-2">
+                    <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>{art_views}회</span>
+                    <a href="/article/{art_id}" class="btn btn-outline-primary btn-sm">읽기 →</a>
+                </div>
+            </div>
+        </div>
+        """
         cards_list.append(card_html)
 
     cards = "".join(cards_list) if cards_list else '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다.</div>'
 
-    cat_nav = (
-        '<div class="d-flex justify-content-center flex-wrap mb-4">'
-        '<a href="/" class="cat-btn ' + ('active' if not cat else '') + '">전체보기</a>'
-        '<a href="/?cat=복지" class="cat-btn ' + ('active' if cat == '복지' else '') + '">🏛️ 정부지원·복지</a>'
-        '<a href="/?cat=경제" class="cat-btn ' + ('active' if cat == '경제' else '') + '">📈 생활경제·재테크</a>'
-        '<a href="/?cat=건강" class="cat-btn ' + ('active' if cat == '건강' else '') + '">🩺 시니어건강·식품</a>'
-        '<a href="/?cat=문화" class="cat-btn ' + ('active' if cat == '문화' else '') + '">🎨 문화·힐링여행</a>'
-        '</div>'
-    )
+    cat_nav = f"""
+    <div class="d-flex justify-content-center flex-wrap mb-4">
+        <a href="/" class="cat-btn {'active' if not cat else ''}">전체보기</a>
+        <a href="/?cat=복지" class="cat-btn {'active' if cat == '복지' else ''}">🏛️ 정부지원·복지</a>
+        <a href="/?cat=경제" class="cat-btn {'active' if cat == '경제' else ''}">📈 생활경제·재테크</a>
+        <a href="/?cat=건강" class="cat-btn {'active' if cat == '건강' else ''}">🩺 시니어건강·식품</a>
+        <a href="/?cat=문화" class="cat-btn {'active' if cat == '문화' else ''}">🎨 문화·힐링여행</a>
+    </div>
+    """
 
-    body = (
-        '<div class="hero text-center"><div class="container"><h1 class="fw-bold">인사이트 데일리 웹진</h1><p class="mb-0 text-white-50">시니어 복지 · 실전 재테크 · 건강 심층 가이드</p></div></div>'
-        '<div class="container">' + cat_nav + '<div class="row">' + cards + '</div></div>'
-    )
+    body = f"""
+    <div class="hero text-center"><div class="container"><h1 class="fw-bold">인사이트 데일리 웹진</h1><p class="mb-0 text-white-50">시니어 복지 · 실전 재테크 · 건강 심층 가이드</p></div></div>
+    <div class="container">{cat_nav}<div class="row">{cards}</div></div>
+    """
     return render("홈", body)
 
 ARTICLE_VIEW_TEMPLATE = """
@@ -271,7 +249,7 @@ ARTICLE_VIEW_TEMPLATE = """
 
     <div class="p-3 bg-white border-start border-4 border-primary rounded-2 shadow-sm mb-4">
         <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-bolt me-1"></i>핵심 요약</div>
-        <div class="text-secondary small">__SUMMARY__</div>
+        <div class="text-secondary small" style="white-space: pre-line;">__SUMMARY__</div>
     </div>
 
     <article id="artBody" class="art-body bg-white p-4 rounded-3 shadow-sm mb-4 border">
@@ -391,36 +369,38 @@ def view_article(art_id: int):
 
 @app.get("/write")
 def write_form():
-    body = (
-        '<div class="container py-5" style="max-width: 600px;">'
-        '<div class="card p-4 shadow-sm border-0 rounded-3">'
-        '<h4 class="fw-bold mb-3"><i class="fa-solid fa-pen text-primary me-2"></i>기사 수동 발행</h4>'
-        '<p class="text-muted small mb-3">주제를 입력하시면 0.1초 만에 즉시 기사 화면이 열립니다.</p>'
-        '<form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText=\'즉시 등록 중...\';">'
-        '<div class="mb-3">'
-        '<label class="form-label fw-bold small">카테고리</label>'
-        '<select name="category" class="form-select">'
-        '<option value="정부 지원금/복지 혜택">🏛️ 정부 지원금/복지 혜택</option>'
-        '<option value="생활 경제/세무 상식">📈 생활 경제/세무 상식</option>'
-        '<option value="시니어 건강/식품">🩺 시니어 건강/식품</option>'
-        '<option value="문화/예술">🎨 문화/예술</option>'
-        '</select>'
-        '</div>'
-        '<div class="mb-3">'
-        '<label class="form-label fw-bold small">기사 주제</label>'
-        '<input type="text" name="topic" class="form-control" placeholder="예: 2026년 시니어 건강검진 필수 항목 총정리" required>'
-        '</div>'
-        '<button type="submit" name="btn" class="btn btn-primary w-100 py-2 fw-bold">즉시 발행하기</button>'
-        '</form>'
-        '</div></div>'
-    )
+    body = """
+    <div class="container py-5" style="max-width: 600px;">
+        <div class="card p-4 shadow-sm border-0 rounded-3">
+            <h4 class="fw-bold mb-3"><i class="fa-solid fa-pen text-primary me-2"></i>기사 수동 발행</h4>
+            <p class="text-muted small mb-3">주제를 입력하시면 AI가 주제에 맞는 실제 심층 기사를 작성합니다. (약 5~8초 소요)</p>
+            <form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText='AI가 심층 기사 작성 중...';">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">카테고리</label>
+                    <select name="category" class="form-select">
+                        <option value="정부 지원금/복지 혜택">🏛️ 정부 지원금/복지 혜택</option>
+                        <option value="생활 경제/세무 상식">📈 생활 경제/세무 상식</option>
+                        <option value="시니어 건강/식품">🩺 시니어 건강/식품</option>
+                        <option value="문화/예술">🎨 문화/예술</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small">기사 주제</label>
+                    <input type="text" name="topic" class="form-control" placeholder="예: 스마트폰 카카오톡 글씨 크기 설정 및 스팸 차단법" required>
+                </div>
+                <button type="submit" name="btn" class="btn btn-primary w-100 py-2 fw-bold">심층 기사 발행하기</button>
+            </form>
+        </div>
+    </div>
+    """
     return render("기사 수동 발행", body)
 
 @app.get("/create")
 def create_article(category: str = "정부 지원금/복지 혜택", topic: str = ""):
     if not topic:
         return RedirectResponse(url="/", status_code=303)
-    new_id = save_article_instant(category, topic)
+    # 가짜 템플릿 없이 실제 Gemini 생성 결과로 직접 저장
+    new_id = save_article_direct(category, topic)
     return RedirectResponse(url="/article/" + str(new_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
@@ -434,7 +414,7 @@ def sitemap():
         xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         xml += '  <url><loc>https://insight-webzine.onrender.com/</loc><priority>1.0</priority></url>\n'
         for r in rows:
-            xml += '  <url><loc>https://insight-webzine.onrender.com/article/' + str(r["id"]) + '</loc><priority>0.8</priority></url>\n'
+            xml += f'  <url><loc>https://insight-webzine.onrender.com/article/{r["id"]}</loc><priority>0.8</priority></url>\n'
         xml += '</urlset>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -450,7 +430,7 @@ def rss_feed():
         conn.close()
         xml = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>인사이트 데일리</title><link>https://insight-webzine.onrender.com</link>'
         for r in rows:
-            xml += '<item><title><![CDATA[' + str(r['title']) + ']]></title><link>https://insight-webzine.onrender.com/article/' + str(r['id']) + '</link><description><![CDATA[' + str(r['summary']) + ']]></description></item>'
+            xml += f'<item><title><![CDATA[{r["title"]}]]></title><link>https://insight-webzine.onrender.com/article/{r["id"]}</link><description><![CDATA[{r["summary"]}]]></description></item>'
         xml += '</channel></rss>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -459,14 +439,15 @@ def rss_feed():
 @app.get("/admin/stats")
 def admin_stats(pw=""):
     if pw != ADMIN_PW:
-        body = (
-            '<div class="container py-5 text-center" style="max-width:320px;">'
-            '<h5 class="fw-bold mb-3">관리자 로그인</h5>'
-            '<form method="get" action="/admin/stats">'
-            '<input type="password" name="pw" class="form-control mb-2" placeholder="비밀번호" required>'
-            '<button type="submit" class="btn btn-primary w-100">접속</button>'
-            '</form></div>'
-        )
+        body = """
+        <div class="container py-5 text-center" style="max-width:320px;">
+            <h5 class="fw-bold mb-3">관리자 로그인</h5>
+            <form method="get" action="/admin/stats">
+                <input type="password" name="pw" class="form-control mb-2" placeholder="비밀번호" required>
+                <button type="submit" class="btn btn-primary w-100">접속</button>
+            </form>
+        </div>
+        """
         return render("로그인", body)
     conn = get_db()
     c = conn.cursor()
@@ -478,10 +459,10 @@ def admin_stats(pw=""):
     for r in rows:
         row = dict(r)
         tr_list.append(
-            '<tr><td>' + str(row.get('id', '')) + '</td><td><a href="/article/' + str(row.get('id', '')) + '">' + str(row.get('title', '')) + '</a></td><td>' + str(row.get('category', '')) + '</td><td>' + str(row.get('views', 0)) + '회</td><td>' + str(row.get('created_at', ''))[:10] + '</td></tr>'
+            f"<tr><td>{row.get('id', '')}</td><td><a href='/article/{row.get('id', '')}'>{row.get('title', '')}</a></td><td>{row.get('category', '')}</td><td>{row.get('views', 0)}회</td><td>{str(row.get('created_at', ''))[:10]}</td></tr>"
         )
     table_rows = "".join(tr_list)
-    body = '<div class="container py-4"><h3>📊 통계</h3><table class="table table-bordered bg-white mt-3"><thead><tr><th>ID</th><th>제목</th><th>분류</th><th>조회수</th><th>일자</th></tr></thead><tbody>' + table_rows + '</tbody></table></div>'
+    body = f'<div class="container py-4"><h3>📊 통계</h3><table class="table table-bordered bg-white mt-3"><thead><tr><th>ID</th><th>제목</th><th>분류</th><th>조회수</th><th>일자</th></tr></thead><tbody>{table_rows}</tbody></table></div>'
     return render("통계", body)
 
 if __name__ == "__main__":
