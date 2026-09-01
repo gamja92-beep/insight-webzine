@@ -5,6 +5,7 @@ import time
 import threading
 import random
 import urllib.request
+import urllib.parse
 from datetime import datetime
 
 from fastapi import FastAPI, Response
@@ -16,7 +17,6 @@ app = FastAPI()
 ADMIN_STATS_PASSWORD = "admin1234"
 WEBZINE_URL = "https://insight-webzine.onrender.com"
 
-# Gemini API 클라이언트 초기화
 client = None
 try:
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -27,7 +27,8 @@ except Exception:
     client = None
 
 def get_db():
-    conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
+    conn = sqlite3.connect("webzine.db", timeout=60.0, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -59,7 +60,6 @@ def init_db():
 
 init_db()
 
-# 24시간 잠자기 방지 자체 핑 엔진
 def keep_alive_scheduler():
     time.sleep(60)
     while True:
@@ -192,10 +192,8 @@ def generate_and_save_article(category="", topic=""):
         inserted_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        print("[" + now + "] 기사 발행 완료 (ID: " + str(inserted_id) + "): " + title)
         return inserted_id
-    except Exception as e:
-        print("기사 저장 실패:", e)
+    except Exception:
         return 1
 
 def auto_article_scheduler():
@@ -287,7 +285,7 @@ def ping():
     return Response(content="pong", media_type="text/plain")
 
 @app.get("/")
-def index(cat: str = "", writing: str = ""):
+def index(cat: str = ""):
     conn = get_db()
     cursor = conn.cursor()
     if cat:
@@ -329,20 +327,6 @@ def index(cat: str = "", writing: str = ""):
     if not cards_html:
         cards_html = '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다. 상단의 수동 기사 발행을 눌러보세요.</div>'
 
-    notice_banner = ""
-    if writing == "1":
-        notice_banner = """
-        <div class="alert alert-success alert-dismissible fade show text-center shadow-sm mb-4 rounded-4" role="alert">
-            <i class="fa-solid fa-wand-magic-sparkles me-2"></i><strong>AI 수석 기자가 기사를 집필하고 있습니다.</strong> 약 10초 후 새로고침하시면 맨 위에 기사가 등록됩니다.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        <script>
-            setTimeout(function() {
-                window.location.href = '/';
-            }, 8000);
-        </script>
-        """
-
     cat_nav = """
     <div class="d-flex justify-content-center flex-wrap mb-4">
         <a href="/" class="cat-nav-btn """ + ('active' if not cat else '') + """">전체보기</a>
@@ -361,7 +345,6 @@ def index(cat: str = "", writing: str = ""):
         </div>
     </div>
     <div class="container">
-        """ + notice_banner + """
         """ + cat_nav + """
         <div class="row">
             """ + cards_html + """
@@ -426,15 +409,11 @@ def view_article(article_id: int):
 
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <button id="ttsPlayBtn" class="btn btn-success px-3 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
-                    <i class="fa-solid fa-circle-play me-1"></i> <span id="ttsBtnText">맑은 아나운서 음성 듣기</span>
+                <button id="ttsPlayBtn" class="btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleAudioStreaming()">
+                    <i class="fa-solid fa-headphones me-2"></i><span id="ttsBtnText">맑은 아나운서 음성 듣기</span>
                 </button>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-success" onclick="setSpeed(0.85)">0.8x</button>
-                    <button type="button" class="btn btn-success active" id="speedNormal" onclick="setSpeed(0.95)">표준 낭독</button>
-                    <button type="button" class="btn btn-outline-success" onclick="setSpeed(1.1)">1.1x</button>
-                </div>
-                <small id="ttsStatus" class="text-secondary fw-semibold">또렷하고 맑은 음성으로 낭독합니다.</small>
+                <small id="ttsStatus" class="text-secondary fw-semibold">울림 없는 맑고 청아한 스튜디오 음성으로 낭독합니다.</small>
+                <audio id="ttsAudioPlayer" style="display: none;"></audio>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="text-muted small fw-semibold">글자:</span>
@@ -494,107 +473,61 @@ def view_article(article_id: int):
             });
         });
 
-        var isSpeaking = false;
-        var speechSynth = window.speechSynthesis;
-        var currentRate = 0.95;
-        var sentenceList = [];
-        var currentSentenceIdx = 0;
-        var selectedVoice = null;
+        var audioPlayer = document.getElementById('ttsAudioPlayer');
+        var audioSegments = [];
+        var currentSegIdx = 0;
+        var isAudioPlaying = false;
 
-        function findBestKoreanVoice() {
-            if (!speechSynth) return null;
-            var voices = speechSynth.getVoices();
-            for (var i = 0; i < voices.length; i++) {
-                var v = voices[i];
-                if (v.lang.indexOf('ko') !== -1 || v.lang.indexOf('KO') !== -1) {
-                    if (v.name.indexOf('SunHi') !== -1 || v.name.indexOf('Heami') !== -1 || v.name.indexOf('Google') !== -1 || v.name.indexOf('Natural') !== -1 || v.name.indexOf('Online') !== -1) {
-                        return v;
-                    }
-                }
-            }
-            for (var j = 0; j < voices.length; j++) {
-                if (voices[j].lang.indexOf('ko') !== -1 || voices[j].lang.indexOf('KO') !== -1) return voices[j];
-            }
-            return null;
-        }
-
-        if (speechSynth && speechSynth.onvoiceschanged !== undefined) {
-            speechSynth.onvoiceschanged = function() {
-                selectedVoice = findBestKoreanVoice();
-            };
-        }
-
-        function setSpeed(speed) {
-            currentRate = speed;
-            if (isSpeaking) {
-                speechSynth.cancel();
-                speakNextSentence();
-            }
-        }
-
-        function speakNextSentence() {
-            if (!isSpeaking) return;
-            if (currentSentenceIdx >= sentenceList.length) {
-                isSpeaking = false;
+        function playNextSegment() {
+            if (!isAudioPlaying) return;
+            if (currentSegIdx >= audioSegments.length) {
+                isAudioPlaying = false;
                 document.getElementById('ttsBtnText').innerText = "기사 다시 듣기";
-                document.getElementById('ttsPlayBtn').className = "btn btn-success px-3 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsPlayBtn').className = "btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm";
                 document.getElementById('ttsStatus').innerText = "낭독이 완료되었습니다.";
                 return;
             }
 
-            var text = sentenceList[currentSentenceIdx].trim();
+            var text = audioSegments[currentSegIdx].trim();
             if (text.length === 0) {
-                currentSentenceIdx++;
-                speakNextSentence();
+                currentSegIdx++;
+                playNextSegment();
                 return;
             }
 
-            var utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ko-KR';
-            utterance.rate = currentRate;
-            utterance.pitch = 1.05; // 웅웅거림 없는 맑고 또렷한 톤
-            
-            if (!selectedVoice) selectedVoice = findBestKoreanVoice();
-            if (selectedVoice) utterance.voice = selectedVoice;
-
-            utterance.onend = function() {
-                currentSentenceIdx++;
-                speakNextSentence();
-            };
-            utterance.onerror = function() {
-                currentSentenceIdx++;
-                speakNextSentence();
-            };
-
-            speechSynth.speak(utterance);
+            var streamUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=ko&client=tw-ob";
+            audioPlayer.src = streamUrl;
+            audioPlayer.playbackRate = 1.0;
+            audioPlayer.play().catch(function() {
+                currentSegIdx++;
+                playNextSegment();
+            });
         }
 
-        function toggleTTS() {
-            if (!speechSynth) {
-                alert("음성 재생을 지원하지 않는 브라우저입니다.");
-                return;
-            }
+        audioPlayer.onended = function() {
+            currentSegIdx++;
+            playNextSegment();
+        };
 
-            if (isSpeaking) {
-                speechSynth.cancel();
-                isSpeaking = false;
+        function toggleAudioStreaming() {
+            if (isAudioPlaying) {
+                audioPlayer.pause();
+                isAudioPlaying = false;
                 document.getElementById('ttsBtnText').innerText = "맑은 아나운서 음성 듣기";
-                document.getElementById('ttsPlayBtn').className = "btn btn-success px-3 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "재생이 정지되었습니다.";
+                document.getElementById('ttsPlayBtn').className = "btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsStatus').innerText = "재생이 일시정지되었습니다.";
             } else {
                 var rawText = document.getElementById('articleBody').innerText;
-                var cleanText = rawText.replace(/\\s+/g, ' ').trim();
-                
-                // 긴 문장을 마침표/물음표 단위로 쪼개어 버퍼 왜곡 방지
-                sentenceList = cleanText.split(/(?<=[.?!])\\s+/);
-                currentSentenceIdx = 0;
-                isSpeaking = true;
+                var clean = rawText.replace(/\\s+/g, ' ').trim();
+                audioSegments = clean.match(/[^.?!]+[.?!]+/g) || [clean];
+                currentSegIdx = 0;
+                isAudioPlaying = true;
 
                 document.getElementById('ttsBtnText').innerText = "음성 일시정지";
-                document.getElementById('ttsPlayBtn').className = "btn btn-danger px-3 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "맑고 또렷한 톤으로 낭독 중입니다...";
+                document.getElementById('ttsPlayBtn').className = "btn btn-danger px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsStatus').innerText = "맑은 스튜디오 음성으로 낭독 중입니다...";
                 
-                speakNextSentence();
+                playNextSegment();
             }
         }
 
@@ -626,9 +559,9 @@ def write_form():
     <div class="container py-5" style="max-width: 760px;">
         <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
             <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
-            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 AI 수석 기자가 2,000자 이상의 심층 리포트를 즉시 발행합니다.</p>
+            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 AI 수석 기자가 2,000자 이상의 심층 리포트를 즉시 작성하여 등록합니다.</p>
 
-            <form id="writeForm" method="get" action="/create" onsubmit="showInstantNotice()">
+            <form id="writeForm" method="get" action="/create" onsubmit="showLoadingUI()">
                 <div class="mb-3">
                     <label class="form-label fw-bold">카테고리</label>
                     <select name="category" class="form-select py-2">
@@ -643,17 +576,22 @@ def write_form():
                     <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
                 <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
-                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 발행 요청
+                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 작성 및 발행
                 </button>
             </form>
+
+            <div id="loadingBox" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary mb-3" style="width: 3.2rem; height: 3.2rem;" role="status"></div>
+                <h5 class="fw-bold text-dark mb-2">AI 수석 기자가 2,000자 심층 리포트를 집필 중입니다...</h5>
+                <p class="text-muted small mb-0">약 8~15초 후 기사가 완성되면 바로 새 기사 페이지로 이동합니다. 창을 닫지 마세요.</p>
+            </div>
         </div>
     </div>
 
     <script>
-        function showInstantNotice() {
-            var btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>기사 생성 접수 완료...';
+        function showLoadingUI() {
+            document.getElementById('writeForm').style.display = 'none';
+            document.getElementById('loadingBox').style.display = 'block';
         }
     </script>
     """
@@ -664,11 +602,8 @@ def create_article(category: str = "정부 지원금/복지 혜택", topic: str 
     if not topic:
         return RedirectResponse(url="/", status_code=303)
     
-    # 30초 튕김(타임아웃)을 방지하기 위해 백그라운드 스레드에서 안전하게 기사 생성
-    threading.Thread(target=generate_and_save_article, args=(category, topic), daemon=True).start()
-    
-    # 즉시 알림 배너가 켜진 메인 홈으로 이동 (8초 후 자동 새로고침되어 기사 노출)
-    return RedirectResponse(url="/?writing=1", status_code=303)
+    new_article_id = generate_and_save_article(category, topic)
+    return RedirectResponse(url="/article/" + str(new_article_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
 def sitemap():
