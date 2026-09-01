@@ -56,13 +56,9 @@ def get_cat_slug(category):
 def call_gemini_api(category: str, topic: str):
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
-    # API 키가 없을 때의 기본 가이드
     fallback_title = topic
     fallback_summary = f"1. {topic}에 대한 핵심 요약 정보.\n2. 세부 기준 및 절차 안내.\n3. 필수 주의사항."
-    fallback_content = f"""
-    <h2>1. {topic} - 개요 및 필요성</h2>
-    <p>{topic}에 대한 상세 가이드입니다.</p>
-    """
+    fallback_content = f"<h2>1. {topic} - 개요 및 필요성</h2><p>{topic}에 대한 상세 가이드입니다.</p>"
 
     if not api_key:
         return fallback_title, fallback_summary, fallback_content
@@ -203,86 +199,4 @@ def index(cat: str = ""):
     if cat:
         c.execute("SELECT * FROM articles WHERE category LIKE ? ORDER BY id DESC", ('%' + cat + '%',))
     else:
-        c.execute("SELECT * FROM articles ORDER BY id DESC")
-    articles = c.fetchall()
-    conn.close()
-
-    cards_list = []
-    for r in articles:
-        row = dict(r)
-        art_id = str(row.get('id', ''))
-        art_cat = str(row.get('category', ''))
-        art_date = str(row.get('created_at', ''))[:10]
-        art_title = str(row.get('title', ''))
-        art_sum = str(row.get('summary', ''))
-        art_views = str(row.get('views', 0))
-
-        card_html = f"""
-        <div class="col-md-4 mb-4">
-            <div class="card-art d-flex flex-column">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    {get_badge(art_cat)}
-                    <small class="text-muted">{art_date}</small>
-                </div>
-                <h5 class="fw-bold mb-2">
-                    <a href="/article/{art_id}" class="text-decoration-none text-dark">{art_title}</a>
-                </h5>
-                <p class="text-secondary small flex-grow-1" style="white-space: pre-line; line-height: 1.6;">{art_sum}</p>
-                <div class="d-flex justify-content-between align-items-center pt-3 border-top mt-2">
-                    <span class="text-muted small"><i class="fa-regular fa-eye me-1"></i>{art_views}회</span>
-                    <a href="/article/{art_id}" class="btn btn-outline-primary btn-sm">읽기 →</a>
-                </div>
-            </div>
-        </div>
-        """
-        cards_list.append(card_html)
-
-    cards = "".join(cards_list) if cards_list else '<div class="col-12 text-center py-5 text-muted">등록된 기사가 없습니다.</div>'
-
-    cat_nav = f"""
-    <div class="d-flex justify-content-center flex-wrap mb-4">
-        <a href="/" class="cat-btn {'active' if not cat else ''}">전체보기</a>
-        <a href="/?cat=복지" class="cat-btn {'active' if cat == '복지' else ''}">🏛️ 정부지원·복지</a>
-        <a href="/?cat=경제" class="cat-btn {'active' if cat == '경제' else ''}">📈 생활경제·재테크</a>
-        <a href="/?cat=건강" class="cat-btn {'active' if cat == '건강' else ''}">🩺 시니어건강·식품</a>
-        <a href="/?cat=문화" class="cat-btn {'active' if cat == '문화' else ''}">🎨 문화·힐링여행</a>
-    </div>
-    """
-
-    body = f"""
-    <div class="hero">
-        <div class="container">
-            <h1 class="fw-bold display-6 mb-2">인사이트 데일리 웹진</h1>
-            <p class="mb-0 text-white-50">시니어 복지 · 실전 재테크 · 건강 심층 가이드</p>
-        </div>
-    </div>
-    <div class="container">
-        {cat_nav}
-        <div class="row">
-            {cards}
-        </div>
-    </div>
-    """
-    return render("홈", body)
-
-ARTICLE_VIEW_TEMPLATE = """
-<div class="container py-4" style="max-width: 840px;">
-    <div class="mb-3 d-flex align-items-center gap-2">
-        __BADGE__ <span class="text-muted small">__CREATED_AT__</span>
-    </div>
-    <h1 class="fw-bold text-dark mb-4 lh-base" style="font-size: 2rem;">__ARTICLE_TITLE__</h1>
-    
-    <div class="p-3 bg-white border rounded-3 d-flex align-items-center justify-content-between mb-4 shadow-sm flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2">
-            <button id="ttsBtn" class="btn btn-dark btn-sm fw-bold px-3 py-2 rounded-pill shadow-sm" onclick="toggleSpeech()">
-                <i class="fa-solid fa-volume-high me-1 text-warning"></i> <span id="ttsText">차분한 아나운서 음성 듣기</span>
-            </button>
-            <small id="ttsStatus" class="text-secondary fw-semibold">차분하고 편안한 브리핑 톤</small>
-        </div>
-        <div class="d-flex gap-1">
-            <button class="btn btn-light btn-sm border" onclick="resizeFont(1)" title="글자 확대">A+</button>
-            <button class="btn btn-light btn-sm border" onclick="resizeFont(-1)" title="글자 축소">A-</button>
-        </div>
-    </div>
-
-    <div class="p-3 bg-white border-start border-4 border-primary rounded-2 shadow-sm mb-4">
+        c.execute("SELECT * FROM
