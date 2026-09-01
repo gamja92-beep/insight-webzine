@@ -4,7 +4,7 @@ import json
 import time
 from datetime import datetime
 
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 import uvicorn
@@ -403,3 +403,44 @@ async def create_article(cat_slug: str = Form(...), source_name: str = Form(...)
 if __name__ == "__main__":
     print("📰 인사이트 웹진 SEO 강화 버전 가동: http://127.0.0.1:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)
+
+# ======================================================
+# 4. 검색엔진용 Sitemap 및 RSS 피드 라우트
+# ======================================================
+@app.get("/sitemap.xml", response_class=Response)
+def sitemap():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, created_at FROM articles ORDER BY id DESC")
+    articles = cursor.fetchall()
+    conn.close()
+
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    xml_content += '  <url><loc>https://insight-webzine.onrender.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n'
+    for row in articles:
+        xml_content += f'  <url><loc>https://insight-webzine.onrender.com/article/{row["id"]}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
+    xml_content += '</urlset>'
+    return Response(content=xml_content, media_type="application/xml")
+
+@app.get("/rss", response_class=Response)
+def rss_feed():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, summary, created_at FROM articles ORDER BY id DESC LIMIT 30")
+    articles = cursor.fetchall()
+    conn.close()
+
+    rss_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    rss_content += '<rss version="2.0">\n<channel>\n'
+    rss_content += '  <title>인사이트 데일리 웹진</title>\n'
+    rss_content += '  <link>https://insight-webzine.onrender.com</link>\n'
+    rss_content += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
+    for row in articles:
+        rss_content += '  <item>\n'
+        rss_content += f'    <title><![CDATA[{row["title"]}]]></title>\n'
+        rss_content += f'    <link>https://insight-webzine.onrender.com/article/{row["id"]}</link>\n'
+        rss_content += f'    <description><![CDATA[{row["summary"]}]]></description>\n'
+        rss_content += '  </item>\n'
+    rss_content += '</channel>\n</rss>'
+    return Response(content=rss_content, media_type="application/xml")
