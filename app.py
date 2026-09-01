@@ -4,110 +4,62 @@ import json
 import time
 from datetime import datetime
 
-from fastapi import FastAPI, Form, Response
+from fastapi import FastAPI, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 import uvicorn
 
-# ==========================================================
-# 1. 시스템 설정
-# ==========================================================
-GEMINI_API_KEY = "AIzaSyDUT1q_c4QcAGG7rzqZWTmsWvwXXvqH6zI"
-MODEL_NAME = "gemini-2.5-flash"  # 할당량이 넉넉하고 빠른 모델로 최적화
-DB_FILE = "webzine.db"
+# ======================================================
+# 1. 환경 설정 및 DB 초기화
+# ======================================================
+app = FastAPI()
 
-CATEGORIES = [
-    {"slug": "all", "name": "전체보기"},
-    {"slug": "health", "name": "🌿 시니어 건강/식품"},
-    {"slug": "welfare", "name": "💰 정부 지원금/복지 혜택"},
-    {"slug": "economy", "name": "📊 생활 경제/세무 상식"},
-    {"slug": "culture", "name": "🎨 문화/예술"}
-]
+# 관리자 통계 비밀번호 (원하시는 번호로 변경 가능)
+ADMIN_STATS_PASSWORD = "admin1234"
+
+def get_db():
+    conn = sqlite3.connect("webzine.db", check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cat_slug TEXT NOT NULL,
-            category TEXT NOT NULL,
             title TEXT NOT NULL,
-            summary TEXT,
-            content TEXT,
-            tags TEXT,
-            source_name TEXT,
-            created_at TEXT,
-            views INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'published'
+            category TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            views INTEGER DEFAULT 0
         )
-    ''')
+    """)
+    # 기존 DB에 views 컬럼이 없는 경우 대비
+    try:
+        cursor.execute("ALTER TABLE articles ADD COLUMN views INTEGER DEFAULT 0")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
 init_db()
-app = FastAPI(title="인사이트 데일리 웹진")
 
-# ==========================================================
-# 2. SEO & CTR 최적화 AI 기사 생성 엔진 (429 자동 재시도 탑재)
-# ==========================================================
-def generate_rich_article(topic_or_raw: str, category_name: str, source_name: str, max_retries: int = 3):
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    prompt = f"""
-너는 20년 경력의 디지털 뉴스 수석 에디터이자 포털(네이버/구글) 검색엔진 최적화(SEO) 수석 컨설턴트야.
-제공된 [주제/원문]을 분석하여 검색 포털 1페이지 상단에 노출되고 클릭률(CTR)이 폭발하는 고품질 전문 신문 기사를 작성해줘.
+# 조회수 증가 함수
+def increase_article_view(article_id: int):
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE articles SET views = COALESCE(views, 0) + 1 WHERE id = ?", (article_id,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
-[작성 가이드라인 - SEO 및 CTR 극대화 규칙]
-
-1. 🎯 [기사 제목 (Title)]:
-   - 검색자가 지나칠 수 없도록 '숫자', '손실 방지/경고', '구체적 혜택', '연도(2026)'를 조합할 것.
-   - 제목 길이: 28자~40자 내외로 정제할 것.
-
-2. 📌 [3줄 핵심 브리핑 (Summary)]:
-   - 구글 피처드 스니펫에 채택되도록 바쁜 독자가 결론을 5초 만에 파악할 수 있는 3개 핵심 문장으로 작성할 것.
-
-3. 📝 [본문 구조화 (HTML Content)]:
-   - `<h2>`, `<h3>`, `<p>`, `<blockquote>`, `<ul>`, `<li>`, `<table>` 태그를 적극 활용할 것.
-   - [섹션 1]: 문제 제기 및 배경 (왜 지금 이 정보가 중요한가?)
-   - [섹션 2]: 핵심 실천 가이드 및 신청 방법
-   - [섹션 3]: 한눈에 보는 요약 비교표 (HTML `<table>` 태그) 또는 체크리스트
-   - [섹션 4]: 💡 자주 묻는 질문 FAQ (실제 궁금해하는 2~3개의 Q&A)
-
-4. 🏷️ [핵심 검색 키워드 (Tags)]:
-   - 포털 연관검색어 형태의 롱테일 키워드 4개를 쉼표(,)로 구분하여 제시.
-
-[주제/원문]: {topic_or_raw}
-[카테고리]: {category_name}
-[출처 기관]: {source_name}
-
-반드시 아래 필드명을 가진 JSON 형식으로만 응답할 것:
-- title: (문자열) 고클릭률 최적화 제목
-- summary: (문자열) 핵심 3줄 요약 (줄바꿈 포함)
-- html_content: (문자열) 완벽히 구조화된 본문 HTML
-- tags: (문자열) 검색 키워드 4개
-"""
-    for attempt in range(1, max_retries + 1):
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME,
-                contents=prompt,
-                config={"response_mime_type": "application/json"}
-            )
-            return json.loads(response.text.strip())
-        except Exception as e:
-            err_msg = str(e)
-            print(f"[!] AI 생성 시도 ({attempt}/{max_retries}) 오류: {err_msg}")
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                print(f"⏳ API 호출 제한(429) 감지. 15초 대기 후 자동 재시도합니다...")
-                time.sleep(15)
-            else:
-                time.sleep(3)
-                
-    return None
-
-# ==========================================================
-# 3. 웹 페이지 UI 템플릿
-# ==========================================================
+# ======================================================
+# 2. 공통 HTML 레이아웃 (SEO 및 메타태그 포함)
+# ======================================================
 HTML_LAYOUT = """<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -116,293 +68,172 @@ HTML_LAYOUT = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>__PAGE_TITLE__ - 인사이트 데일리 웹진</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary: #1e3a8a; --accent: #dc2626; --bg: #f8fafc; --text: #1e293b; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif; margin: 0; background: var(--bg); color: var(--text); line-height: 1.75; }
-        header { background: #ffffff; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
-        .header-top { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; }
-        .logo { font-size: 26px; font-weight: 900; color: var(--primary); text-decoration: none; letter-spacing: -1px; }
-        .logo span { color: var(--accent); }
-        .btn-admin { background: #1e3a8a; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 14px; padding: 8px 16px; border-radius: 6px; }
-        
-        .nav-bar { background: #f1f5f9; border-top: 1px solid #e2e8f0; }
-        .nav-inner { max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 20px; }
-        
-        .tab-btn { color: #334155; font-weight: 700; font-size: 15px; padding: 8px 18px; border-radius: 20px; background: #ffffff; border: 1px solid #cbd5e1; cursor: pointer; transition: all 0.2s; outline: none; }
-        .tab-btn:hover { color: #ffffff; background: #3b82f6; border-color: #3b82f6; }
-        .tab-btn.active { background: var(--primary) !important; color: #ffffff !important; border-color: var(--primary) !important; }
-        
-        .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; min-height: 65vh; }
-        .article-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
-        .card { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.04); display: flex; flex-direction: column; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-4px); }
-        .card-body { padding: 22px; display: flex; flex-direction: column; flex-grow: 1; }
-        .badge { display: inline-block; align-self: flex-start; background: #e0e7ff; color: var(--primary); font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 6px; margin-bottom: 12px; cursor: pointer; }
-        .card-title { font-size: 19px; font-weight: bold; margin: 0 0 10px 0; line-height: 1.45; }
-        .card-title a { color: var(--text); text-decoration: none; }
-        .card-title a:hover { color: var(--primary); }
-        .card-desc { font-size: 14px; color: #64748b; margin-bottom: 16px; flex-grow: 1; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-        .card-meta { font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; border-top: 1px solid #f1f5f9; padding-top: 12px; margin-top: auto; }
-        
-        .article-detail { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 40px; }
-        .detail-title { font-size: 28px; font-weight: 800; line-height: 1.35; margin: 10px 0 15px 0; color: #0f172a; }
-        .detail-meta { color: #64748b; font-size: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
-        .summary-box { background: #f0fdf4; border-left: 5px solid #22c55e; padding: 20px 24px; border-radius: 0 8px 8px 0; margin-bottom: 35px; font-size: 16px; color: #166534; line-height: 1.8; }
-        .summary-box strong { font-size: 17px; display: block; margin-bottom: 8px; }
-        .article-content { font-size: 17px; color: #334155; }
-        .article-content h2 { color: var(--primary); font-size: 22px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 40px; }
-        .article-content h3 { font-size: 18px; color: #0f172a; margin-top: 25px; }
-        .article-content blockquote { background: #f8fafc; border-left: 4px solid #94a3b8; margin: 24px 0; padding: 14px 20px; font-style: italic; color: #475569; }
-        
-        .article-content table { width: 100%; border-collapse: collapse; margin: 25px 0; font-size: 15px; }
-        .article-content th, .article-content td { border: 1px solid #cbd5e1; padding: 12px 14px; text-align: left; }
-        .article-content th { background: #f1f5f9; font-weight: bold; color: #1e293b; }
-        .article-content tr:nth-child(even) { background: #f8fafc; }
-
-        .source-tag { background: #f1f5f9; border-radius: 8px; padding: 16px; margin-top: 40px; font-size: 13px; color: #64748b; }
-        .ad-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; padding: 22px; margin: 25px 0; color: #94a3b8; font-size: 13px; font-weight: bold; }
-        
-        .admin-box { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; max-width: 720px; margin: 0 auto; }
-        .form-group { margin-bottom: 18px; }
-        .form-group label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 14px; }
-        .form-control { width: 100%; padding: 11px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
-        textarea.form-control { height: 160px; line-height: 1.5; }
-        .btn-submit { background: var(--primary); color: #fff; border: none; padding: 13px 24px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; }
-        footer { background: #0f172a; color: #94a3b8; text-align: center; padding: 35px 20px; margin-top: 60px; font-size: 13px; }
+        body { background-color: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .navbar-brand { font-weight: 800; color: #1e3a8a !important; }
+        .hero-section { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 40px 0; margin-bottom: 30px; }
+        .article-card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s; height: 100%; }
+        .article-card:hover { transform: translateY(-4px); }
+        .badge-cat { background-color: #e0e7ff; color: #3730a3; font-weight: 600; }
+        .btn-custom { background-color: #1e3a8a; color: white; }
+        .btn-custom:hover { background-color: #172554; color: white; }
     </style>
 </head>
 <body>
-    <header>
-        <div class="header-top">
-            <a href="/" class="logo">인사이트<span>웹진</span></a>
-            <a href="/admin" class="btn-admin">⚡ SEO 기사 즉시 발행</a>
-        </div>
-        <div class="nav-bar">
-            <div class="nav-inner">
-                <button type="button" class="tab-btn active" onclick="switchCategory('all', this)">전체보기</button>
-                <button type="button" class="tab-btn" onclick="switchCategory('health', this)">🌿 시니어 건강/식품</button>
-                <button type="button" class="tab-btn" onclick="switchCategory('welfare', this)">💰 정부 지원금/복지 혜택</button>
-                <button type="button" class="tab-btn" onclick="switchCategory('economy', this)">📊 생활 경제/세무 상식</button>
-                <button type="button" class="tab-btn" onclick="switchCategory('culture', this)">🎨 문화/예술</button>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fa-solid fa-newspaper me-2"></i>인사이트 데일리</a>
+            <div class="d-flex">
+                <a href="/write" class="btn btn-outline-primary btn-sm me-2"><i class="fa-solid fa-pen me-1"></i>기사 작성</a>
+                <a href="/admin/stats" class="btn btn-outline-secondary btn-sm"><i class="fa-solid fa-chart-line me-1"></i>관리자 통계</a>
             </div>
         </div>
-    </header>
-    <div class="container">
-        __BODY_CONTENT__
-    </div>
-    <footer>
-        <p>© 2026 인사이트 데일리 웹진. All rights reserved.</p>
+    </nav>
+    __CONTENT__
+    <footer class="bg-white border-top py-4 mt-5 text-center text-muted small">
+        <div class="container">
+            <p class="mb-1">© 인사이트 데일리 웹진. All Rights Reserved.</p>
+            <p class="mb-0"><a href="/rss" class="text-decoration-none text-muted me-3">RSS 피드</a> <a href="/sitemap.xml" class="text-decoration-none text-muted">사이트맵</a></p>
+        </div>
     </footer>
-
-    <script>
-    function switchCategory(targetSlug, btnElement) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        if (btnElement) {
-            btnElement.classList.add('active');
-        } else {
-            const b = document.querySelector(`button[onclick*="'${targetSlug}'"]`);
-            if (b) b.classList.add('active');
-        }
-
-        const cards = document.querySelectorAll('.card');
-        let count = 0;
-
-        cards.forEach(card => {
-            const slug = card.getAttribute('data-slug');
-            if (targetSlug === 'all' || slug === targetSlug) {
-                card.style.display = 'flex';
-                count++;
-            } else {
-                card.style.display = 'none';
-            }
-        });
-
-        const titleEl = document.getElementById('section-title');
-        if (titleEl) {
-            const label = btnElement ? btnElement.innerText : '기사';
-            titleEl.innerText = `🔥 ${label} (${count}개)`;
-        }
-    }
-    </script>
 </body>
 </html>
 """
 
-# ==========================================================
-# 4. 라우터 설정
-# ==========================================================
+# ======================================================
+# 3. 사이트 페이지 라우트
+# ======================================================
 @app.get("/", response_class=HTMLResponse)
-async def home_page():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT id, cat_slug, category, title, summary, created_at, views FROM articles ORDER BY id DESC")
-    rows = c.fetchall()
+def index():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM articles ORDER BY id DESC")
+    articles = cursor.fetchall()
     conn.close()
 
     cards_html = ""
-    for r in rows:
-        art_id, cat_slug, category, title, summary, created_at, views = r
-        first_sum = (summary or "").split("\n")[0]
-        created_date = (created_at or "")[:10]
+    for row in articles:
         cards_html += f"""
-        <div class="card" data-slug="{cat_slug}">
-            <div class="card-body">
-                <span class="badge" onclick="switchCategory('{cat_slug}')">{category}</span>
-                <h3 class="card-title"><a href="/article/{art_id}">{title}</a></h3>
-                <p class="card-desc">{first_sum}</p>
-                <div class="card-meta">
-                    <span>📅 {created_date}</span>
-                    <span>👁️ {views}</span>
+        <div class="col-md-4 mb-4">
+            <div class="card article-card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge badge-cat px-2 py-1">{row['category']}</span>
+                    <small class="text-muted">{row['created_at'][:10]}</small>
+                </div>
+                <h5 class="card-title fw-bold mb-3"><a href="/article/{row['id']}" class="text-decoration-none text-dark">{row['title']}</a></h5>
+                <p class="card-text text-muted small flex-grow-1">{row['summary']}</p>
+                <div class="mt-3">
+                    <a href="/article/{row['id']}" class="btn btn-sm btn-outline-secondary w-100">기사 읽기</a>
                 </div>
             </div>
         </div>
         """
 
-    if not rows:
-        cards_html = "<p style='text-align:center; grid-column: 1/-1; padding: 40px; color:#64748b;'>기사가 없습니다. [⚡ SEO 기사 즉시 발행] 버튼으로 기사를 등록해 보세요.</p>"
+    if not cards_html:
+        cards_html = '<div class="col-12 text-center py-5 text-muted">발행된 기사가 없습니다. 상단의 기사 작성을 눌러보세요.</div>'
 
-    body = f"""
-    <div style="margin-bottom: 22px;">
-        <h2 id="section-title" style="font-size: 22px; font-weight: 800; margin: 0;">🔥 전체보기 ({len(rows)}개)</h2>
+    content = f"""
+    <div class="hero-section text-center">
+        <div class="container">
+            <h1 class="fw-bold mb-2">인사이트 데일리 웹진</h1>
+            <p class="lead mb-0 text-white-50">매일 만나는 새로운 시선과 유용한 지식</p>
+        </div>
     </div>
-    <div class="ad-box">📢 [Google AdSense] 상단 반응형 배너 광고 영역</div>
-    <div class="article-grid">
-        {cards_html}
+    <div class="container">
+        <div class="row">
+            {cards_html}
+        </div>
     </div>
     """
-    html = HTML_LAYOUT.replace("__PAGE_TITLE__", "인사이트 데일리 웹진").replace("__BODY_CONTENT__", body)
-    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return HTML_LAYOUT.replace("__PAGE_TITLE__", "메인").replace("__CONTENT__", content)
 
 @app.get("/article/{article_id}", response_class=HTMLResponse)
-async def article_detail(article_id: int):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE articles SET views = views + 1 WHERE id = ?", (article_id,))
-    conn.commit()
+def view_article(article_id: int):
+    # 독자 화면에는 띄우지 않고 내부 DB 조회수만 1 증가
+    increase_article_view(article_id)
 
-    c.execute("SELECT category, title, summary, content, tags, source_name, created_at, views, cat_slug FROM articles WHERE id = ?", (article_id,))
-    row = c.fetchone()
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
+    row = cursor.fetchone()
     conn.close()
 
     if not row:
-        return HTMLResponse("기사를 찾을 수 없습니다.", status_code=404)
+        return HTMLResponse("존재하지 않는 기사입니다.", status_code=404)
 
-    category, title, summary, content, tags, source_name, created_at, views, cat_slug = row
-    summary_items = [f"<li>{s.strip()}</li>" for s in (summary or "").split("\n") if s.strip()]
-    summary_html = "".join(summary_items) if summary_items else "<li>본문 내용을 확인해 주세요.</li>"
-
-    body = f"""
-    <div class="article-detail">
-        <span class="badge">{category}</span>
-        <h1 class="detail-title">{title}</h1>
-        <div class="detail-meta">
-            <span>발행일: {created_at}</span> &nbsp;|&nbsp; 
-            <span>조회수: {views}</span> &nbsp;|&nbsp;
-            <span>출처: {source_name}</span>
+    body_html = row['content'].replace('\n', '<br>')
+    content = f"""
+    <div class="container py-5" style="max-width: 800px;">
+        <div class="mb-4">
+            <span class="badge badge-cat mb-2">{row['category']}</span>
+            <h2 class="fw-bold text-dark">{row['title']}</h2>
+            <div class="text-muted small border-bottom pb-3">{row['created_at']}</div>
         </div>
-
-        <div class="ad-box">📢 [Google AdSense] 본문 상단 반응형 광고</div>
-
-        <div class="summary-box">
-            <strong>📌 핵심 요약 브리핑 (스니펫 가이드)</strong>
-            <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-                {summary_html}
-            </ul>
+        <div class="p-3 mb-4 bg-light rounded border-start border-4 border-primary">
+            <strong>요약:</strong> {row['summary']}
         </div>
-
-        <div class="article-content">
-            {content or ""}
+        <div class="article-body fs-5 lh-lg text-secondary mb-5">
+            {body_html}
         </div>
-
-        <div class="ad-box">📢 [Google AdSense] 본문 하단 광고 영역</div>
-
-        <div class="source-tag">
-            <p style="margin:0;"><strong>💡 출처 안내:</strong> 본 기사는 {source_name}의 공식 자료를 기반으로 AI 심층 분석을 거쳐 작성되었습니다.</p>
-            <p style="margin:6px 0 0 0;"><strong>SEO 키워드 태그:</strong> {tags or ""}</p>
-        </div>
-        
-        <div style="text-align: center; margin-top: 30px;">
-            <a href="/" style="display:inline-block; padding: 10px 20px; background: #e2e8f0; color: #334155; text-decoration:none; border-radius: 6px; font-weight: bold;">← 전체 기사 목록으로</a>
+        <div class="text-center border-top pt-4">
+            <a href="/" class="btn btn-outline-primary"><i class="fa-solid fa-list me-1"></i>목록으로 돌아가기</a>
         </div>
     </div>
     """
-    html = HTML_LAYOUT.replace("__PAGE_TITLE__", str(title)).replace("__BODY_CONTENT__", body)
-    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return HTML_LAYOUT.replace("__PAGE_TITLE__", row['title']).replace("__CONTENT__", content)
 
-@app.get("/admin", response_class=HTMLResponse)
-async def admin_page():
-    options_html = "".join([f'<option value="{c["slug"]}">{c["name"]}</option>' for c in CATEGORIES if c["slug"] != "all"])
-    body = f"""
-    <div class="admin-box">
-        <h2 style="margin-top:0; color: var(--primary);">⚡ AI 고품질 SEO 기사 즉시 발행</h2>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">
-            핵심 키워드나 원문 텍스트를 입력하면 AI 에디터가 <b>포털 검색 상위 노출 규격(고클릭률 제목 + 요약 스니펫 + 비교표 + FAQ)</b>에 맞춰 기사를 즉시 작성합니다.
-        </p>
-        
-        <form action="/admin/create" method="post">
-            <div class="form-group">
-                <label>카테고리 선택</label>
-                <select name="cat_slug" class="form-control">
-                    {options_html}
+@app.get("/write", response_class=HTMLResponse)
+def write_form():
+    form_html = """
+    <div class="container py-5" style="max-width: 700px;">
+        <h3 class="fw-bold mb-4"><i class="fa-solid fa-pen-nib me-2"></i>새 기사 작성</h3>
+        <form method="post" action="/write" class="card p-4 shadow-sm border-0">
+            <div class="mb-3">
+                <label class="form-label fw-bold">카테고리</label>
+                <select name="category" class="form-select">
+                    <option value="경제/경영">경제/경영</option>
+                    <option value="IT/테크">IT/테크</option>
+                    <option value="사회/복지">사회/복지</option>
+                    <option value="문화/라이프">문화/라이프</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label>출처명 (신뢰도 향상용)</label>
-                <input type="text" name="source_name" class="form-control" value="과학기술정보통신부 / 보건복지부 복지로" required>
+            <div class="mb-3">
+                <label class="form-label fw-bold">기사 제목</label>
+                <input type="text" name="title" class="form-control" placeholder="제목을 입력하세요" required>
             </div>
-            <div class="form-group">
-                <label>원문 텍스트 또는 주제 키워드</label>
-                <textarea name="raw_text" class="form-control" placeholder="기사 작성에 참고할 내용을 입력하세요..." required>2026년 65세 이상 기초연금 수급자 통신비 감면 자격 요건, 월 최대 12,100원 할인 혜택, 주민센터 및 복지로/통신사 114 간편 신청방법</textarea>
+            <div class="mb-3">
+                <label class="form-label fw-bold">기사 요약 (1~2줄)</label>
+                <input type="text" name="summary" class="form-control" placeholder="요약 내용을 입력하세요" required>
             </div>
-            <button type="submit" class="btn-submit">🚀 고클릭률 SEO 기사 즉시 생성 및 발행</button>
+            <div class="mb-4">
+                <label class="form-label fw-bold">본문 내용</label>
+                <textarea name="content" rows="10" class="form-control" placeholder="본문 내용을 입력하세요" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">기사 발행하기</button>
         </form>
     </div>
     """
-    html = HTML_LAYOUT.replace("__PAGE_TITLE__", "SEO 기사 등록").replace("__BODY_CONTENT__", body)
-    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return HTML_LAYOUT.replace("__PAGE_TITLE__", "기사 작성").replace("__CONTENT__", form_html)
 
-@app.post("/admin/create")
-async def create_article(cat_slug: str = Form(...), source_name: str = Form(...), raw_text: str = Form(...)):
-    slug_to_name = {c["slug"]: c["name"] for c in CATEGORIES}
-    category_name = slug_to_name.get(cat_slug, "기타")
-    
-    art_data = generate_rich_article(raw_text, category_name, source_name)
-    if not art_data:
-        return HTMLResponse("""
-        <div style="text-align:center; padding:50px; font-family:sans-serif;">
-            <h2>⏳ AI API 요청 한도에 도달했습니다.</h2>
-            <p style="color:#64748b;">구글 무료 API 일일/분당 할당량 초과 상태입니다. 약 1~2분 후 다시 시도해 주세요.</p>
-            <a href="/admin" style="display:inline-block; margin-top:20px; padding:10px 20px; background:#1e3a8a; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold;">← 관리자 페이지로 돌아가기</a>
-        </div>
-        """, status_code=429)
-        
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO articles (cat_slug, category, title, summary, content, tags, source_name, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        cat_slug,
-        category_name,
-        art_data.get("title", "정보 안내"),
-        art_data.get("summary", ""),
-        art_data.get("html_content", ""),
-        art_data.get("tags", ""),
-        source_name,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ))
+@app.post("/write")
+def write_submit(
+    title: str = Form(...),
+    category: str = Form(...),
+    summary: str = Form(...),
+    content: str = Form(...)
+):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO articles (title, category, summary, content, created_at, views)
+        VALUES (?, ?, ?, ?, ?, 0)
+    """, (title, category, summary, content, now))
     conn.commit()
-    new_id = c.lastrowid
     conn.close()
-
-    return RedirectResponse(url=f"/article/{new_id}", status_code=303)
-
-# ==========================================================
-# 5. 메인 실행 부
-# ==========================================================
-if __name__ == "__main__":
-    print("📰 인사이트 웹진 SEO 강화 버전 가동: http://127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    return RedirectResponse(url="/", status_code=303)
 
 # ======================================================
 # 4. 검색엔진용 Sitemap 및 RSS 피드 라우트
@@ -416,16 +247,15 @@ def sitemap():
         articles = cursor.fetchall()
         conn.close()
 
-        xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-        xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        xml_content += '  <url><loc>https://insight-webzine.onrender.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n'
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        xml += '  <url><loc>https://insight-webzine.onrender.com/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n'
         for row in articles:
-            art_id = row[0] if not isinstance(row, dict) else row["id"]
-            xml_content += f'  <url><loc>https://insight-webzine.onrender.com/article/{art_id}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
-        xml_content += '</urlset>'
-        return Response(content=xml_content, media_type="application/xml")
-    except Exception as e:
-        return Response(content=f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://insight-webzine.onrender.com/</loc></url></urlset>', media_type="application/xml")
+            xml += f'  <url><loc>https://insight-webzine.onrender.com/article/{row["id"]}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n'
+        xml += '</urlset>'
+        return Response(content=xml, media_type="application/xml")
+    except Exception:
+        return Response(content='<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://insight-webzine.onrender.com/</loc></url></urlset>', media_type="application/xml")
 
 @app.get("/rss", response_class=Response)
 def rss_feed():
@@ -436,21 +266,100 @@ def rss_feed():
         articles = cursor.fetchall()
         conn.close()
 
-        rss_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-        rss_content += '<rss version="2.0">\n<channel>\n'
-        rss_content += '  <title>인사이트 데일리 웹진</title>\n'
-        rss_content += '  <link>https://insight-webzine.onrender.com</link>\n'
-        rss_content += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        xml += '<rss version="2.0">\n<channel>\n'
+        xml += '  <title>인사이트 데일리 웹진</title>\n'
+        xml += '  <link>https://insight-webzine.onrender.com</link>\n'
+        xml += '  <description>최신 뉴스 및 인사이트 웹진</description>\n'
         for row in articles:
-            art_id = row[0] if not isinstance(row, dict) else row["id"]
-            art_title = row[1] if not isinstance(row, dict) else row["title"]
-            art_sum = row[2] if not isinstance(row, dict) else row["summary"]
-            rss_content += '  <item>\n'
-            rss_content += f'    <title><![CDATA[{art_title}]]></title>\n'
-            rss_content += f'    <link>https://insight-webzine.onrender.com/article/{art_id}</link>\n'
-            rss_content += f'    <description><![CDATA[{art_sum}]]></description>\n'
-            rss_content += '  </item>\n'
-        rss_content += '</channel>\n</rss>'
-        return Response(content=rss_content, media_type="application/xml")
-    except Exception as e:
+            xml += '  <item>\n'
+            xml += f'    <title><![CDATA[{row["title"]}]]></title>\n'
+            xml += f'    <link>https://insight-webzine.onrender.com/article/{row["id"]}</link>\n'
+            xml += f'    <description><![CDATA[{row["summary"]}]]></description>\n'
+            xml += '  </item>\n'
+        xml += '</channel>\n</rss>'
+        return Response(content=xml, media_type="application/xml")
+    except Exception:
         return Response(content='<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>인사이트 데일리 웹진</title><link>https://insight-webzine.onrender.com</link></channel></rss>', media_type="application/xml")
+
+# ======================================================
+# 5. 비공개 관리자 통계 대시보드
+# ======================================================
+@app.get("/admin/stats", response_class=HTMLResponse)
+def admin_stats(pw: str = ""):
+    if pw != ADMIN_STATS_PASSWORD:
+        login_html = """
+        <div class="container py-5 d-flex justify-content-center">
+            <div class="card p-4 shadow-sm border-0 text-center" style="max-width: 360px; width: 100%;">
+                <h4 class="fw-bold mb-3">📊 관리자 로그인</h4>
+                """ + ('<div class="alert alert-danger py-2 small mb-3">비밀번호가 틀렸습니다.</div>' if pw else '') + """
+                <form method="get" action="/admin/stats">
+                    <input type="password" name="pw" class="form-control mb-3" placeholder="비밀번호 입력" autofocus required>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">통계 보기</button>
+                </form>
+            </div>
+        </div>
+        """
+        return HTML_LAYOUT.replace("__PAGE_TITLE__", "관리자 로그인").replace("__CONTENT__", login_html)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, title, category, COALESCE(views, 0) as views, created_at FROM articles ORDER BY views DESC, id DESC")
+    articles = cursor.fetchall()
+    total_views = sum([row['views'] for row in articles])
+    conn.close()
+
+    rows_html = ""
+    for idx, row in enumerate(articles, 1):
+        rows_html += f"""
+        <tr>
+            <td class="text-center fw-bold text-muted">{idx}</td>
+            <td><a href="/article/{row['id']}" target="_blank" class="text-decoration-none text-dark fw-semibold">{row['title']}</a></td>
+            <td class="text-center"><span class="badge badge-cat">{row['category']}</span></td>
+            <td class="text-center text-primary fw-bold">{row['views']:,} 회</td>
+            <td class="text-center text-muted small">{row['created_at'][:10]}</td>
+        </tr>
+        """
+
+    if not rows_html:
+        rows_html = '<tr><td colspan="5" class="text-center py-4 text-muted">등록된 기사가 없습니다.</td></tr>'
+
+    dashboard_html = f"""
+    <div class="container py-5" style="max-width: 900px;">
+        <h3 class="fw-bold mb-4">📊 기사 조회수 및 방문 통계</h3>
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card p-3 shadow-sm border-0 text-center">
+                    <div class="text-muted small">총 누적 기사 조회수</div>
+                    <div class="fs-2 fw-bold text-primary">{total_views:,} <span class="fs-6 text-muted">회</span></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card p-3 shadow-sm border-0 text-center">
+                    <div class="text-muted small">총 발행 기사 수</div>
+                    <div class="fs-2 fw-bold text-secondary">{len(articles):,} <span class="fs-6 text-muted">개</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="card shadow-sm border-0 overflow-hidden">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 60px;">순위</th>
+                        <th>기사 제목</th>
+                        <th class="text-center" style="width: 120px;">카테고리</th>
+                        <th class="text-center" style="width: 120px;">조회수</th>
+                        <th class="text-center" style="width: 120px;">작성일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_html}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    return HTML_LAYOUT.replace("__PAGE_TITLE__", "관리자 통계").replace("__CONTENT__", dashboard_html)
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
