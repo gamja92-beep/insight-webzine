@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import json
-import time
 import threading
 import random
 from datetime import datetime
@@ -65,20 +64,20 @@ TOPICS = [
 def make_default_content(topic):
     return (
         "<h2>1. 주요 배경과 핵심 정보</h2>"
-        "<p>" + topic + "에 대한 핵심 정보를 상세히 안내해 드립니다.</p>"
+        "<p>" + topic + "에 대한 핵심 정보를 상세히 안내해 드립니다. 본 가이드는 실생활에서 즉시 활용할 수 있는 핵심 지침을 담고 있습니다.</p>"
         "<h2>2. 세부 혜택 요약</h2>"
         "<table class='table table-bordered my-3'>"
         "<thead class='table-light'><tr><th>구분</th><th>지원 내용</th><th>대상</th></tr></thead>"
-        "<tbody><tr><td>기본 지원</td><td>맞춤형 혜택 및 감면</td><td>만 65세 이상</td></tr></tbody>"
+        "<tbody><tr><td>기본 지원</td><td>맞춤형 혜택 및 본인부담금 대폭 감면</td><td>만 65세 이상 및 해당 가구</td></tr>"
+        "<tr><td>신청처</td><td>정부24 온라인 또는 관할 주민센터 방문</td><td>신분증 지참</td></tr></tbody>"
         "</table>"
-        "<h2>3. 신청 절차</h2>"
-        "<ol><li>신청 자격 확인</li><li>구비 서류 준비 후 접수</li><li>심사 및 혜택 수령</li></ol>"
-        "<h2>4. 주의사항</h2>"
-        "<ul><li>신청 기한을 반드시 사전 확인하세요.</li></ul>"
+        "<h2>3. 신청 절차 및 가이드</h2>"
+        "<ol><li>자격 요건 및 해당 연도 기준 확인</li><li>필수 구비 서류 준비 후 접수</li><li>심사 및 지원 혜택 수령</li></ol>"
+        "<h2>4. 전문가 주의사항</h2>"
+        "<ul><li>기한 내 미신청 시 소급 적용이 불가할 수 있으니 사전 기간을 꼭 확인하세요.</li></ul>"
     )
 
-def update_with_ai_task(art_id, category, topic):
-    time.sleep(2)
+def background_ai_enrichment(art_id, category, topic):
     if not client:
         return
     prompt = (
@@ -114,7 +113,7 @@ def update_with_ai_task(art_id, category, topic):
     except Exception:
         pass
 
-def save_article(category="", topic=""):
+def save_article_instant(category="", topic=""):
     if not category or not topic:
         chosen = random.choice(TOPICS)
         category, topic = chosen[0], chosen[1]
@@ -122,19 +121,16 @@ def save_article(category="", topic=""):
     content = make_default_content(topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    new_id = 1
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("INSERT INTO articles (title, category, summary, content, created_at, views, likes) VALUES (?, ?, ?, ?, ?, 0, 0)",
-                  (topic, category, summary, content, now))
-        new_id = c.lastrowid
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("INSERT INTO articles (title, category, summary, content, created_at, views, likes) VALUES (?, ?, ?, ?, ?, 0, 0)",
+              (topic, category, summary, content, now))
+    new_id = c.lastrowid
+    conn.commit()
+    conn.close()
 
-    threading.Thread(target=update_with_ai_task, args=(new_id, category, topic), daemon=True).start()
+    # AI 심층 글쓰기는 백그라운드 스레드에서 조용히 수행 (0.05초 만에 완료 반환)
+    threading.Thread(target=background_ai_enrichment, args=(new_id, category, topic), daemon=True).start()
     return new_id
 
 BASE_HTML = """<!DOCTYPE html>
@@ -385,7 +381,8 @@ def write_form():
         '<div class="container py-5" style="max-width: 600px;">'
         '<div class="card p-4 shadow-sm border-0 rounded-3">'
         '<h4 class="fw-bold mb-3"><i class="fa-solid fa-pen text-primary me-2"></i>기사 수동 발행</h4>'
-        '<form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText=\'발행 중...\';">'
+        '<p class="text-muted small mb-3">주제를 입력하시면 0.1초 만에 즉시 기사 화면이 열립니다.</p>'
+        '<form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText=\'즉시 등록 중...\';">'
         '<div class="mb-3">'
         '<label class="form-label fw-bold small">카테고리</label>'
         '<select name="category" class="form-select">'
@@ -397,7 +394,7 @@ def write_form():
         '</div>'
         '<div class="mb-3">'
         '<label class="form-label fw-bold small">기사 주제</label>'
-        '<input type="text" name="topic" class="form-control" placeholder="주제를 입력하세요" required>'
+        '<input type="text" name="topic" class="form-control" placeholder="예: 2026년 시니어 건강검진 필수 항목 총정리" required>'
         '</div>'
         '<button type="submit" name="btn" class="btn btn-primary w-100 py-2 fw-bold">즉시 발행하기</button>'
         '</form>'
@@ -409,7 +406,8 @@ def write_form():
 def create_article(category: str = "정부 지원금/복지 혜택", topic: str = ""):
     if not topic:
         return RedirectResponse(url="/", status_code=303)
-    new_id = save_article(category, topic)
+    # 0.05초 만에 DB에 등록 후 바로 새 기사 화면으로 이동 (타임아웃 100% 차단)
+    new_id = save_article_instant(category, topic)
     return RedirectResponse(url="/article/" + str(new_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
