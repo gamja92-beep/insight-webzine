@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import json
+import time
 import threading
 import random
 from datetime import datetime
@@ -22,7 +23,8 @@ except Exception:
     client = None
 
 def get_db():
-    conn = sqlite3.connect("webzine.db", timeout=20.0)
+    conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -75,7 +77,8 @@ def make_default_content(topic):
         "<ul><li>신청 기한을 반드시 사전 확인하세요.</li></ul>"
     )
 
-def update_with_ai(art_id, category, topic):
+def update_with_ai_task(art_id, category, topic):
+    time.sleep(2)
     if not client:
         return
     prompt = (
@@ -118,14 +121,20 @@ def save_article(category="", topic=""):
     summary = "실생활에 즉시 도움 되는 핵심 가이드 및 신청 방법 안내."
     content = make_default_content(topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("INSERT INTO articles (title, category, summary, content, created_at, views, likes) VALUES (?, ?, ?, ?, ?, 0, 0)",
-              (topic, category, summary, content, now))
-    new_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    threading.Thread(target=update_with_ai, args=(new_id, category, topic), daemon=True).start()
+    
+    new_id = 1
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("INSERT INTO articles (title, category, summary, content, created_at, views, likes) VALUES (?, ?, ?, ?, ?, 0, 0)",
+                  (topic, category, summary, content, now))
+        new_id = c.lastrowid
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+    threading.Thread(target=update_with_ai_task, args=(new_id, category, topic), daemon=True).start()
     return new_id
 
 BASE_HTML = """<!DOCTYPE html>
