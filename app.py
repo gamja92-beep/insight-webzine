@@ -4,7 +4,6 @@ import json
 import time
 import threading
 import random
-import urllib.parse
 from datetime import datetime
 
 from fastapi import FastAPI, Request, Response
@@ -83,7 +82,7 @@ AUTO_TOPIC_POOL = [
 
 def make_article_data(category: str, topic: str):
     title = topic
-    summary = "1. 실생활에 즉시 도움 되는 심층 핵심 정보. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
+    summary = "1. 실생활에 즉시 도움 되는 핵심 정보 가이드. 2. 지원 대상, 신청처 및 구체적인 혜택 총정리. 3. 꼭 알아두어야 할 주의사항과 실전 꿀팁 수록."
     
     content = """
     <h2>1. 주요 배경과 핵심 정보</h2>
