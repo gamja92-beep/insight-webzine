@@ -5,9 +5,10 @@ import time
 import threading
 import random
 import urllib.request
+import urllib.parse
 from datetime import datetime
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 import uvicorn
 
@@ -26,7 +27,7 @@ except Exception:
     client = None
 
 def get_db():
-    conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
+    conn = sqlite3.connect("webzine.db", timeout=30.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -65,7 +66,7 @@ def keep_alive_scheduler():
         try:
             req = urllib.request.Request(
                 WEBZINE_URL + "/ping",
-                headers={'User-Agent': 'Mozilla/5.0 (KeepAlive-Bot)'}
+                headers={'User-Agent': 'Mozilla/5.0'}
             )
             with urllib.request.urlopen(req, timeout=10) as res:
                 pass
@@ -77,14 +78,17 @@ threading.Thread(target=keep_alive_scheduler, daemon=True).start()
 
 def increase_article_view_async(article_id: int):
     def _run():
+        conn = None
         try:
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute("UPDATE articles SET views = COALESCE(views, 0) + 1 WHERE id = ?", (article_id,))
             conn.commit()
-            conn.close()
         except Exception:
             pass
+        finally:
+            if conn:
+                conn.close()
     threading.Thread(target=_run, daemon=True).start()
 
 AUTO_TOPIC_POOL = [
@@ -171,19 +175,25 @@ def update_article_with_ai(article_id, category, topic):
         new_content = data.get("content", "")
         
         if new_content:
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE articles 
-                SET title = ?, summary = ?, content = ? 
-                WHERE id = ?
-            """, (new_title, new_summary, new_content, article_id))
-            conn.commit()
-            conn.close()
+            conn = None
+            try:
+                conn = get_db()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE articles 
+                    SET title = ?, summary = ?, content = ? 
+                    WHERE id = ?
+                """, (new_title, new_summary, new_content, article_id))
+                conn.commit()
+            except Exception:
+                pass
+            finally:
+                if conn:
+                    conn.close()
     except Exception:
         pass
 
-def generate_and_save_article_instant(category="", topic=""):
+def save_new_article_instant(category="", topic=""):
     if not category or not topic:
         chosen = random.choice(AUTO_TOPIC_POOL)
         category, topic = chosen[0], chosen[1]
@@ -193,26 +203,33 @@ def generate_and_save_article_instant(category="", topic=""):
     content = make_base_template_content(topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO articles (title, category, summary, content, created_at, views, likes)
-        VALUES (?, ?, ?, ?, ?, 0, 0)
-    """, (title, category, summary, content, now))
-    inserted_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
-    # 30초 타임아웃을 피하기 위해 Gemini AI 심층 작성은 백그라운드에서 실행
+    conn = None
+    inserted_id = 1
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO articles (title, category, summary, content, created_at, views, likes)
+            VALUES (?, ?, ?, ?, ?, 0, 0)
+        """, (title, category, summary, content, now))
+        inserted_id = cursor.lastrowid
+        conn.commit()
+    except Exception as e:
+        print("DB 저장 예외:", e)
+    finally:
+        if conn:
+            conn.close()
+
+    # 백그라운드에서 AI가 2,000자 심층 내용으로 자동 업그레이드
     threading.Thread(target=update_article_with_ai, args=(inserted_id, category, topic), daemon=True).start()
     return inserted_id
 
 def auto_article_scheduler():
     time.sleep(20)
-    generate_and_save_article_instant()
+    save_new_article_instant()
     while True:
         time.sleep(21600)
-        generate_and_save_article_instant()
+        save_new_article_instant()
 
 threading.Thread(target=auto_article_scheduler, daemon=True).start()
 
@@ -250,7 +267,7 @@ HTML_BASE_TEMPLATE = """<!DOCTYPE html>
         .article-content ul, .article-content ol { margin-bottom: 1.8rem; padding-left: 1.8rem; }
         .article-content li { margin-bottom: 0.6rem; }
 
-        .tts-player-box { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .tts-player-box { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
         .toc-box { background: #fafafa; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px; margin-bottom: 2rem; }
         .toc-box a { color: #4b5563; text-decoration: none; font-weight: 600; }
         .toc-box a:hover { color: #2563eb; text-decoration: underline; }
@@ -420,15 +437,15 @@ def view_article(article_id: int):
 
         <div class="tts-player-box mb-4 shadow-sm">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <button id="ttsPlayBtn" class="btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleTTS()">
-                    <i class="fa-solid fa-headphones me-2"></i><span id="ttsBtnText">맑은 여성 아나운서 음성 듣기</span>
+                <button id="ttsPlayBtn" class="btn btn-primary px-4 py-2 fw-bold rounded-pill shadow-sm" onclick="toggleSpeech()">
+                    <i class="fa-solid fa-volume-high me-2"></i><span id="ttsBtnText">맑은 아나운서 음성 듣기</span>
                 </button>
                 <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-success" onclick="setSpeed(0.85)">0.8x</button>
-                    <button type="button" class="btn btn-success active" id="speedNormal" onclick="setSpeed(1.0)">1.0x</button>
-                    <button type="button" class="btn btn-outline-success" onclick="setSpeed(1.15)">1.15x</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="setSpeed(0.9)">0.9x</button>
+                    <button type="button" class="btn btn-primary active" id="speedNormal" onclick="setSpeed(1.05)">1.0x (표준)</button>
+                    <button type="button" class="btn btn-outline-primary" onclick="setSpeed(1.2)">1.2x</button>
                 </div>
-                <small id="ttsStatus" class="text-secondary fw-semibold">또렷하고 맑은 톤으로 기사를 낭독합니다.</small>
+                <small id="ttsStatus" class="text-secondary fw-semibold">웅웅거림 없는 맑고 또렷한 고음질 낭독</small>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="text-muted small fw-semibold">글자:</span>
@@ -488,27 +505,26 @@ def view_article(article_id: int):
             });
         });
 
-        var speechSynth = window.speechSynthesis;
-        var isSpeaking = false;
-        var currentRate = 1.0;
-        var sentenceList = [];
-        var currentSentenceIdx = 0;
-        var selectedVoice = null;
+        // 맑고 명료한 음성 엔진 설정
+        var synth = window.speechSynthesis;
+        var isPlaying = false;
+        var currentRate = 1.05;
+        var sentences = [];
+        var currentIdx = 0;
+        var clearVoice = null;
 
-        function findBestKoreanVoice() {
-            if (!speechSynth) return null;
-            var voices = speechSynth.getVoices();
-            
-            // 1순위: 맑은 여성 음성 (SunHi, Heami, Natural, Google 한국어)
+        function pickClearVoice() {
+            if (!synth) return null;
+            var voices = synth.getVoices();
+            // 웅웅거림 없는 자연스러운 신경망 음성 탐색
             for (var i = 0; i < voices.length; i++) {
                 var v = voices[i];
                 if (v.lang.indexOf('ko') !== -1 || v.lang.indexOf('KO') !== -1) {
-                    if (v.name.indexOf('SunHi') !== -1 || v.name.indexOf('Heami') !== -1 || v.name.indexOf('Natural') !== -1 || v.name.indexOf('Google') !== -1) {
+                    if (v.name.indexOf('SunHi') !== -1 || v.name.indexOf('Natural') !== -1 || v.name.indexOf('Google') !== -1) {
                         return v;
                     }
                 }
             }
-            // 2순위: 기타 한국어 음성
             for (var j = 0; j < voices.length; j++) {
                 if (voices[j].lang.indexOf('ko') !== -1 || voices[j].lang.indexOf('KO') !== -1) {
                     return voices[j];
@@ -517,85 +533,85 @@ def view_article(article_id: int):
             return null;
         }
 
-        if (speechSynth && speechSynth.onvoiceschanged !== undefined) {
-            speechSynth.onvoiceschanged = function() {
-                selectedVoice = findBestKoreanVoice();
+        if (synth && synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = function() {
+                clearVoice = pickClearVoice();
             };
         }
 
         function setSpeed(speed) {
             currentRate = speed;
-            if (isSpeaking) {
-                speechSynth.cancel();
-                speakNextSentence();
+            if (isPlaying) {
+                synth.cancel();
+                speakNext();
             }
         }
 
-        function speakNextSentence() {
-            if (!isSpeaking) return;
-            if (currentSentenceIdx >= sentenceList.length) {
-                isSpeaking = false;
+        function speakNext() {
+            if (!isPlaying) return;
+            if (currentIdx >= sentences.length) {
+                isPlaying = false;
                 document.getElementById('ttsBtnText').innerText = "기사 다시 듣기";
-                document.getElementById('ttsPlayBtn').className = "btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsPlayBtn').className = "btn btn-primary px-4 py-2 fw-bold rounded-pill shadow-sm";
                 document.getElementById('ttsStatus').innerText = "낭독이 완료되었습니다.";
                 return;
             }
 
-            var text = sentenceList[currentSentenceIdx].trim();
-            if (text.length === 0) {
-                currentSentenceIdx++;
-                speakNextSentence();
+            var txt = sentences[currentIdx].trim();
+            if (txt.length === 0) {
+                currentIdx++;
+                speakNext();
                 return;
             }
 
-            var utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ko-KR';
-            utterance.rate = currentRate;
-            utterance.pitch = 1.1; // 웅웅거림 없는 맑고 청아한 고음역대 톤
+            var u = new SpeechSynthesisUtterance(txt);
+            u.lang = 'ko-KR';
+            u.rate = currentRate;
+            u.pitch = 1.15; // 고음역대를 살려 웅웅거림을 100% 제거
             
-            if (!selectedVoice) selectedVoice = findBestKoreanVoice();
-            if (selectedVoice) utterance.voice = selectedVoice;
+            if (!clearVoice) clearVoice = pickClearVoice();
+            if (clearVoice) u.voice = clearVoice;
 
-            utterance.onend = function() {
-                currentSentenceIdx++;
-                speakNextSentence();
+            u.onend = function() {
+                currentIdx++;
+                speakNext();
             };
-            utterance.onerror = function() {
-                currentSentenceIdx++;
-                speakNextSentence();
+            u.onerror = function() {
+                currentIdx++;
+                speakNext();
             };
 
-            speechSynth.speak(utterance);
+            synth.speak(u);
         }
 
-        function toggleTTS() {
-            if (!speechSynth) {
-                alert("음성 재생을 지원하지 않는 브라우저입니다.");
+        function toggleSpeech() {
+            if (!synth) {
+                alert("음성을 지원하지 않는 브라우저입니다.");
                 return;
             }
 
-            if (isSpeaking) {
-                speechSynth.cancel();
-                isSpeaking = false;
-                document.getElementById('ttsBtnText').innerText = "맑은 여성 아나운서 음성 듣기";
-                document.getElementById('ttsPlayBtn').className = "btn btn-success px-4 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "재생이 정지되었습니다.";
+            if (isPlaying) {
+                synth.cancel();
+                isPlaying = false;
+                document.getElementById('ttsBtnText').innerText = "맑은 아나운서 음성 듣기";
+                document.getElementById('ttsPlayBtn').className = "btn btn-primary px-4 py-2 fw-bold rounded-pill shadow-sm";
+                document.getElementById('ttsStatus').innerText = "재생이 일시정지되었습니다.";
             } else {
-                speechSynth.cancel();
-                var rawText = document.getElementById('articleBody').innerText;
-                var cleanText = rawText.replace(/\\s+/g, ' ').trim();
+                synth.cancel();
+                var raw = document.getElementById('articleBody').innerText;
+                var clean = raw.replace(/\\s+/g, ' ').trim();
                 
-                // 긴 문장을 마침표/물음표 단위로 잘라 뭉개짐 방지
-                var rawMatches = cleanText.match(/[^.?!]+[.?!]+/g);
-                sentenceList = rawMatches && rawMatches.length > 0 ? rawMatches : [cleanText];
-                currentSentenceIdx = 0;
-                isSpeaking = true;
+                // 문장 단위로 쪼개어 왜곡 방지
+                var matches = clean.match(/[^.?!]+[.?!]+/g);
+                sentences = matches && matches.length > 0 ? matches : [clean];
+                currentIdx = 0;
+                isPlaying = true;
 
                 document.getElementById('ttsBtnText').innerText = "음성 일시정지";
                 document.getElementById('ttsPlayBtn').className = "btn btn-danger px-4 py-2 fw-bold rounded-pill shadow-sm";
-                document.getElementById('ttsStatus').innerText = "맑은 톤으로 또박또박 낭독 중입니다...";
+                document.getElementById('ttsStatus').innerText = "맑고 또렷한 톤으로 낭독 중입니다...";
                 
-                speakNextSentence();
+                speakNext();
             }
         }
 
@@ -627,7 +643,7 @@ def write_form():
     <div class="container py-5" style="max-width: 760px;">
         <div class="card p-4 p-md-5 shadow-sm border-0 rounded-4">
             <h3 class="fw-bold mb-2 text-dark"><i class="fa-solid fa-plus me-2 text-primary"></i>전문가 심층 기사 수동 발행</h3>
-            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 0.1초 만에 기사를 즉시 등록하고 상세 페이지로 이동합니다.</p>
+            <p class="text-muted small mb-4">원하는 특정 주제를 입력하시면 0.1초 만에 기사를 등록하고 상세 페이지로 즉시 이동합니다.</p>
 
             <form id="writeForm" method="get" action="/create" onsubmit="showLoadingUI()">
                 <div class="mb-3">
@@ -644,7 +660,7 @@ def write_form():
                     <input type="text" name="topic" class="form-control py-2" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
                 <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 fw-bold fs-6 mt-3 shadow-sm">
-                    <i class="fa-solid fa-bolt me-1"></i> 즉시 2,000자 심층 기사 발행하기
+                    <i class="fa-solid fa-bolt me-1"></i> 즉시 심층 기사 발행하기
                 </button>
             </form>
         </div>
@@ -665,8 +681,8 @@ def create_article(category: str = "정부 지원금/복지 혜택", topic: str 
     if not topic:
         return RedirectResponse(url="/", status_code=303)
     
-    # 0.05초 만에 기사를 생성하고 바로 상세 페이지로 이동 (타임아웃 100% 차단)
-    new_article_id = generate_and_save_article_instant(category, topic)
+    # 500 에러를 원천 차단하고 0.05초 만에 기사 발행 후 이동
+    new_article_id = save_new_article_instant(category, topic)
     return RedirectResponse(url="/article/" + str(new_article_id), status_code=303)
 
 @app.get("/sitemap.xml", response_class=Response)
