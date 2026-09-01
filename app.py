@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import json
-import random
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -12,8 +11,6 @@ import uvicorn
 
 app = FastAPI()
 ADMIN_PW = "admin1234"
-
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 
 def get_db():
     conn = sqlite3.connect("webzine.db", timeout=30.0, check_same_thread=False)
@@ -56,95 +53,103 @@ def get_cat_slug(category):
         return "health"
     return "culture"
 
-def call_gemini_rest_api(category: str, topic: str):
-    # API 키가 환경변수에 없을 때 제공하는 고품질 비상 콘텐츠
-    default_title = topic
-    default_summary = "1. 실생활에 즉각 적용 가능한 핵심 설정 단계 수록.\n2. 5060 시니어를 위한 화면별 상세 조작 가이드.\n3. 사기 피해를 예방하는 필수 보안 및 스팸 차단 수칙."
-    default_content = f"""
-    <h2>1. 왜 지금 당장 이 설정이 필수적일까요?</h2>
-    <p>스마트폰 화면의 기본 글씨가 작아 눈이 침침하거나 피로를 느끼는 분들이 많습니다. 또한 최근 교묘해진 모바일 메신저 사기 및 미끼 문자(부고장, 택배 배송 조회)는 단 한 번의 잘못된 클릭으로도 큰 금전 피해를 부를 수 있습니다. 오늘 안내해 드리는 두 가지 핵심 설정만 완료해 두셔도 일상 속 스마트폰 사용이 훨씬 쾌적해지고 안전해집니다.</p>
-    
-    <h2>2. 카카오톡 및 스마트폰 화면 글씨 크기 3단계 키우기</h2>
-    <p>동사무소나 대리점을 방문하지 않고도 집에서 1분이면 바로 바꿀 수 있습니다.</p>
+def call_gemini_api(category: str, topic: str):
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+    # API 키가 아예 없을 때의 안전 기본 뼈대 (주제 기반 생성)
+    fallback_title = topic
+    fallback_summary = f"1. {topic} 관련 핵심 실전 가이드 요약\n2. 주요 자격 요건 및 단계별 세부 절차\n3. 시니어 독자가 반드시 알아두어야 할 주의사항"
+    fallback_content = f"""
+    <h2>1. {topic} - 주요 배경 및 핵심 내용</h2>
+    <p>{topic}에 대해 반드시 알아두어야 할 핵심 정보와 주요 기준을 상세히 안내해 드립니다.</p>
+    <h2>2. 단계별 실천 및 신청 가이드</h2>
     <ol>
-        <li><strong>카카오톡 앱 내부 글자 크기 설정:</strong> 카카오톡을 켜고 우측 하단 점 세 개 [더보기] ➜ 우측 상단 톱니바퀴 [설정] ➜ [화면] ➜ [글자크기] 메뉴로 들어갑니다. 아래쪽 조절 바를 오른쪽으로 밀어 읽기 편한 큰 글씨로 맞춥니다.</li>
-        <li><strong>스마트폰 전체 글자 및 화면 확대:</strong> 휴대폰 홈 화면에서 톱니바퀴 [설정] 앱 터치 ➜ [디스플레이] ➜ [글자 크기와 스타일] 선택 ➜ 글자 크기를 크게 올리고 '글꼴 굵게'를 켜두시면 메시지와 뉴스 기사 전체가 선명해집니다.</li>
+        <li>해당 분야의 최신 기준과 본인 해당 여부를 먼저 확인합니다.</li>
+        <li>필요 서류와 준비 사항을 꼼꼼하게 정리하여 접수합니다.</li>
+        <li>진행 과정 및 변동 사항을 주기적으로 체크하여 불이익을 방지합니다.</li>
     </ol>
-    
-    <h2>3. 보이스피싱 및 악성 스팸 원천 차단 3대 필수 수칙</h2>
-    <table class="table table-bordered my-3">
-        <thead class="table-light">
-            <tr><th>구분</th><th>주요 차단 경로</th><th>실행 효과</th></tr>
-        </thead>
-        <tbody>
-            <tr><td>문자 링크 차단</td><td>메시지 앱 ➜ 설정 ➜ 스팸 및 차단 번호 관리</td><td>출처 불명 링크(URL) 자동 경고</td></tr>
-            <tr><td>해외 발신 차단</td><td>전화 앱 ➜ 수신 차단 ➜ 국제전화 수신 거부</td><td>국외 유입 피싱 전화 자동 거절</td></tr>
-            <tr><td>친구 미등록 차단</td><td>카카오톡 ➜ 친구 ➜ 친구 추천 허용 끄기</td><td>모르는 사람의 단체방 초대 방지</td></tr>
-        </tbody>
-    </table>
-    
-    <h2>4. 시니어 독자가 반드시 기억해야 할 안전 지침</h2>
+    <h2>3. 전문가 주의사항 및 실전 꿀팁</h2>
     <ul>
-        <li>자녀나 가족을 사칭하며 "폰이 고장 나서 편의점 상품권을 사달라"거나 "인증번호를 알려달라"고 하면 100% 사기이므로 절대 대응하지 마시고 즉시 전화를 끊으세요.</li>
-        <li>모르는 번호로 온 문자메시지 속 파란색 인터넷 주소(링크)는 절대로 누르지 말고 곧바로 삭제하세요.</li>
+        <li>신청 시기나 기한을 놓치면 지원 대상에서 제외될 수 있으니 미리 확인하세요.</li>
+        <li>궁금한 사항은 전담 기관 공식 창구를 통해 교차 검증하는 것이 안전합니다.</li>
     </ul>
     """
 
-    if not GEMINI_API_KEY:
-        return default_title, default_summary, default_content
+    if not api_key:
+        return fallback_title, fallback_summary, fallback_content
 
     prompt = f"""
-    당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
-    주제: "{topic}" (카테고리: {category})
+당신은 5060 시니어 전문 웹진의 수석 에디터입니다.
+다음 주제에 대해 시니어 독자가 쉽고 명확하게 이해할 수 있는 1,800자 이상의 고품질 심층 실전 가이드 기사를 작성해 주세요.
 
-    시니어 독자가 즉시 이해하고 따라 할 수 있는 1,800자 이상의 매우 상세한 고품격 실전 가이드 기사를 작성해 주세요.
-    주제에 전혀 맞지 않는 엉뚱한 행정기관 방문이나 서류 제출 같은 복지 템플릿 문구는 절대로 쓰지 마십시오.
-    스마트폰 조작법, 생활 상식, 건강 관리 등 주제의 성격에 딱 맞는 실질적이고 구체적인 순서와 팁을 작성하세요.
+주제: "{topic}"
+카테고리: "{category}"
 
-    [HTML 구성 필수 요구사항]
-    - <h2>1. 주요 배경과 핵심 필요성</h2>
-    - <h2>2. 단계별 실전 실행 가이드</h2> (번호 매긴 <ol> 목록으로 조작 경로 상세 설명)
-    - <h2>3. 한눈에 보는 핵심 요약 및 비교</h2> (HTML <table> 표 활용)
-    - <h2>4. 전문가 주의사항 및 실전 꿀팁</h2> (<ul> 목록)
+[필수 작성 지침]
+1. 반드시 주어진 주제("{topic}")에 정확히 들어맞는 실질적인 전문 내용만 작성하세요. 다른 엉뚱한 주제의 내용(예: 휴대폰 설정, 동사무소 방문 등)을 섞지 마십시오.
+2. 기사 본문은 HTML 태그(<h2>, <p>, <ol>, <ul>, <table> 등)를 사용하여 보기 쉽게 구조화하세요.
+3. 소제목 구성:
+   - <h2>1. 주요 배경과 핵심 필요성</h2>
+   - <h2>2. 상세 기준 및 혜택 요약</h2> (HTML <table> 표 포함)
+   - <h2>3. 단계별 실전 절차 및 가이드</h2> (<ol> 번호 목록)
+   - <h2>4. 전문가 주의사항 및 필수 체크포인트</h2> (<ul> 목록)
 
-    [반환 JSON 규격]
-    {{
-        "title": "기사 제목",
-        "summary": "1. 핵심 요약 첫 번째\\n2. 핵심 요약 두 번째\\n3. 핵심 요약 세 번째",
-        "content": "HTML 본문"
-    }}
-    """
+반드시 아래 JSON 형식으로만 답변하세요:
+{{
+  "title": "{topic}",
+  "summary": "1. 요약 첫 번째\\n2. 요약 두 번째\\n3. 요약 세 번째",
+  "content": "<h2>1. ...</h2><p>...</p>..."
+}}
+"""
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": 0.3
-        }
-    }
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash"
+    ]
 
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=25) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            data = json.loads(raw_text)
-            title = data.get("title", topic)
-            summary = data.get("summary", default_summary)
-            content = data.get("content", default_content)
-            return title, summary, content
-    except Exception:
-        return default_title, default_summary, default_content
+    for model_name in models_to_try:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.3
+                }
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=25) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                
+                # 마크다운 코드블록 제거
+                if raw_text.startswith("```"):
+                    lines = raw_text.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    raw_text = "\n".join(lines).strip()
+
+                data = json.loads(raw_text)
+                title = data.get("title", topic)
+                summary = data.get("summary", fallback_summary)
+                content = data.get("content", fallback_content)
+                if content and len(content) > 100:
+                    return title, summary, content
+        except Exception:
+            continue
+
+    return fallback_title, fallback_summary, fallback_content
 
 def save_article_direct(category: str, topic: str):
     cat_slug = get_cat_slug(category)
-    title, summary, content = call_gemini_rest_api(category, topic)
+    title, summary, content = call_gemini_api(category, topic)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     conn = get_db()
@@ -163,8 +168,8 @@ BASE_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>__TITLE__ - 인사이트 데일리</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="[https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css](https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css)" rel="stylesheet">
+    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css)">
     <style>
         body { background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; }
         .hero { background: linear-gradient(135deg, #0f172a, #1e3a8a); color: white; padding: 35px 0; margin-bottom: 25px; }
@@ -411,7 +416,7 @@ def write_form():
     <div class="container py-5" style="max-width: 600px;">
         <div class="card p-4 shadow-sm border-0 rounded-3">
             <h4 class="fw-bold mb-3"><i class="fa-solid fa-pen text-primary me-2"></i>기사 수동 발행</h4>
-            <p class="text-muted small mb-3">주제를 입력하시면 AI가 주제에 맞는 상세 실전 가이드를 작성합니다. (약 4~6초 소요)</p>
+            <p class="text-muted small mb-3">주제를 입력하시면 AI가 해당 주제에 딱 맞춘 심층 전문 기사를 즉시 작성합니다. (약 5~8초 소요)</p>
             <form method="get" action="/create" onsubmit="this.btn.disabled=true; this.btn.innerText='AI가 심층 기사 작성 중...';">
                 <div class="mb-3">
                     <label class="form-label fw-bold small">카테고리</label>
@@ -424,7 +429,7 @@ def write_form():
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-bold small">기사 주제</label>
-                    <input type="text" name="topic" class="form-control" placeholder="예: 스마트폰 카카오톡 글씨 크기 설정 및 스팸 차단법" required>
+                    <input type="text" name="topic" class="form-control" placeholder="예: 2026년 시니어 노인장기요양보험 등급 판정 기준 및 방문요양 혜택 총정리" required>
                 </div>
                 <button type="submit" name="btn" class="btn btn-primary w-100 py-2 fw-bold">심층 기사 발행하기</button>
             </form>
@@ -448,10 +453,10 @@ def sitemap():
         c.execute("SELECT id FROM articles ORDER BY id DESC")
         rows = c.fetchall()
         conn.close()
-        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        xml += '  <url><loc>https://insight-webzine.onrender.com/</loc><priority>1.0</priority></url>\n'
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="[http://www.sitemaps.org/schemas/sitemap/0.9](http://www.sitemaps.org/schemas/sitemap/0.9)">\n'
+        xml += '  <url><loc>[https://insight-webzine.onrender.com/](https://insight-webzine.onrender.com/)</loc><priority>1.0</priority></url>\n'
         for r in rows:
-            xml += f'  <url><loc>https://insight-webzine.onrender.com/article/{r["id"]}</loc><priority>0.8</priority></url>\n'
+            xml += f'  <url><loc>[https://insight-webzine.onrender.com/article/](https://insight-webzine.onrender.com/article/){r["id"]}</loc><priority>0.8</priority></url>\n'
         xml += '</urlset>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
@@ -465,9 +470,9 @@ def rss_feed():
         c.execute("SELECT id, title, summary FROM articles ORDER BY id DESC LIMIT 20")
         rows = c.fetchall()
         conn.close()
-        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>인사이트 데일리</title><link>https://insight-webzine.onrender.com</link>'
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>인사이트 데일리</title><link>[https://insight-webzine.onrender.com](https://insight-webzine.onrender.com)</link>'
         for r in rows:
-            xml += f'<item><title><![CDATA[{r["title"]}]]></title><link>https://insight-webzine.onrender.com/article/{r["id"]}</link><description><![CDATA[{r["summary"]}]]></description></item>'
+            xml += f'<item><title><![CDATA[{r["title"]}]]></title><link>[https://insight-webzine.onrender.com/article/](https://insight-webzine.onrender.com/article/){r["id"]}</link><description><![CDATA[{r["summary"]}]]></description></item>'
         xml += '</channel></rss>'
         return Response(content=xml, media_type="application/xml")
     except Exception:
