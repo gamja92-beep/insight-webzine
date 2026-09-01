@@ -14,7 +14,7 @@ app = FastAPI()
 
 ADMIN_STATS_PASSWORD = "admin1234"
 
-# Gemini API 클라이언트
+# Gemini API 클라이언트 초기화
 client = None
 try:
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
