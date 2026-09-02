@@ -85,7 +85,10 @@ def render_page(title, content_html):
 def index(cat: str = ""):
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT * FROM articles WHERE category LIKE ? ORDER BY id DESC" if cat else "SELECT * FROM articles ORDER BY id DESC", (f'%{cat}%',] if cat else [])
+    if cat:
+        c.execute("SELECT * FROM articles WHERE category LIKE ? ORDER BY id DESC", (f'%{cat}%',))
+    else:
+        c.execute("SELECT * FROM articles ORDER BY id DESC")
     articles = c.fetchall()
     conn.close()
 
