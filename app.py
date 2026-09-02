@@ -1,19 +1,18 @@
 import sqlite3
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from google import genai
+import os
 
 app = FastAPI()
 
-# 렌더 환경 변수 또는 직접 입력한 API 키 지원
-import os
-API_KEY = os.environ.get("")
+# 환경 변수에서 API 키 불러오기
+API_KEY = os.environ.get("API_KEY", "")
 MODEL_NAME = "gemini-3.6-flash"
 
 client = genai.Client(api_key=API_KEY)
 
-# DB 초기화 (자동 및 수동 기사 모두 저장)
+# DB 초기화
 def init_db():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
@@ -30,7 +29,7 @@ def init_db():
 
 init_db()
 
-# 메인 페이지: 발행된 모든 기사 목록 보여주기
+# 메인 페이지
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     conn = sqlite3.connect("database.db")
@@ -77,7 +76,7 @@ def index(request: Request):
     html += "</body></html>"
     return html
 
-# 관리자 페이지: AI 자동 생성 버튼 + 직접 수동 작성 폼 제공
+# 관리자 페이지
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return """
@@ -104,7 +103,6 @@ def admin_page(request: Request):
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
         <h1>⚙️ 웹진 관리자 스튜디오</h1>
         
-        <!-- 1. AI 자동 생성 섹션 -->
         <div class="box">
             <h3>🤖 AI 자동 SEO 기사 발행</h3>
             <p>구글 제미니가 최신 트렌드를 분석해 고품질 SEO 기사를 즉시 작성합니다.</p>
@@ -113,7 +111,6 @@ def admin_page(request: Request):
             </form>
         </div>
 
-        <!-- 2. 수동 글 작성 섹션 (Human-in-the-Loop) -->
         <div class="box">
             <h3>✍️ 직접 글 작성하기 (수동 발행)</h3>
             <p>원장님의 통찰이 담긴 오리지널 글을 직접 작성하여 등록할 수 있습니다.</p>
@@ -131,7 +128,7 @@ def admin_page(request: Request):
     </html>
     """
 
-# AI 자동 기사 생성 처리 라우트
+# AI 자동 생성
 @app.post("/admin/create")
 def create_article():
     prompt = "최근 주목받는 AI 기술과 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘."
@@ -141,8 +138,6 @@ def create_article():
             contents=prompt,
         )
         text = response.text
-        
-        # 간단하게 첫 줄을 제목, 나머지를 본문으로 분리
         lines = text.split("\n", 1)
         title = lines[0].replace("#", "").strip() if len(lines) > 0 else "AI 트렌드 뉴스"
         content = lines[1].strip() if len(lines) > 1 else text
@@ -157,7 +152,7 @@ def create_article():
 
     return RedirectResponse(url="/", status_code=303)
 
-# 수동 글 작성 처리 라우트
+# 수동 글 작성
 @app.post("/admin/manual-create")
 def manual_create_article(title: str = Form(...), content: str = Form(...)):
     conn = sqlite3.connect("database.db")
