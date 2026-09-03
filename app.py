@@ -38,7 +38,6 @@ def init_db():
 
 init_db()
 
-# 키워드에 맞는 무료 이미지와 출처를 자동으로 찾아오는 함수
 def fetch_unsplash_image(query_keyword):
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
@@ -257,10 +256,9 @@ def create_article(category: str = Form(...)):
     generate_ai_article(category)
     return RedirectResponse(url="/", status_code=303)
 
-# 원장님이 적어주신 프롬프트를 제미니가 확장해서 기사로 만드는 함수
 @app.post("/admin/manual-expand")
 def manual_expand_article(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
-    full_prompt = f"다음 주제와 내용을 바탕으로, 전문적이고 독자들이 흥미로워할 만한 SEO 최적화 뉴스 기사 본문을 상세하고 풍성하게 작성해줘.\n\n[제목]: {title}\n[핵심 내용 및 요청사항]: {prompt}"
+    full_prompt = f"다음 주제와 내용을 바탕으로, 전문적이고 독자들이 흥미로워할 만한 SEO 최적화 뉴스 기사 본문을 상세하고 풍성하게 작성해줘. (프롬프트 문장 자체를 그대로 출력하지 말고, 오직 기사 본문 내용만 작성해줘)\n\n[제목]: {title}\n[핵심 내용 및 요청사항]: {prompt}"
     
     try:
         response = client.models.generate_content(
@@ -269,9 +267,8 @@ def manual_expand_article(category: str = Form(...), title: str = Form(...), pro
         )
         content = response.text.strip()
     except Exception as e:
-        content = prompt # 실패 시 원본 내용 그대로 저장
+        content = prompt
 
-    # 카테고리별 검색 키워드 설정
     keyword_map = {
         "AI/테크": "technology",
         "경제/주식": "stock market economy",
@@ -280,7 +277,6 @@ def manual_expand_article(category: str = Form(...), title: str = Form(...), pro
     }
     keyword = keyword_map.get(category, "news")
     
-    # 이미지 자동 가져오기
     img_url, author_name, author_url = fetch_unsplash_image(keyword)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
