@@ -12,7 +12,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 app = FastAPI()
 
 API_KEY = os.environ.get("API_KEY", "")
-# 최신 3.5 플래시 모델 설정
 MODEL_NAME = "gemini-3.5-flash"
 
 # Unsplash API 키
@@ -39,30 +38,39 @@ def init_db():
 
 init_db()
 
-def fetch_unsplash_image(query_keyword):
+# Unsplash에서 키워드에 맞는 이미지를 여러 장(최대 2장) 가져오는 함수
+def fetch_unsplash_images(query_keyword, count=1):
+    images = []
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": query_keyword, "orientation": "landscape"}
+        # Unsplash API는 count 파라미터로 여러 장을 랜덤하게 가져올 수 있습니다.
+        params = {"query": query_keyword, "orientation": "landscape", "count": count}
         response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
         
         if response.status_code == 200:
             data = response.json()
-            image_url = data["urls"]["regular"]
-            author_name = data["user"]["name"]
-            author_url = data["user"]["links"]["html"]
-            return image_url, author_name, author_url
+            # 만약 1장을 요청해서 딕셔너리로 오면 리스트로 감싸줍니다.
+            if isinstance(data, dict):
+                data = [data]
+            for item in data:
+                img_url = item["urls"]["regular"]
+                author_name = item["user"]["name"]
+                images.append({"url": img_url, "author": author_name})
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash", "https://unsplash.com"
+    if not images:
+        images.append({"url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "author": "Unsplash"})
+    
+    return images
 
-# 1. 상단 자동 발행 함수
+# 1. 상단 자동 발행 함수 (해시태그 + 멀티 이미지 적용)
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 첫 줄은 제목, 둘째 줄부터는 본문으로 작성해줘.", "technology"),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 첫 줄은 제목, 둘째 줄부터는 본문으로 작성해줘.", "stock market economy"),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 첫 줄은 제목, 둘째 줄부터는 본문으로 작성해줘.", "warm lifestyle people"),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 첫 줄은 제목, 둘째 줄부터는 본문으로 작성해줘.", "senior elderly care")
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태러 붙여줘.", "technology"),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태로 붙여줘.", "stock market economy"),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태로 붙여줘.", "warm lifestyle people"),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태로 붙여줘.", "senior elderly care")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
@@ -74,21 +82,39 @@ def generate_ai_article(category_name):
             model=MODEL_NAME,
             contents=prompt,
         )
-        text = response.text
-        lines = text.split("\n", 1)
-        title = lines[0].replace("#", "").strip() if len(lines) > 0 else f"{category_name} 소식"
-        content = lines[1].strip() if len(lines) > 1 else text
-
-        img_url, author_name, author_url = fetch_unsplash_image(keyword)
-
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                       (category_name, title, content, img_url, f"{author_name} / Unsplash"))
-        conn.commit()
-        conn.close()
+        content = response.text.strip()
     except Exception as e:
-        print(f"[자동생성 오류] {category_name}: {e}")
+        content = f"기사 생성 중 오류가 발생했습니다: {e}"
+
+    # 카테고리별 키워드 및 이미지 2장 가져오기 (대표 이미지 + 본문 추가 이미지)
+    keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
+    img_keyword = keyword_map.get(category_name, "news")
+    imgs = fetch_unsplash_images(img_keyword, count=2)
+    
+    # 2장 이상일 경우 내용을 문단 단위로 쪼개어 중간에 두 번째 이미지를 자연스럽게 삽입
+    paragraphs = content.split("\n\n")
+    if len(imgs) > 1 and len(paragraphs) > 2:
+        mid_idx = len(paragraphs) // 2
+        mid_img_html = f"<br><img src='{imgs[1]['url']}' class='article-img'><div class='img-source'>📷 Photo by {imgs[1]['author']} / Unsplash</div><br>"
+        paragraphs.insert(mid_idx, mid_img_html)
+        content = "\n\n".join(paragraphs)
+
+    # 대표 이미지 출처 표기 포맷
+    main_img_str = f"{imgs[0]['url']}|||{imgs[0]['author']} / Unsplash"
+    if len(imgs) > 1:
+        main_img_str += f"|{imgs[1]['url']}|||{imgs[1]['author']} / Unsplash" # 2장 모두 저장
+
+    # 첫 줄을 제목으로 추출
+    lines = content.split("\n", 1)
+    title = lines[0].replace("#", "").replace("제목:", "").strip() if len(lines) > 0 else f"{category_name} 소식"
+    body_content = lines[1].strip() if len(lines) > 1 else content
+
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
+                   (category_name, title, body_content, imgs[0]['url'], f"{imgs[0]['author']} / Unsplash"))
+    conn.commit()
+    conn.close()
 
 def scheduled_job():
     categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
@@ -145,6 +171,8 @@ def index(request: Request, category: str = None):
             .img-source {{ font-size: 0.8em; color: #666; margin-bottom: 15px; font-style: italic; }}
             
             .content {{ line-height: 1.6; white-space: pre-wrap; }}
+            .hashtag {{ color: #2980b9; font-weight: bold; margin-top: 15px; display: block; }}
+            
             .btn-group {{ position: absolute; top: 25px; right: 25px; display: flex; gap: 6px; }}
             .edit-btn {{ background: #f39c12; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
             .edit-btn:hover {{ background: #d68910; }}
@@ -224,7 +252,7 @@ def admin_page(request: Request):
         <!-- 1. 상단: 자동화 기사 생성 -->
         <div class="box" style="border-top: 5px solid #27ae60;">
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
-            <p>카테고리만 고르고 누르면 제미니가 알아서 최신 기사를 즉시 생성합니다.</p>
+            <p>해시태그와 멀티 이미지가 포함된 최신 기사를 즉시 생성합니다.</p>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -239,8 +267,7 @@ def admin_page(request: Request):
 
         <!-- 2. 중단: 완전 수동 글 작성 -->
         <div class="box" style="border-top: 5px solid #2980b9;">
-            <h3>✍️ 2. 중단: 완전 수동 글 작성 (작성한 내용 그대로 발행)</h3>
-            <p>원장님이 직접 제목과 본문을 타이핑한 그대로 발행하는 공간입니다.</p>
+            <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
             <form action="/admin/create-manual" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -251,16 +278,16 @@ def admin_page(request: Request):
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
-                <label>기사 내용 (작성한 그대로 올라갑니다)</label>
+                <label>기사 내용</label>
                 <textarea name="content" placeholder="내용을 직접 작성하세요..." required></textarea>
                 <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
             </form>
         </div>
 
-        <!-- 3. 하단: AI 프롬프트 확장 발행 -->
+        <!-- 3. 하단: AI 프롬프트 확장 발행 (해시태그 자동 포함 + 멀티 이미지) -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (메모를 전문 기사로 확장)</h3>
-            <p>제목과 대략적인 프롬프트(메모)를 적어주시면, 최신 제미니 모델이 철저하게 살을 붙여 풍성한 전문 기사 본문으로 확장합니다.</p>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (해시태그 + 멀티 이미지 자동 삽입)</h3>
+            <p>메모를 넣으면 제미니가 풍성한 본문과 함께 하단에 검색용 해시태그를 자동으로 달아주고, 본문 중간에 추가 이미지를 쏙 넣어줍니다.</p>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -280,37 +307,33 @@ def admin_page(request: Request):
     </html>
     """
 
-# 1. 자동 발행 처리
 @app.post("/admin/create-auto")
 def create_auto(category: str = Form(...)):
     generate_ai_article(category)
     return RedirectResponse(url="/", status_code=303)
 
-# 2. 완전 수동 발행 처리
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
-    img_url, author_name, _ = fetch_unsplash_image(keyword)
+    imgs = fetch_unsplash_images(keyword, count=1)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, content, img_url, f"{author_name} / Unsplash"))
+                   (category, title, content, imgs[0]['url'], f"{imgs[0]['author']} / Unsplash"))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행 처리 (최신 모델이 절대 그대로 뱉지 않고 길게 확장하도록 역할 부여)
+# 3. AI 프롬프트 확장 발행 (해시태그 및 멀티 이미지 삽입 로직 탑재)
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
-    # 시스템 지시 역할을 겸하는 강력한 프롬프트 구조
     system_directive = (
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
         "독자들이 흥미를 느끼고 깊이 있게 읽을 수 있는 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
-        "주의사항: 사용자가 입력한 요청사항이나 메모 문장을 그대로 출력하지 마십시오. "
-        "오직 그 내용을 토대로 살을 붙여서 독립적이고 완성도 높은 긴 본문 글만 생성해야 합니다."
+        "필수 조건: 글의 맨 마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #태그 형태로 공백을 두고 포함해 주세요."
     )
     
     full_query = f"{system_directive}\n\n[기사 제목]: {title}\n[작성 요청사항/메모]: {prompt}"
@@ -326,17 +349,25 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
-    img_url, author_name, _ = fetch_unsplash_image(keyword)
+    
+    # 이미지를 2장 가져와서 본문 중간에 자연스럽게 녹여냅니다.
+    imgs = fetch_unsplash_images(keyword, count=2)
+    
+    paragraphs = final_content.split("\n\n")
+    if len(imgs) > 1 and len(paragraphs) > 2:
+        mid_idx = len(paragraphs) // 2
+        mid_img_html = f"<br><img src='{imgs[1]['url']}' class='article-img'><div class='img-source'>📷 Photo by {imgs[1]['author']} / Unsplash</div><br>"
+        paragraphs.insert(mid_idx, mid_img_html)
+        final_content = "\n\n".join(paragraphs)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, final_content, img_url, f"{author_name} / Unsplash"))
+                   (category, title, final_content, imgs[0]['url'], f"{imgs[0]['author']} / Unsplash"))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 기사 수정 페이지 (GET)
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int):
     conn = sqlite3.connect("database.db", check_same_thread=False)
