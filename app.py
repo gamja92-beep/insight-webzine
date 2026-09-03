@@ -20,6 +20,7 @@ UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 
 client = genai.Client(api_key=API_KEY)
 
+# 데이터베이스 초기화 (가장 안정적인 단일 구조)
 def init_db():
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -39,7 +40,7 @@ def init_db():
 
 init_db()
 
-# 단일 고화질 대표 이미지를 안정적으로 가져오는 함수
+# 단일 고화질 대표 이미지와 작가 이름을 꼬임 없이 깔끔하게 가져오는 함수
 def fetch_single_image(query_keyword):
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
@@ -52,19 +53,18 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 기사 내용을 가장 깔끔하게 정돈하는 필터 함수
+# 기사 내용을 깔끔하게 정돈하는 필터 함수
 def clean_and_format_content(text):
-    # 특수기호 제거
     text = text.replace('**', '').replace('--', '').replace('*', '')
     
-    # 해시태그 추출
+    # 해시태그 추출 및 본문 분리
     all_words = text.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
     
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # ### 소제목 형태를 보기 좋은 웹진 스타일 HTML로 변환
+    # 소제목 HTML 변환
     text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2980b9; display: block; margin-top: 25px; margin-bottom: 10px;">📌 \1</b>', text)
     
     # 해시태그를 맨 아래에 예쁘게 장식
@@ -76,7 +76,7 @@ def clean_and_format_content(text):
 
     return text
 
-# 1. 상단 자동 발행 함수
+# 1. 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
         "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 중간중간 ### 소제목을 꼭 넣어줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘.", "technology"),
@@ -111,7 +111,7 @@ def generate_ai_article(category_name):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category_name, title, body_content, img_url, f"{author_name} / Unsplash"))
+                   (category_name, title, body_content, img_url, author_name))
     conn.commit()
     conn.close()
 
@@ -124,6 +124,7 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
+# 메인 홈페이지 (데이터베이스에서 기사를 정상적으로 불러오도록 쿼리 고정)
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -219,6 +220,7 @@ def index(request: Request, category: str = None):
     html += "</body></html>"
     return html
 
+# 관리자 페이지
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return """
@@ -283,7 +285,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (깔끔한 단락 + 소제목 + 해시태그)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -317,7 +319,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, content, img_url, f"{author_name} / Unsplash"))
+                   (category, title, content, img_url, author_name))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
@@ -353,7 +355,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, final_content, img_url, f"{author_name} / Unsplash"))
+                   (category, title, final_content, img_url, author_name))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
@@ -397,7 +399,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
