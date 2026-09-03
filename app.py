@@ -12,7 +12,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 app = FastAPI()
 
 API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-2.5-flash"
+# 최신 3.5 플래시 모델 설정
+MODEL_NAME = "gemini-3.5-flash"
 
 # Unsplash API 키
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
@@ -55,7 +56,7 @@ def fetch_unsplash_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash", "https://unsplash.com"
 
-# 자동 발행 함수
+# 1. 상단 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
         "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 첫 줄은 제목, 둘째 줄부터는 본문으로 작성해줘.", "technology"),
@@ -259,7 +260,7 @@ def admin_page(request: Request):
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
             <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (메모를 전문 기사로 확장)</h3>
-            <p>제목과 대략적인 프롬프트(메모)를 적어주시면, 제미니가 철저하게 살을 붙여 풍성한 전문 기사 본문으로 확장합니다.</p>
+            <p>제목과 대략적인 프롬프트(메모)를 적어주시면, 최신 제미니 모델이 철저하게 살을 붙여 풍성한 전문 기사 본문으로 확장합니다.</p>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -285,7 +286,7 @@ def create_auto(category: str = Form(...)):
     generate_ai_article(category)
     return RedirectResponse(url="/", status_code=303)
 
-# 2. 완전 수동 발행 처리 (입력한 내용 그대로 저장)
+# 2. 완전 수동 발행 처리
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
@@ -300,21 +301,24 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행 처리 (제미니가 확실하게 살을 붙이도록 강제)
+# 3. AI 프롬프트 확장 발행 처리 (최신 모델이 절대 그대로 뱉지 않고 길게 확장하도록 역할 부여)
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
-    strict_prompt = f"""
-    당신은 전문 뉴스 기자입니다. 아래의 [요청사항/메모]를 바탕으로, 독자들이 흥미로워할 만한 깊이 있고 풍성한 SEO 최적화 뉴스 기사 본문을 상세하게 작성해 주세요.
-    절대로 요청사항 문장 자체를 그대로 출력하지 말고, 오직 완성된 뉴스 기사 본문 내용만 길고 전문적으로 작성해 주세요.
-
-    [기사 제목]: {title}
-    [요청사항/메모]: {prompt}
-    """
+    # 시스템 지시 역할을 겸하는 강력한 프롬프트 구조
+    system_directive = (
+        "당신은 전문 수석 뉴스 기자입니다. "
+        "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
+        "독자들이 흥미를 느끼고 깊이 있게 읽을 수 있는 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
+        "주의사항: 사용자가 입력한 요청사항이나 메모 문장을 그대로 출력하지 마십시오. "
+        "오직 그 내용을 토대로 살을 붙여서 독립적이고 완성도 높은 긴 본문 글만 생성해야 합니다."
+    )
     
+    full_query = f"{system_directive}\n\n[기사 제목]: {title}\n[작성 요청사항/메모]: {prompt}"
+
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
-            contents=strict_prompt,
+            contents=full_query,
         )
         final_content = response.text.strip()
     except Exception as e:
@@ -372,7 +376,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
