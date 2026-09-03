@@ -39,31 +39,30 @@ def init_db():
 
 init_db()
 
-# Unsplash에서 서로 다른 사진을 확실하게 2장 가져오는 함수 (중복 방지 로직 포함)
+# Unsplash에서 서로 다른 사진을 확실하게 보장하며 2장을 따로 요청하는 함수
 def fetch_unsplash_images(query_keyword, count=2):
     images = []
-    try:
-        headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # 넉넉하게 5장을 요청한 뒤 서로 다른 사진만 골라냅니다.
-        params = {"query": query_keyword, "orientation": "landscape", "count": 5}
-        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if isinstance(data, dict):
-                data = [data]
+    seen_ids = set()
+    headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+    
+    # 필요한 장수만큼 개별적으로 요청을 보내서 고유한 사진 ID를 확보합니다.
+    for _ in range(count):
+        try:
+            params = {"query": query_keyword, "orientation": "landscape"}
+            response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
             
-            seen_urls = set()
-            for item in data:
+            if response.status_code == 200:
+                item = response.json()
+                photo_id = item.get("id")
                 img_url = item["urls"]["regular"]
                 author_name = item["user"]["name"]
-                if img_url not in seen_urls:
-                    seen_urls.add(img_url)
+                
+                # 만약 아이디가 겹치면 한 번 더 시도
+                if photo_id and photo_id not in seen_ids:
+                    seen_ids.add(photo_id)
                     images.append({"url": img_url, "author": author_name})
-                    if len(images) >= count:
-                        break
-    except Exception as e:
-        print(f"[이미지 검색 오류]: {e}")
+        except Exception as e:
+            print(f"[이미지 검색 오류]: {e}")
     
     # 혹시라도 부족하면 기본 이미지로 채움
     while len(images) < count:
@@ -73,19 +72,14 @@ def fetch_unsplash_images(query_keyword, count=2):
 
 # 마크다운 정리 및 해시태그 줄바꿈 보장 함수
 def clean_and_format_content(text):
-    # ### 소제목 기호 변환
     text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2c3e50; display: block; margin-top: 20px; margin-bottom: 10px;">📌 \1</b>', text)
     text = text.replace('**', '')
     
-    # 해시태그가 문장에 붙어있거나 줄바꿈이 안 된 경우 맨 아래로 예쁘게 분리
-    # (#으로 시작하는 단어들을 찾아냄)
     hashtags = re.findall(r'(#[\w가-힣]+)', text)
     if hashtags:
-        # 본문에서 해시태그 원문들을 일단 제거
         for tag in hashtags:
             text = text.replace(tag, '')
         text = text.strip()
-        # 맨 아래에 줄바꿈과 함께 깔끔하게 파란색 스타일로 재조합
         tag_html = "<br><br><div style='margin-top: 25px; color: #2980b9; font-weight: bold;'>" + " ".join(hashtags) + "</div>"
         text += tag_html
 
@@ -116,9 +110,7 @@ def generate_ai_article(category_name):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     img_keyword = keyword_map.get(category_name, "news")
     
-    # 서로 다른 이미지 2장 확실하게 가져오기
     imgs = fetch_unsplash_images(img_keyword, count=2)
-    
     content = clean_and_format_content(content)
 
     paragraphs = content.split("\n\n")
@@ -307,7 +299,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (줄바꿈 해시태그 + 서로 다른 멀티 이미지)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (서로 다른 2개의 고화질 이미지)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -320,7 +312,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 완벽 정돈된 기사 확장 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 완벽한 멀티 이미지 기사 발행하기</button>
             </form>
         </div>
     </body>
@@ -346,7 +338,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행 (해시태그 줄바꿈 및 서로 다른 중복 방지 이미지 적용)
+# 3. AI 프롬프트 확장 발행 (서로 다른 이미지 고유 ID 보장 로직 적용)
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
     system_directive = (
@@ -370,13 +362,11 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
     
-    # 서로 다른 이미지 2장 확실하게 가져오기
+    # 2번 개별 요청을 통해 완전히 서로 다른 고유 사진 2장을 확보합니다.
     imgs = fetch_unsplash_images(keyword, count=2)
     
-    # 마크다운 정리 및 해시태그 줄바꿈 처리
     final_content = clean_and_format_content(final_content)
 
-    # 본문 중간에 서로 다른 두 번째 이미지 삽입
     paragraphs = final_content.split("\n\n")
     if len(paragraphs) > 1:
         mid_idx = len(paragraphs) // 2
