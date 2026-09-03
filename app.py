@@ -12,6 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 app = FastAPI()
 
 API_KEY = os.environ.get("API_KEY", "")
+# 원장님이 만족하신 3.5 버전으로 고정!
 MODEL_NAME = "gemini-3.5-flash"
 
 # Unsplash API 키
@@ -38,18 +39,16 @@ def init_db():
 
 init_db()
 
-# Unsplash에서 키워드에 맞는 이미지를 여러 장(최대 2장) 가져오는 함수
-def fetch_unsplash_images(query_keyword, count=1):
+# Unsplash에서 이미지를 여러 장(기본 2장) 안정적으로 가져오는 함수
+def fetch_unsplash_images(query_keyword, count=2):
     images = []
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # Unsplash API는 count 파라미터로 여러 장을 랜덤하게 가져올 수 있습니다.
         params = {"query": query_keyword, "orientation": "landscape", "count": count}
         response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
         
         if response.status_code == 200:
             data = response.json()
-            # 만약 1장을 요청해서 딕셔너리로 오면 리스트로 감싸줍니다.
             if isinstance(data, dict):
                 data = [data]
             for item in data:
@@ -59,18 +58,28 @@ def fetch_unsplash_images(query_keyword, count=1):
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    if not images:
+    # 혹시라도 부족하면 기본 이미지로 채움
+    while len(images) < count:
         images.append({"url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "author": "Unsplash"})
     
     return images
 
-# 1. 상단 자동 발행 함수 (해시태그 + 멀티 이미지 적용)
+# 불필요한 마크다운 기호(###, **)를 깔끔하게 정리해 주는 청소 함수
+import re
+def clean_markdown_text(text):
+    # ### 소제목 기호를 깔끔한 시각적 스타일(굵은 글씨 및 여백)로 변환
+    text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2c3e50; display: block; margin-top: 20px; margin-bottom: 10px;">📌 \1</b>', text)
+    # ** 강조 기호 제거 또는 일반 볼드로 정돈
+    text = text.replace('**', '')
+    return text
+
+# 1. 상단 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태러 붙여줘.", "technology"),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태로 붙여줘.", "stock market economy"),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태로 붙여줘.", "warm lifestyle people"),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 마지막 줄에는 검색용 해시태그 5개를 #태그 형태로 붙여줘.", "senior elderly care")
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "technology"),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "stock market economy"),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "warm lifestyle people"),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "senior elderly care")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
@@ -84,29 +93,25 @@ def generate_ai_article(category_name):
         )
         content = response.text.strip()
     except Exception as e:
-        content = f"기사 생성 중 오류가 발생했습니다: {e}"
+        content = f"기사 생성 오류: {e}"
 
-    # 카테고리별 키워드 및 이미지 2장 가져오기 (대표 이미지 + 본문 추가 이미지)
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     img_keyword = keyword_map.get(category_name, "news")
     imgs = fetch_unsplash_images(img_keyword, count=2)
     
-    # 2장 이상일 경우 내용을 문단 단위로 쪼개어 중간에 두 번째 이미지를 자연스럽게 삽입
+    # 텍스트 정돈
+    content = clean_markdown_text(content)
+
+    # 본문 중간 이미지 삽입 (문단이 여러 개일 때 중간에 쏙 집어넣기)
     paragraphs = content.split("\n\n")
-    if len(imgs) > 1 and len(paragraphs) > 2:
+    if len(paragraphs) > 1:
         mid_idx = len(paragraphs) // 2
         mid_img_html = f"<br><img src='{imgs[1]['url']}' class='article-img'><div class='img-source'>📷 Photo by {imgs[1]['author']} / Unsplash</div><br>"
         paragraphs.insert(mid_idx, mid_img_html)
         content = "\n\n".join(paragraphs)
 
-    # 대표 이미지 출처 표기 포맷
-    main_img_str = f"{imgs[0]['url']}|||{imgs[0]['author']} / Unsplash"
-    if len(imgs) > 1:
-        main_img_str += f"|{imgs[1]['url']}|||{imgs[1]['author']} / Unsplash" # 2장 모두 저장
-
-    # 첫 줄을 제목으로 추출
     lines = content.split("\n", 1)
-    title = lines[0].replace("#", "").replace("제목:", "").strip() if len(lines) > 0 else f"{category_name} 소식"
+    title = lines[0].replace("<br>", "").strip() if len(lines) > 0 else f"{category_name} 소식"
     body_content = lines[1].strip() if len(lines) > 1 else content
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -167,11 +172,10 @@ def index(request: Request, category: str = None):
             .article h2 {{ margin-top: 5px; color: #2980b9; }}
             .date {{ font-size: 0.85em; color: #888; margin-bottom: 15px; }}
             
-            .article-img {{ width: 100%; max-height: 400px; object-fit: cover; border-radius: 6px; margin-bottom: 10px; }}
+            .article-img {{ width: 100%; max-height: 400px; object-fit: cover; border-radius: 6px; margin-bottom: 5px; }}
             .img-source {{ font-size: 0.8em; color: #666; margin-bottom: 15px; font-style: italic; }}
             
-            .content {{ line-height: 1.6; white-space: pre-wrap; }}
-            .hashtag {{ color: #2980b9; font-weight: bold; margin-top: 15px; display: block; }}
+            .content {{ line-height: 1.7; font-size: 1.05em; }}
             
             .btn-group {{ position: absolute; top: 25px; right: 25px; display: flex; gap: 6px; }}
             .edit-btn {{ background: #f39c12; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
@@ -252,7 +256,6 @@ def admin_page(request: Request):
         <!-- 1. 상단: 자동화 기사 생성 -->
         <div class="box" style="border-top: 5px solid #27ae60;">
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
-            <p>해시태그와 멀티 이미지가 포함된 최신 기사를 즉시 생성합니다.</p>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -284,10 +287,9 @@ def admin_page(request: Request):
             </form>
         </div>
 
-        <!-- 3. 하단: AI 프롬프트 확장 발행 (해시태그 자동 포함 + 멀티 이미지) -->
+        <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (해시태그 + 멀티 이미지 자동 삽입)</h3>
-            <p>메모를 넣으면 제미니가 풍성한 본문과 함께 하단에 검색용 해시태그를 자동으로 달아주고, 본문 중간에 추가 이미지를 쏙 넣어줍니다.</p>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (깔끔한 소제목 + 멀티 이미지)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -300,7 +302,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 프롬프트로 풍성한 기사 확장 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 깔끔한 기사 확장 발행하기</button>
             </form>
         </div>
     </body>
@@ -326,14 +328,14 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행 (해시태그 및 멀티 이미지 삽입 로직 탑재)
+# 3. AI 프롬프트 확장 발행 (마크다운 깔끔 정돈 및 중간 이미지 삽입 로직 탑재)
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
     system_directive = (
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
-        "독자들이 흥미를 느끼고 깊이 있게 읽을 수 있는 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
-        "필수 조건: 글의 맨 마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #태그 형태로 공백을 두고 포함해 주세요."
+        "독자들이 읽기 편하도록 여러 개의 단락과 깔끔한 소제목(### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
+        "마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #태그 형태로 포함해 주세요."
     )
     
     full_query = f"{system_directive}\n\n[기사 제목]: {title}\n[작성 요청사항/메모]: {prompt}"
@@ -350,11 +352,15 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
     
-    # 이미지를 2장 가져와서 본문 중간에 자연스럽게 녹여냅니다.
+    # 이미지 2장 가져오기
     imgs = fetch_unsplash_images(keyword, count=2)
     
+    # 마크다운 기호 정돈
+    final_content = clean_markdown_text(final_content)
+
+    # 본문 중간에 두 번째 이미지 삽입
     paragraphs = final_content.split("\n\n")
-    if len(imgs) > 1 and len(paragraphs) > 2:
+    if len(paragraphs) > 1:
         mid_idx = len(paragraphs) // 2
         mid_img_html = f"<br><img src='{imgs[1]['url']}' class='article-img'><div class='img-source'>📷 Photo by {imgs[1]['author']} / Unsplash</div><br>"
         paragraphs.insert(mid_idx, mid_img_html)
@@ -407,7 +413,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
