@@ -1,8 +1,12 @@
 import sqlite3
+import random
+from datetime import datetime
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 import os
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI()
 
@@ -12,9 +16,9 @@ MODEL_NAME = "gemini-3.6-flash"
 
 client = genai.Client(api_key=API_KEY)
 
-# DB 초기화 (category 컬럼 추가)
+# DB 초기화
 def init_db():
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS articles (
@@ -30,10 +34,53 @@ def init_db():
 
 init_db()
 
-# 메인 페이지 (카테고리별 필터링 지원)
+# 공통 기사 생성 함수 (AI 자동화 핵심)
+def generate_ai_article(category_name):
+    prompts = {
+        "AI/테크": "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
+        "경제/주식": "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
+        "세상이야기": "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
+        "시니어/복지": "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘."
+    }
+    
+    prompt = prompts.get(category_name, "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.")
+    
+    try:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+        )
+        text = response.text
+        lines = text.split("\n", 1)
+        title = lines[0].replace("#", "").strip() if len(lines) > 0 else f"{category_name} 소식"
+        content = lines[1].strip() if len(lines) > 1 else text
+
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category_name, title, content))
+        conn.commit()
+        conn.close()
+        print(f"[자동생성 성공] {category_name} - {title}")
+    except Exception as e:
+        print(f"[자동생성 오류] {category_name}: {e}")
+
+# 자동 스케줄러 설정 (서버가 켜져 있는 동안 작동)
+def scheduled_job():
+    categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
+    # 무작위로 하나씩 골라서 자동 발행 (원하시면 특정 카테고리를 순차적으로 지정할 수도 있습니다)
+    target_cat = random.choice(categories)
+    generate_ai_article(target_cat)
+
+scheduler = BackgroundScheduler()
+# 테스트 또는 실전 운영을 위해 시간 설정 (예: 6시간마다 자동으로 1개씩 생성 -> 하루 총 4개 발행 루프)
+scheduler.add_job(scheduled_job, 'interval', hours=6)
+scheduler.start()
+
+
+# 메인 페이지 (카테고리별 필터링)
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None):
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     
     if category and category != "전체":
@@ -52,7 +99,7 @@ def index(request: Request, category: str = None):
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
-        <title>인사이트 웹진 - 종합 뉴스</title>
+        <title>인사이트 종합 웹진</title>
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 850px; margin: 40px auto; padding: 20px; background: #f9f9f9; color: #333; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
@@ -60,7 +107,6 @@ def index(request: Request, category: str = None):
             .admin-link {{ display: inline-block; padding: 8px 14px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }}
             .admin-link:hover {{ background: #2980b9; }}
             
-            /* 카테고리 탭 메뉴 */
             .nav-tabs {{ display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }}
             .tab-item {{ padding: 8px 16px; background: #e2e8f0; color: #475569; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
             .tab-item:hover, .tab-item.active {{ background: #3498db; color: white; }}
@@ -74,11 +120,10 @@ def index(request: Request, category: str = None):
     </head>
     <body>
         <div class="header-flex">
-            <h1>📰 인사이트 종합 웹진</h1>
+            <h1>📰 인사이트 종합 웹진 (24시 자동운영)</h1>
             <a href="/admin" class="admin-link">⚙️ 관리자 페이지</a>
         </div>
 
-        <!-- 카테고리 탭 바 -->
         <div class="nav-tabs">
     """
     
@@ -90,7 +135,7 @@ def index(request: Request, category: str = None):
     html += "</div>"
 
     if not articles:
-        html += "<p style='text-align:center; color:#777; margin-top:50px;'>등록된 기사가 없습니다. 관리자 페이지에서 다양한 소식을 발행해 보세요!</p>"
+        html += "<p style='text-align:center; color:#777; margin-top:50px;'>등록된 기사가 없습니다. 관리자 페이지에서 뉴스를 발행해 보세요!</p>"
     else:
         for art in articles:
             cat_name = art['category'] if art['category'] else '종합'
@@ -105,7 +150,7 @@ def index(request: Request, category: str = None):
     html += "</body></html>"
     return html
 
-# 관리자 페이지 (카테고리 선택 기능 추가)
+# 관리자 페이지
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return """
@@ -130,30 +175,28 @@ def admin_page(request: Request):
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>⚙️ 웹진 관리자 스튜디오</h1>
+        <h1>⚙️ 웹진 관리자 스튜디오 (자동 + 수동)</h1>
         
-        <!-- AI 자동 생성 -->
         <div class="box">
-            <h3>🤖 AI 자동 SEO 기사 발행</h3>
-            <p>제미니가 지정된 카테고리에 맞춰 전문적인 SEO 뉴스를 자동으로 생성합니다.</p>
+            <h3>🤖 AI 수동 즉시 생성</h3>
+            <p>선택한 카테고리에 맞춰 제미니가 지금 즉시 고품질 뉴스를 작성하여 발행합니다.</p>
             <form action="/admin/create" method="post">
-                <label>기사 카테고리 선택</label>
+                <label>카테고리 선택</label>
                 <select name="category">
                     <option value="AI/테크">AI/테크</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
                 </select>
-                <button type="submit">🚀 AI 기사 즉시 생성 및 발행</button>
+                <button type="submit">🚀 지금 즉시 AI 기사 생성하기</button>
             </form>
         </div>
 
-        <!-- 수동 작성 -->
         <div class="box">
-            <h3>✍️ 직접 글 작성하기 (수동 발행)</h3>
-            <p>원장님의 통찰이 담긴 오리지널 글을 카테고리별로 직접 발행할 수 있습니다.</p>
+            <h3>✍️ 원장님 직접 글 작성 (수동 발행)</h3>
+            <p>원장님의 깊은 통찰이 담긴 오리지널 글을 카테고리별로 직접 등록합니다.</p>
             <form action="/admin/manual-create" method="post">
-                <label>기사 카테고리</label>
+                <label>카테고리</label>
                 <select name="category">
                     <option value="AI/테크">AI/테크</option>
                     <option value="경제/주식">경제/주식</option>
@@ -174,34 +217,16 @@ def admin_page(request: Request):
     </html>
     """
 
-# AI 자동 기사 생성 처리 (선택한 카테고리 반영)
+# 관리자 수동 AI 생성
 @app.post("/admin/create")
 def create_article(category: str = Form(...)):
-    prompt = f"'{category}' 분야에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘."
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-        )
-        text = response.text
-        lines = text.split("\n", 1)
-        title = lines[0].replace("#", "").strip() if len(lines) > 0 else f"{category} 트렌드 뉴스"
-        content = lines[1].strip() if len(lines) > 1 else text
-
-        conn = sqlite3.connect("database.db")
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category, title, content))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"AI 생성 오류: {e}")
-
+    generate_ai_article(category)
     return RedirectResponse(url="/", status_code=303)
 
-# 수동 글 작성 처리 (선택한 카테고리 반영)
+# 수동 글 작성
 @app.post("/admin/manual-create")
 def manual_create_article(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category, title, content))
     conn.commit()
