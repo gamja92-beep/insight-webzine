@@ -52,7 +52,7 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [업그레이드] 소제목 굵기/색상 진하게 강화 및 해시태그 무결점 정돈 필터
+# 🌟 [완벽 자동화] 제미니가 소제목과 본문을 신문 스타일 HTML로 다듬어주는 함수
 def clean_and_format_content(text, category_name="종합"):
     text = text.replace('**', '').replace('--', '').replace('*', '')
     
@@ -63,14 +63,14 @@ def clean_and_format_content(text, category_name="종합"):
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 소제목 색상을 더 진하고 묵직하게 변경 (color: #117a65 또는 진한 네이비 #1b4f72, 두께 font-weight: 800)
+    # 소제목(### 또는 일반 소제목 문장)을 원장님이 만드신 그 멋진 스타일로 자동 변환
     text = re.sub(
         r'###\s*(.*)', 
         r'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">\1</h3>', 
         text
     )
     
-    # 단락(<p>) 단위로 깔끔하게 포맷팅
+    # 단락 구분을 명확히 하여 <p> 태그로 감싸기
     paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
     formatted_paragraphs = []
     
@@ -82,7 +82,7 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(formatted_paragraphs)
     
-    # 해시태그 정돈 (비어있으면 카테고리별 기본 태그로 알차게 채워줌)
+    # 해시태그 보정 및 장식
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
@@ -126,7 +126,6 @@ def generate_ai_article(category_name):
     
     img_url, author_name = fetch_single_image(img_keyword)
     
-    # 제목 추출
     split_lines = content.split("\n", 1)
     art_title = split_lines[0].replace("#", "").replace("제목:", "").strip() if len(split_lines) > 0 else f"{category_name} 소식"
     
@@ -309,7 +308,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (선명한 소제목 + 완벽 해시태그 보정)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (신문 스타일 자동 적용)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -356,7 +355,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     system_directive = (
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
-        "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
+        "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(반드시 ### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
         "별표(*)나 대시(--) 같은 마크다운 특수 기호는 절대 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
         "마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 포함해 주세요."
     )
@@ -425,7 +424,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
