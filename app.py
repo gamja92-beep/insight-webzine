@@ -5,6 +5,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 import os
+import requests
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -12,6 +13,9 @@ app = FastAPI()
 
 API_KEY = os.environ.get("API_KEY", "")
 MODEL_NAME = "gemini-2.5-flash"
+
+# Unsplash API 키 (여기에 발급받으신 키를 넣어주세요!)
+UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxeREfLjS25QFZIZ27uYEhhA"
 
 client = genai.Client(api_key=API_KEY)
 
@@ -24,6 +28,8 @@ def init_db():
             category TEXT DEFAULT '종합',
             title TEXT,
             content TEXT,
+            image_url TEXT,
+            image_author TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -32,15 +38,36 @@ def init_db():
 
 init_db()
 
+# 키워드에 맞는 무료 이미지와 출처를 자동으로 찾아오는 함수
+def fetch_unsplash_image(query_keyword):
+    try:
+        headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+        params = {"query": query_keyword, "orientation": "landscape"}
+        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
+        
+        if response.status_code == 200:
+            data = response.json()
+            image_url = data["urls"]["regular"]
+            author_name = data["user"]["name"]
+            author_url = data["user"]["links"]["html"]
+            return image_url, author_name, author_url
+    except Exception as e:
+        print(f"[이미지 검색 오류]: {e}")
+    
+    # 실패 시 기본 대체 이미지
+    return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash", "https://unsplash.com"
+
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
-        "경제/주식": "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
-        "세상이야기": "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
-        "시니어/복지": "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘."
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.", "technology"),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.", "stock market economy"),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.", "warm lifestyle people"),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.", "senior elderly care")
     }
     
-    prompt = prompts.get(category_name, "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.")
+    cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
+    prompt = cat_info[1]
+    keyword = cat_info[2]
     
     try:
         response = client.models.generate_content(
@@ -52,9 +79,13 @@ def generate_ai_article(category_name):
         title = lines[0].replace("#", "").strip() if len(lines) > 0 else f"{category_name} 소식"
         content = lines[1].strip() if len(lines) > 1 else text
 
+        # 이미지 자동 가져오기
+        img_url, author_name, author_url = fetch_unsplash_image(keyword)
+
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category_name, title, content))
+        cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
+                       (category_name, title, content, img_url, f"{author_name} / Unsplash"))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -69,21 +100,24 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 메인 페이지 (각 기사마다 삭제 버튼 추가)
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     
     if category and category != "전체":
-        cursor.execute("SELECT id, category, title, content, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
+        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
     else:
-        cursor.execute("SELECT id, category, title, content, created_at FROM articles ORDER BY id DESC")
+        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
         
     rows = cursor.fetchall()
     conn.close()
 
-    articles = [{"id": r[0], "category": r[1], "title": r[2], "content": r[3], "created_at": r[4]} for r in rows]
+    articles = [{
+        "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
+        "image_url": r[4], "image_author": r[5], "created_at": r[6]
+    } for r in rows]
+    
     categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
 
     html = f"""
@@ -103,13 +137,16 @@ def index(request: Request, category: str = None):
             .tab-item {{ padding: 8px 16px; background: #e2e8f0; color: #475569; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
             .tab-item:hover, .tab-item.active {{ background: #3498db; color: white; }}
 
-            .article {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }}
+            .article {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }}
             .badge {{ display: inline-block; padding: 4px 10px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-bottom: 8px; }}
             .article h2 {{ margin-top: 5px; color: #2980b9; }}
-            .date {{ font-size: 0.85em; color: #888; margin-bottom: 10px; }}
-            .content {{ line-height: 1.6; white-space: pre-wrap; }}
+            .date {{ font-size: 0.85em; color: #888; margin-bottom: 15px; }}
             
-            .delete-btn {{ position: absolute; top: 20px; right: 20px; background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
+            .article-img {{ width: 100%; max-height: 400px; object-fit: cover; border-radius: 6px; margin-bottom: 10px; }}
+            .img-source {{ font-size: 0.8em; color: #666; margin-bottom: 15px; font-style: italic; }}
+            
+            .content {{ line-height: 1.6; white-space: pre-wrap; }}
+            .delete-btn {{ position: absolute; top: 25px; right: 25px; background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
             .delete-btn:hover {{ background: #c0392b; }}
         </style>
     </head>
@@ -134,19 +171,23 @@ def index(request: Request, category: str = None):
     else:
         for art in articles:
             cat_name = art['category'] if art['category'] else '종합'
+            img_tag = f"<img src='{art['image_url']}' class='article-img'>" if art['image_url'] else ""
+            source_tag = f"<div class='img-source'>📷 Photo by {art['image_author']}</div>" if art['image_author'] else ""
+            
             html += f"""
             <div class="article">
                 <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
                 <span class="badge">{cat_name}</span>
                 <h2>{art['title']}</h2>
                 <div class="date">발행일시: {art['created_at']}</div>
+                {img_tag}
+                {source_tag}
                 <div class="content">{art['content']}</div>
             </div>
             """
     html += "</body></html>"
     return html
 
-# 관리자 페이지
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return """
@@ -174,8 +215,8 @@ def admin_page(request: Request):
         <h1>⚙️ 웹진 관리자 스튜디오 (자동 + 수동)</h1>
         
         <div class="box">
-            <h3>🤖 AI 수동 즉시 생성</h3>
-            <p>선택한 카테고리에 맞춰 제미니가 지금 즉시 고품질 뉴스를 작성하여 발행합니다.</p>
+            <h3>🤖 AI 수동 즉시 생성 (이미지 자동 첨부)</h3>
+            <p>선택한 카테고리에 맞는 기사와 고화질 사진, 출처가 자동으로 뚝딱 발행됩니다.</p>
             <form action="/admin/create" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -184,13 +225,12 @@ def admin_page(request: Request):
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
                 </select>
-                <button type="submit">🚀 지금 즉시 AI 기사 생성하기</button>
+                <button type="submit">🚀 지금 즉시 AI 기사 + 이미지 생성하기</button>
             </form>
         </div>
 
         <div class="box">
             <h3>✍️ 원장님 직접 글 작성 (수동 발행)</h3>
-            <p>원장님의 깊은 통찰이 담긴 오리지널 글을 카테고리별로 직접 등록합니다.</p>
             <form action="/admin/manual-create" method="post">
                 <label>카테고리</label>
                 <select name="category">
@@ -222,12 +262,13 @@ def create_article(category: str = Form(...)):
 def manual_create_article(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category, title, content))
+    # 수동 글 작성 시에는 기본 이미지 매칭
+    cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
+                   (category, title, content, "https://images.unsplash.com/photo-1585829365295-ab7cd400c167", "Unsplash"))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 기사 삭제 경로 추가
 @app.get("/admin/delete/{article_id}")
 def delete_article(article_id: int):
     conn = sqlite3.connect("database.db", check_same_thread=False)
