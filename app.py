@@ -20,7 +20,6 @@ UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 
 client = genai.Client(api_key=API_KEY)
 
-# 데이터베이스 초기화 (가장 안정적인 단일 구조)
 def init_db():
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -40,7 +39,7 @@ def init_db():
 
 init_db()
 
-# 단일 고화질 대표 이미지와 작가 이름을 꼬임 없이 깔끔하게 가져오는 함수
+# 단일 고화질 대표 이미지 가져오기
 def fetch_single_image(query_keyword):
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
@@ -53,28 +52,46 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 기사 내용을 깔끔하게 정돈하는 필터 함수
+# 🌟 [인터넷 신문 스타일] 본문 및 소제목 완벽 정돈 필터
 def clean_and_format_content(text):
+    # 불필요한 마크다운 기호 제거
     text = text.replace('**', '').replace('--', '').replace('*', '')
     
-    # 해시태그 추출 및 본문 분리
+    # 해시태그 분리
     all_words = text.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
     
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 소제목 HTML 변환
-    text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2980b9; display: block; margin-top: 25px; margin-bottom: 10px;">📌 \1</b>', text)
+    # ### 소제목 형태를 진짜 언론사 뉴스 소제목 스타일로 깔끔하게 변환
+    # 위아래 여백을 넉넉히 주고, 파란색 포인트 박스나 밑줄 느낌의 세련된 디자인 적용
+    text = re.sub(
+        r'###\s*(.*)', 
+        r'<h3 style="color: #1a5276; border-left: 4px solid #2980b9; padding-left: 10px; margin-top: 30px; margin-bottom: 12px; font-size: 1.2em; font-weight: bold;">\1</h3>', 
+        text
+    )
+    
+    # 단락 구분을 명확히 하기 위해 줄바꿈을 `<p>` 태그로 변환하여 신문 기사처럼 단락감 부여
+    paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+    formatted_paragraphs = []
+    
+    for p in paragraphs:
+        # 소제목 태그(<h3>)인 경우는 그대로 유지하고, 일반 텍스트는 문단(<p>)으로 감싸줍니다.
+        if p.startswith('<h3'):
+            formatted_paragraphs.append(p)
+        else:
+            formatted_paragraphs.append(f'<p style="margin-bottom: 16px; text-align: justify;">{p}</p>')
+            
+    final_html = "".join(formatted_paragraphs)
     
     # 해시태그를 맨 아래에 예쁘게 장식
     unique_tags = list(dict.fromkeys(hashtags))
     if unique_tags:
-        text = text.strip()
-        tag_html = "<br><br><div style='margin-top: 30px; padding-top: 15px; border-top: 1px solid #eee; color: #2980b9; font-weight: bold;'>" + " ".join(unique_tags[:5]) + "</div>"
-        text += tag_html
+        tag_html = "<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em;'>" + " ".join(unique_tags[:5]) + "</div>"
+        final_html += tag_html
 
-    return text
+    return final_html
 
 # 1. 자동 발행 함수
 def generate_ai_article(category_name):
@@ -104,14 +121,20 @@ def generate_ai_article(category_name):
     img_url, author_name = fetch_single_image(img_keyword)
     content = clean_and_format_content(content)
 
-    lines = content.split("\n", 1)
-    title = lines[0].replace("<br>", "").strip() if len(lines) > 0 else f"{category_name} 소식"
-    body_content = lines[1].strip() if len(lines) > 1 else content
-
+    lines = content.split("</p>", 1)
+    # 첫 번째 문단이나 제목 추출 안전 장치
+    title = f"{category_name} 심층 리포트"
+    
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
+    
+    # 프롬프트나 자동 생성에서 첫 줄을 제목으로 분리
+    raw_response_text = response.text.strip()
+    split_lines = raw_response_text.split("\n", 1)
+    art_title = split_lines[0].replace("#", "").replace("제목:", "").strip() if len(split_lines) > 0 else f"{category_name} 소식"
+    
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category_name, title, body_content, img_url, author_name))
+                   (category_name, art_title, content, img_url, author_name))
     conn.commit()
     conn.close()
 
@@ -124,7 +147,7 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 메인 홈페이지 (데이터베이스에서 기사를 정상적으로 불러오도록 쿼리 고정)
+# 메인 홈페이지
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -152,30 +175,30 @@ def index(request: Request, category: str = None):
         <meta charset="UTF-8">
         <title>인사이트 종합 웹진</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 850px; margin: 40px auto; padding: 20px; background: #f9f9f9; color: #333; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
-            h1 {{ color: #2c3e50; margin: 0; }}
-            .admin-link {{ display: inline-block; padding: 8px 14px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }}
-            .admin-link:hover {{ background: #2980b9; }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 850px; margin: 40px auto; padding: 20px; background: #f4f6f7; color: #333; }}
+            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2980b9; padding-bottom: 15px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            h1 {{ color: #2c3e50; margin: 0; font-size: 1.6em; }}
+            .admin-link {{ display: inline-block; padding: 8px 16px; background: #2980b9; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }}
+            .admin-link:hover {{ background: #1f618d; }}
             
-            .nav-tabs {{ display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; }}
-            .tab-item {{ padding: 8px 16px; background: #e2e8f0; color: #475569; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
-            .tab-item:hover, .tab-item.active {{ background: #3498db; color: white; }}
+            .nav-tabs {{ display: flex; gap: 10px; margin: 25px 0; flex-wrap: wrap; }}
+            .tab-item {{ padding: 8px 18px; background: #e2e8f0; color: #475569; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
+            .tab-item:hover, .tab-item.active {{ background: #2980b9; color: white; }}
 
-            .article {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }}
-            .badge {{ display: inline-block; padding: 4px 10px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-bottom: 8px; }}
-            .article h2 {{ margin-top: 5px; color: #2980b9; }}
-            .date {{ font-size: 0.85em; color: #888; margin-bottom: 15px; }}
+            .article {{ background: white; padding: 35px; margin-bottom: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: relative; }}
+            .badge {{ display: inline-block; padding: 4px 12px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.85em; font-weight: bold; margin-bottom: 10px; }}
+            .article h2 {{ margin-top: 5px; color: #2c3e50; font-size: 1.5em; line-height: 1.4; }}
+            .date {{ font-size: 0.85em; color: #888; margin-bottom: 20px; }}
             
-            .article-img {{ width: 100%; max-height: 400px; object-fit: cover; border-radius: 6px; margin-bottom: 5px; }}
-            .img-source {{ font-size: 0.8em; color: #666; margin-bottom: 15px; font-style: italic; }}
+            .article-img {{ width: 100%; max-height: 450px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }}
+            .img-source {{ font-size: 0.8em; color: #777; margin-bottom: 25px; font-style: italic; }}
             
-            .content {{ line-height: 1.8; font-size: 1.05em; }}
+            .content {{ line-height: 1.85; font-size: 1.08em; color: #2c3e50; }}
             
-            .btn-group {{ position: absolute; top: 25px; right: 25px; display: flex; gap: 6px; }}
-            .edit-btn {{ background: #f39c12; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
+            .btn-group {{ position: absolute; top: 35px; right: 35px; display: flex; gap: 6px; }}
+            .edit-btn {{ background: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
             .edit-btn:hover {{ background: #d68910; }}
-            .delete-btn {{ background: #e74c3c; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
+            .delete-btn {{ background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
             .delete-btn:hover {{ background: #c0392b; }}
         </style>
     </head>
@@ -285,7 +308,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (인터넷 신문 스타일 소제목 + 단락 정돈)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -298,7 +321,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 깔끔하게 확장된 기사 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 신문 스타일 기사 확장 발행하기</button>
             </form>
         </div>
     </body>
@@ -315,11 +338,14 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
     img_url, author_name = fetch_single_image(keyword)
+    
+    # 수동 글 작성 시에도 줄바꿈 태그(<p>) 적용
+    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, content, img_url, author_name))
+                   (category, title, formatted_content, img_url, author_name))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
