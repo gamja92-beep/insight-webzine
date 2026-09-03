@@ -14,7 +14,7 @@ app = FastAPI()
 API_KEY = os.environ.get("API_KEY", "")
 MODEL_NAME = "gemini-2.5-flash"
 
-# Unsplash API 키 (원장님의 키를 넣어주세요!)
+# Unsplash API 키
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 
 client = genai.Client(api_key=API_KEY)
@@ -55,6 +55,7 @@ def fetch_unsplash_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash", "https://unsplash.com"
 
+# 24시간 자동운영용 기본 생성 함수 (빈 프롬프트일 때 동작)
 def generate_ai_article(category_name):
     prompts = {
         "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.", "technology"),
@@ -199,22 +200,20 @@ def admin_page(request: Request):
             .box { background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
             button { background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
             button:hover { background: #219653; }
-            .manual-btn { background: #2980b9; }
-            .manual-btn:hover { background: #1f618d; }
             input[type="text"], select, textarea { width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }
-            textarea { height: 180px; resize: vertical; }
+            textarea { height: 150px; resize: vertical; }
             label { font-weight: bold; color: #34495e; display: block; margin-top: 10px; }
             .back-link { display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }
         </style>
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>⚙️ 웹진 관리자 스튜디오 (자동 + 수동 AI 확장)</h1>
+        <h1>⚙️ 웹진 관리자 스튜디오</h1>
         
         <div class="box">
-            <h3>🤖 AI 수동 즉시 생성 (전체 자동)</h3>
-            <p>선택한 카테고리에 맞는 기사와 고화질 사진, 출처가 자동으로 발행됩니다.</p>
-            <form action="/admin/create" method="post">
+            <h3>🤖 AI 자동 기사 발행 (프롬프트 입력 가능)</h3>
+            <p>카테고리를 고르고, 원하시는 아이디어(프롬프트)를 적어주시면 제미니가 완벽한 기사로 확장하여 사진과 함께 발행합니다. (비워두면 알아서 최신 트렌드 기사가 자동 생성됩니다!)</p>
+            <form action="/admin/create-custom" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="AI/테크">AI/테크</option>
@@ -222,53 +221,47 @@ def admin_page(request: Request):
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
                 </select>
-                <button type="submit">🚀 지금 즉시 AI 기사 + 이미지 생성하기</button>
-            </form>
-        </div>
 
-        <div class="box">
-            <h3>✍️ 원장님 맞춤형 AI 글 확장 발행 (수동 프롬프트)</h3>
-            <p>원하시는 제목과 대략적인 메모·키워드를 적어주시면, 제미니가 이를 바탕으로 살을 붙여 풍성하고 전문적인 기사로 확장하여 발행하고 이미지도 함께 붙여줍니다.</p>
-            <form action="/admin/manual-expand" method="post">
-                <label>카테고리</label>
-                <select name="category">
-                    <option value="AI/테크">AI/테크</option>
-                    <option value="경제/주식">경제/주식</option>
-                    <option value="세상이야기">세상이야기</option>
-                    <option value="시니어/복지">시니어/복지</option>
-                </select>
-
-                <label>기사 제목</label>
-                <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
+                <label>작성하고 싶은 주제나 프롬프트 (선택사항)</label>
+                <textarea name="user_prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 기사를 작성해줘. (비워두면 AI가 알아서 최신 주제로 작성합니다)"></textarea>
                 
-                <label>핵심 내용 및 프롬프트 (메모나 키워드만 적어도 됩니다)</label>
-                <textarea name="prompt" placeholder="예: 최근 금리가 인하될 가능성이 높아지면서 배당주에 대한 관심이 커지고 있다. 은퇴자들의 자산 관리 팁을 중심으로 전문적인 기사로 작성해줘." required></textarea>
-                
-                <button type="submit" class="manual-btn">✨ AI로 글을 확장하여 멋지게 발행하기</button>
+                <button type="submit">🚀 AI 기사 + 이미지 생성 및 발행하기</button>
             </form>
         </div>
     </body>
     </html>
     """
 
-@app.post("/admin/create")
-def create_article(category: str = Form(...)):
-    generate_ai_article(category)
-    return RedirectResponse(url="/", status_code=303)
+# 사용자가 입력한 프롬프트(또는 빈칸)를 처리하여 기사를 생성하는 핵심 함수
+@app.post("/admin/create-custom")
+def create_custom_article(category: str = Form(...), user_prompt: str = Form(...)):
+    # 프롬프트를 입력했는지 확인하고 지시사항 구성
+    if user_prompt.strip():
+        full_prompt = f"다음 주제와 요청사항을 바탕으로, 전문적이고 독자들이 흥미로워할 만한 SEO 최적화 뉴스 기사 제목과 본문을 작성해줘. 첫 줄은 제목으로, 둘째 줄부터는 본문으로 작성해줘.\n\n[카테고리]: {category}\n[요청사항/프롬프트]: {user_prompt}"
+    else:
+        # 비워둔 경우 기존 자동 생성 로직 활용
+        prompts = {
+            "AI/테크": "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
+            "경제/주식": "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
+            "세상이야기": "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
+            "시니어/복지": "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘."
+        }
+        full_prompt = prompts.get(category, "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.")
 
-@app.post("/admin/manual-expand")
-def manual_expand_article(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
-    full_prompt = f"다음 주제와 내용을 바탕으로, 전문적이고 독자들이 흥미로워할 만한 SEO 최적화 뉴스 기사 본문을 상세하고 풍성하게 작성해줘. (프롬프트 문장 자체를 그대로 출력하지 말고, 오직 기사 본문 내용만 작성해줘)\n\n[제목]: {title}\n[핵심 내용 및 요청사항]: {prompt}"
-    
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=full_prompt,
         )
-        content = response.text.strip()
+        text = response.text
+        lines = text.split("\n", 1)
+        title = lines[0].replace("#", "").strip() if len(lines) > 0 else f"{category} 소식"
+        content = lines[1].strip() if len(lines) > 1 else text
     except Exception as e:
-        content = prompt
+        title = f"{category} 긴급 소식"
+        content = user_prompt if user_prompt.strip() else "기사 생성 중 오류가 발생했습니다."
 
+    # 카테고리별 Unsplash 검색 키워드 매칭
     keyword_map = {
         "AI/테크": "technology",
         "경제/주식": "stock market economy",
@@ -277,6 +270,7 @@ def manual_expand_article(category: str = Form(...), title: str = Form(...), pro
     }
     keyword = keyword_map.get(category, "news")
     
+    # 이미지 자동 가져오기
     img_url, author_name, author_url = fetch_unsplash_image(keyword)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -292,7 +286,7 @@ def manual_expand_article(category: str = Form(...), title: str = Form(...), pro
 def delete_article(article_id: int):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+    cursor.execute("DELETE_FROM articles WHERE id = ?", (article_id,))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
