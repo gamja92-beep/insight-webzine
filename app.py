@@ -39,44 +39,22 @@ def init_db():
 
 init_db()
 
-# 절대 겹치지 않는 서로 다른 두 장의 고화질 이미지를 가져오는 함수
-def fetch_non_duplicate_images(base_keyword):
-    images = []
-    seen_ids = set()
-    headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-    
-    # 1. 첫 번째 이미지 (메인 키워드)
+# 단일 고화질 대표 이미지를 안정적으로 가져오는 함수
+def fetch_single_image(query_keyword):
     try:
-        res1 = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": base_keyword, "orientation": "landscape"})
-        if res1.status_code == 200:
-            item1 = res1.json()
-            seen_ids.add(item1.get("id"))
-            images.append({"url": item1["urls"]["regular"], "author": item1["user"]["name"]})
+        headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": query_keyword, "orientation": "landscape"})
+        if response.status_code == 200:
+            item = response.json()
+            return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
-        print(f"Img 1 Error: {e}")
-
-    # 2. 두 번째 이미지 (전혀 다른 서브 검색어 활용하여 중복 완벽 방지)
-    sub_pools = ["futuristic technology innovation", "modern business office digital", "global network server data", "abstract lighting workspace"]
-    sub_q = random.choice(sub_pools)
+        print(f"[이미지 검색 오류]: {e}")
     
-    try:
-        res2 = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": sub_q, "orientation": "landscape"})
-        if res2.status_code == 200:
-            item2 = res2.json()
-            if item2.get("id") not in seen_ids:
-                images.append({"url": item2["urls"]["regular"], "author": item2["user"]["name"]})
-    except Exception as e:
-        print(f"Img 2 Error: {e}")
+    return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-    # 혹시라도 부족하면 기본 이미지 보완
-    while len(images) < 2:
-        images.append({"url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "author": "Unsplash"})
-    
-    return images
-
-# 글 내용을 철저하게 정돈하고 마크다운 기호를 깔끔한 HTML로 바꾸는 함수
+# 기사 내용을 가장 깔끔하게 정돈하는 필터 함수
 def clean_and_format_content(text):
-    # 지저분한 마크다운 별표(*)나 불필요한 대시(--) 제거
+    # 특수기호 제거
     text = text.replace('**', '').replace('--', '').replace('*', '')
     
     # 해시태그 추출
@@ -89,7 +67,7 @@ def clean_and_format_content(text):
     # ### 소제목 형태를 보기 좋은 웹진 스타일 HTML로 변환
     text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2980b9; display: block; margin-top: 25px; margin-bottom: 10px;">📌 \1</b>', text)
     
-    # 중복 제거된 해시태그를 맨 아래에 예쁘게 장식
+    # 해시태그를 맨 아래에 예쁘게 장식
     unique_tags = list(dict.fromkeys(hashtags))
     if unique_tags:
         text = text.strip()
@@ -123,15 +101,8 @@ def generate_ai_article(category_name):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     img_keyword = keyword_map.get(category_name, "news")
     
-    imgs = fetch_non_duplicate_images(img_keyword)
+    img_url, author_name = fetch_single_image(img_keyword)
     content = clean_and_format_content(content)
-
-    paragraphs = content.split("\n\n")
-    if len(paragraphs) > 1:
-        mid_idx = len(paragraphs) // 2
-        mid_img_html = f"<br><img src='{imgs[1]['url']}' class='article-img'><div class='img-source'>📷 Photo by {imgs[1]['author']} / Unsplash</div><br>"
-        paragraphs.insert(mid_idx, mid_img_html)
-        content = "\n\n".join(paragraphs)
 
     lines = content.split("\n", 1)
     title = lines[0].replace("<br>", "").strip() if len(lines) > 0 else f"{category_name} 소식"
@@ -140,7 +111,7 @@ def generate_ai_article(category_name):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category_name, title, body_content, imgs[0]['url'], f"{imgs[0]['author']} / Unsplash"))
+                   (category_name, title, body_content, img_url, f"{author_name} / Unsplash"))
     conn.commit()
     conn.close()
 
@@ -312,7 +283,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (깔끔한 정돈 + 서로 다른 2개 이미지)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (깔끔한 단락 + 소제목 + 해시태그)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -325,7 +296,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 완벽 정돈된 기사 확장 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 깔끔하게 확장된 기사 발행하기</button>
             </form>
         </div>
     </body>
@@ -341,12 +312,12 @@ def create_auto(category: str = Form(...)):
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
-    imgs = fetch_non_duplicate_images(keyword)
+    img_url, author_name = fetch_single_image(keyword)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, content, imgs[0]['url'], f"{imgs[0]['author']} / Unsplash"))
+                   (category, title, content, img_url, f"{author_name} / Unsplash"))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
@@ -376,20 +347,13 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
     
-    imgs = fetch_non_duplicate_images(keyword)
+    img_url, author_name = fetch_single_image(keyword)
     final_content = clean_and_format_content(final_content)
-
-    paragraphs = final_content.split("\n\n")
-    if len(paragraphs) > 1:
-        mid_idx = len(paragraphs) // 2
-        mid_img_html = f"<br><img src='{imgs[1]['url']}' class='article-img'><div class='img-source'>📷 Photo by {imgs[1]['author']} / Unsplash</div><br>"
-        paragraphs.insert(mid_idx, mid_img_html)
-        final_content = "\n\n".join(paragraphs)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, final_content, imgs[0]['url'], f"{imgs[0]['author']} / Unsplash"))
+                   (category, title, final_content, img_url, f"{author_name} / Unsplash"))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
@@ -433,7 +397,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
