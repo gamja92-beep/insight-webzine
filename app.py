@@ -55,7 +55,7 @@ def fetch_unsplash_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash", "https://unsplash.com"
 
-# 1. 상단 자동화 기사 생성 함수 (완전 자동)
+# 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
         "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 첫 줄은 제목, 둘째 줄부터는 본문으로 작성해줘.", "technology"),
@@ -208,20 +208,22 @@ def admin_page(request: Request):
             button:hover { background: #219653; }
             .manual-btn { background: #2980b9; }
             .manual-btn:hover { background: #1f618d; }
+            .ai-expand-btn { background: #8e44ad; }
+            .ai-expand-btn:hover { background: #732d91; }
             input[type="text"], select, textarea { width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }
-            textarea { height: 160px; resize: vertical; }
+            textarea { height: 150px; resize: vertical; }
             label { font-weight: bold; color: #34495e; display: block; margin-top: 10px; }
             .back-link { display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }
         </style>
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>⚙️ 웹진 관리자 스튜디오 (상하 분리형)</h1>
+        <h1>⚙️ 웹진 관리자 스튜디오</h1>
         
-        <!-- 상단 박스: 자동화 기사 생성 -->
+        <!-- 1. 상단: 자동화 기사 생성 -->
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (즉시 생성)</h3>
-            <p>원하는 카테고리를 선택하고 버튼을 누르면, 제미니가 알아서 최신 트렌드 기사와 사진을 자동으로 뚝딱 발행합니다.</p>
+            <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
+            <p>카테고리만 고르고 누르면 제미니가 알아서 최신 기사를 즉시 생성합니다.</p>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -230,15 +232,15 @@ def admin_page(request: Request):
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
                 </select>
-                <button type="submit">🚀 지금 즉시 자동 기사 발행하기</button>
+                <button type="submit">🚀 즉시 자동 기사 발행하기</button>
             </form>
         </div>
 
-        <!-- 하단 박스: 수동 작성 및 AI 프롬프트 확장 -->
+        <!-- 2. 중단: 완전 수동 글 작성 -->
         <div class="box" style="border-top: 5px solid #2980b9;">
-            <h3>✍️ 2. 하단: 수동 글 작성 및 AI 프롬프트 확장</h3>
-            <p>제목을 적고, 직접 글을 쓰시거나 <b>대략적인 프롬프트(메모)만 적어주시면</b> 제미니가 살을 붙여 완벽한 기사 본문으로 확장해 줍니다!</p>
-            <form action="/admin/create-manual-expand" method="post">
+            <h3>✍️ 2. 중단: 완전 수동 글 작성 (작성한 내용 그대로 발행)</h3>
+            <p>원장님이 직접 제목과 본문을 타이핑한 그대로 발행하는 공간입니다.</p>
+            <form action="/admin/create-manual" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="AI/테크">AI/테크</option>
@@ -246,52 +248,81 @@ def admin_page(request: Request):
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
                 </select>
+                <label>기사 제목</label>
+                <input type="text" name="title" placeholder="제목을 입력하세요" required>
+                <label>기사 내용 (작성한 그대로 올라갑니다)</label>
+                <textarea name="content" placeholder="내용을 직접 작성하세요..." required></textarea>
+                <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
+            </form>
+        </div>
 
+        <!-- 3. 하단: AI 프롬프트 확장 발행 -->
+        <div class="box" style="border-top: 5px solid #8e44ad;">
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (메모를 전문 기사로 확장)</h3>
+            <p>제목과 대략적인 프롬프트(메모)를 적어주시면, 제미니가 철저하게 살을 붙여 풍성한 전문 기사 본문으로 확장합니다.</p>
+            <form action="/admin/create-ai-expand" method="post">
+                <label>카테고리 선택</label>
+                <select name="category">
+                    <option value="AI/테크">AI/테크</option>
+                    <option value="경제/주식">경제/주식</option>
+                    <option value="세상이야기">세상이야기</option>
+                    <option value="시니어/복지">시니어/복지</option>
+                </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
-                
-                <label>본문 내용 또는 AI 확장용 프롬프트 (메모만 적어도 제미니가 확장합니다)</label>
-                <textarea name="content_or_prompt" placeholder="여기에 직접 글을 쓰거나, 혹은 위에서처럼 'AI 거품론과 인프라 투자 포인트에 대해 전문적으로 작성해줘' 같은 프롬프트를 적어주세요." required></textarea>
-                
-                <button type="submit" class="manual-btn">✨ 수동/프롬프트 확장 기사 발행하기</button>
+                <label>AI 확장용 프롬프트 / 메모</label>
+                <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
+                <button type="submit" class="ai-expand-btn">🪄 프롬프트로 풍성한 기사 확장 발행하기</button>
             </form>
         </div>
     </body>
     </html>
     """
 
-# 1. 상단 자동 발행 처리 경로
+# 1. 자동 발행 처리
 @app.post("/admin/create-auto")
 def create_auto(category: str = Form(...)):
     generate_ai_article(category)
     return RedirectResponse(url="/", status_code=303)
 
-# 2. 하단 수동 및 프롬프트 확장 처리 경로 (핵심 기능)
-@app.post("/admin/create-manual-expand")
-def create_manual_expand(category: str = Form(...), title: str = Form(...), content_or_prompt: str = Form(...)):
-    # 프롬프트인지 직접 쓴 글인지 판단하여 제미니 확장 처리
-    # 글의 길이가 짧거나(~100자 미만) 문장이 메모 형태라면 제미니에게 확장을 요청합니다.
-    expansion_prompt = f"다음 제목과 내용을 바탕으로, 전문적이고 풍성한 SEO 최적화 뉴스 기사 본문을 작성해줘. (프롬프트 문장 자체를 그대로 출력하지 말고, 오직 완성된 기사 본문 내용만 작성해줘)\n\n[제목]: {title}\n[내용/요청사항]: {content_or_prompt}"
+# 2. 완전 수동 발행 처리 (입력한 내용 그대로 저장)
+@app.post("/admin/create-manual")
+def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
+    keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
+    keyword = keyword_map.get(category, "news")
+    img_url, author_name, _ = fetch_unsplash_image(keyword)
+
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
+                   (category, title, content, img_url, f"{author_name} / Unsplash"))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/", status_code=303)
+
+# 3. AI 프롬프트 확장 발행 처리 (제미니가 확실하게 살을 붙이도록 강제)
+@app.post("/admin/create-ai-expand")
+def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
+    strict_prompt = f"""
+    당신은 전문 뉴스 기자입니다. 아래의 [요청사항/메모]를 바탕으로, 독자들이 흥미로워할 만한 깊이 있고 풍성한 SEO 최적화 뉴스 기사 본문을 상세하게 작성해 주세요.
+    절대로 요청사항 문장 자체를 그대로 출력하지 말고, 오직 완성된 뉴스 기사 본문 내용만 길고 전문적으로 작성해 주세요.
+
+    [기사 제목]: {title}
+    [요청사항/메모]: {prompt}
+    """
     
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
-            contents=expansion_prompt,
+            contents=strict_prompt,
         )
         final_content = response.text.strip()
     except Exception as e:
-        final_content = content_or_prompt
+        final_content = prompt
 
-    # 카테고리별 이미지 키워드 매칭
-    keyword_map = {
-        "AI/테크": "technology",
-        "경제/주식": "stock market economy",
-        "세상이야기": "warm lifestyle people",
-        "시니어/복지": "senior elderly care"
-    }
+    keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
-    
-    img_url, author_name, author_url = fetch_unsplash_image(keyword)
+    img_url, author_name, _ = fetch_unsplash_image(keyword)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -299,7 +330,6 @@ def create_manual_expand(category: str = Form(...), title: str = Form(...), cont
                    (category, title, final_content, img_url, f"{author_name} / Unsplash"))
     conn.commit()
     conn.close()
-    
     return RedirectResponse(url="/", status_code=303)
 
 # 기사 수정 페이지 (GET)
@@ -342,15 +372,12 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
-
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
-                
                 <label>기사 내용</label>
                 <textarea name="content" required>{art[3]}</textarea>
-                
                 <button type="submit">💾 수정 사항 저장하기</button>
             </form>
         </div>
@@ -358,7 +385,6 @@ def edit_page(article_id: int):
     </html>
     """
 
-# 기사 수정 반영 (POST)
 @app.post("/admin/update/{article_id}")
 def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -368,7 +394,6 @@ def update_article(article_id: int, category: str = Form(...), title: str = Form
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 기사 삭제 경로
 @app.get("/admin/delete/{article_id}")
 def delete_article(article_id: int):
     conn = sqlite3.connect("database.db", check_same_thread=False)
