@@ -83,7 +83,7 @@ def index(request: Request, category: str = None):
     """
     
     for cat in categories:
-        active_class = "active"ḳif (not category and cat == "전체") or (category == cat) else ""
+        active_class = "active" if (not category and cat == "전체") or (category == cat) else ""
         cat_param = "" if cat == "전체" else f"?category={cat}"
         html += f'<a href="/{cat_param}" class="tab-item {active_class}">{cat}</a>'
         
