@@ -10,13 +10,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI()
 
-# 환경 변수에서 API 키 불러오기
 API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 client = genai.Client(api_key=API_KEY)
 
-# DB 초기화
 def init_db():
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -34,7 +32,6 @@ def init_db():
 
 init_db()
 
-# 공통 기사 생성 함수 (AI 자동화 핵심)
 def generate_ai_article(category_name):
     prompts = {
         "AI/테크": "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 제목과 본문을 포함해줘.",
@@ -60,24 +57,19 @@ def generate_ai_article(category_name):
         cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category_name, title, content))
         conn.commit()
         conn.close()
-        print(f"[자동생성 성공] {category_name} - {title}")
     except Exception as e:
         print(f"[자동생성 오류] {category_name}: {e}")
 
-# 자동 스케줄러 설정 (서버가 켜져 있는 동안 작동)
 def scheduled_job():
     categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
-    # 무작위로 하나씩 골라서 자동 발행 (원하시면 특정 카테고리를 순차적으로 지정할 수도 있습니다)
     target_cat = random.choice(categories)
     generate_ai_article(target_cat)
 
 scheduler = BackgroundScheduler()
-# 테스트 또는 실전 운영을 위해 시간 설정 (예: 6시간마다 자동으로 1개씩 생성 -> 하루 총 4개 발행 루프)
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-
-# 메인 페이지 (카테고리별 필터링)
+# 메인 페이지 (각 기사마다 삭제 버튼 추가)
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -111,11 +103,14 @@ def index(request: Request, category: str = None):
             .tab-item {{ padding: 8px 16px; background: #e2e8f0; color: #475569; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
             .tab-item:hover, .tab-item.active {{ background: #3498db; color: white; }}
 
-            .article {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            .article {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }}
             .badge {{ display: inline-block; padding: 4px 10px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-bottom: 8px; }}
             .article h2 {{ margin-top: 5px; color: #2980b9; }}
             .date {{ font-size: 0.85em; color: #888; margin-bottom: 10px; }}
             .content {{ line-height: 1.6; white-space: pre-wrap; }}
+            
+            .delete-btn {{ position: absolute; top: 20px; right: 20px; background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
+            .delete-btn:hover {{ background: #c0392b; }}
         </style>
     </head>
     <body>
@@ -141,6 +136,7 @@ def index(request: Request, category: str = None):
             cat_name = art['category'] if art['category'] else '종합'
             html += f"""
             <div class="article">
+                <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
                 <span class="badge">{cat_name}</span>
                 <h2>{art['title']}</h2>
                 <div class="date">발행일시: {art['created_at']}</div>
@@ -217,18 +213,26 @@ def admin_page(request: Request):
     </html>
     """
 
-# 관리자 수동 AI 생성
 @app.post("/admin/create")
 def create_article(category: str = Form(...)):
     generate_ai_article(category)
     return RedirectResponse(url="/", status_code=303)
 
-# 수동 글 작성
 @app.post("/admin/manual-create")
 def manual_create_article(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content) VALUES (?, ?, ?)", (category, title, content))
+    conn.commit()
+    conn.close()
+    return RedirectResponse(url="/", status_code=303)
+
+# 기사 삭제 경로 추가
+@app.get("/admin/delete/{article_id}")
+def delete_article(article_id: int):
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
