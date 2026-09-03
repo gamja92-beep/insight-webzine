@@ -6,13 +6,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 import os
 import requests
+import re
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI()
 
 API_KEY = os.environ.get("API_KEY", "")
-# 원장님이 만족하신 3.5 버전으로 고정!
 MODEL_NAME = "gemini-3.5-flash"
 
 # Unsplash API 키
@@ -39,22 +39,29 @@ def init_db():
 
 init_db()
 
-# Unsplash에서 이미지를 여러 장(기본 2장) 안정적으로 가져오는 함수
+# Unsplash에서 서로 다른 사진을 확실하게 2장 가져오는 함수 (중복 방지 로직 포함)
 def fetch_unsplash_images(query_keyword, count=2):
     images = []
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": query_keyword, "orientation": "landscape", "count": count}
+        # 넉넉하게 5장을 요청한 뒤 서로 다른 사진만 골라냅니다.
+        params = {"query": query_keyword, "orientation": "landscape", "count": 5}
         response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
         
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, dict):
                 data = [data]
+            
+            seen_urls = set()
             for item in data:
                 img_url = item["urls"]["regular"]
                 author_name = item["user"]["name"]
-                images.append({"url": img_url, "author": author_name})
+                if img_url not in seen_urls:
+                    seen_urls.add(img_url)
+                    images.append({"url": img_url, "author": author_name})
+                    if len(images) >= count:
+                        break
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
@@ -64,22 +71,33 @@ def fetch_unsplash_images(query_keyword, count=2):
     
     return images
 
-# 불필요한 마크다운 기호(###, **)를 깔끔하게 정리해 주는 청소 함수
-import re
-def clean_markdown_text(text):
-    # ### 소제목 기호를 깔끔한 시각적 스타일(굵은 글씨 및 여백)로 변환
+# 마크다운 정리 및 해시태그 줄바꿈 보장 함수
+def clean_and_format_content(text):
+    # ### 소제목 기호 변환
     text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2c3e50; display: block; margin-top: 20px; margin-bottom: 10px;">📌 \1</b>', text)
-    # ** 강조 기호 제거 또는 일반 볼드로 정돈
     text = text.replace('**', '')
+    
+    # 해시태그가 문장에 붙어있거나 줄바꿈이 안 된 경우 맨 아래로 예쁘게 분리
+    # (#으로 시작하는 단어들을 찾아냄)
+    hashtags = re.findall(r'(#[\w가-힣]+)', text)
+    if hashtags:
+        # 본문에서 해시태그 원문들을 일단 제거
+        for tag in hashtags:
+            text = text.replace(tag, '')
+        text = text.strip()
+        # 맨 아래에 줄바꿈과 함께 깔끔하게 파란색 스타일로 재조합
+        tag_html = "<br><br><div style='margin-top: 25px; color: #2980b9; font-weight: bold;'>" + " ".join(hashtags) + "</div>"
+        text += tag_html
+
     return text
 
 # 1. 상단 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "technology"),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "stock market economy"),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "warm lifestyle people"),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누어 작성하고, 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "senior elderly care")
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "technology"),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "stock market economy"),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "warm lifestyle people"),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "senior elderly care")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
@@ -97,12 +115,12 @@ def generate_ai_article(category_name):
 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     img_keyword = keyword_map.get(category_name, "news")
+    
+    # 서로 다른 이미지 2장 확실하게 가져오기
     imgs = fetch_unsplash_images(img_keyword, count=2)
     
-    # 텍스트 정돈
-    content = clean_markdown_text(content)
+    content = clean_and_format_content(content)
 
-    # 본문 중간 이미지 삽입 (문단이 여러 개일 때 중간에 쏙 집어넣기)
     paragraphs = content.split("\n\n")
     if len(paragraphs) > 1:
         mid_idx = len(paragraphs) // 2
@@ -289,7 +307,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (깔끔한 소제목 + 멀티 이미지)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (줄바꿈 해시태그 + 서로 다른 멀티 이미지)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -302,7 +320,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 깔끔한 기사 확장 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 완벽 정돈된 기사 확장 발행하기</button>
             </form>
         </div>
     </body>
@@ -328,7 +346,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행 (마크다운 깔끔 정돈 및 중간 이미지 삽입 로직 탑재)
+# 3. AI 프롬프트 확장 발행 (해시태그 줄바꿈 및 서로 다른 중복 방지 이미지 적용)
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
     system_directive = (
@@ -352,13 +370,13 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
     
-    # 이미지 2장 가져오기
+    # 서로 다른 이미지 2장 확실하게 가져오기
     imgs = fetch_unsplash_images(keyword, count=2)
     
-    # 마크다운 기호 정돈
-    final_content = clean_markdown_text(final_content)
+    # 마크다운 정리 및 해시태그 줄바꿈 처리
+    final_content = clean_and_format_content(final_content)
 
-    # 본문 중간에 두 번째 이미지 삽입
+    # 본문 중간에 서로 다른 두 번째 이미지 삽입
     paragraphs = final_content.split("\n\n")
     if len(paragraphs) > 1:
         mid_idx = len(paragraphs) // 2
