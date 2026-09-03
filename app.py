@@ -52,44 +52,50 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [인터넷 신문 스타일] 본문 및 소제목 완벽 정돈 필터
-def clean_and_format_content(text):
-    # 불필요한 마크다운 기호 제거
+# 🌟 [업그레이드] 소제목 굵기/색상 진하게 강화 및 해시태그 무결점 정돈 필터
+def clean_and_format_content(text, category_name="종합"):
     text = text.replace('**', '').replace('--', '').replace('*', '')
     
-    # 해시태그 분리
+    # 해시태그 추출
     all_words = text.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
     
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # ### 소제목 형태를 진짜 언론사 뉴스 소제목 스타일로 깔끔하게 변환
-    # 위아래 여백을 넉넉히 주고, 파란색 포인트 박스나 밑줄 느낌의 세련된 디자인 적용
+    # 소제목 색상을 더 진하고 묵직하게 변경 (color: #117a65 또는 진한 네이비 #1b4f72, 두께 font-weight: 800)
     text = re.sub(
         r'###\s*(.*)', 
-        r'<h3 style="color: #1a5276; border-left: 4px solid #2980b9; padding-left: 10px; margin-top: 30px; margin-bottom: 12px; font-size: 1.2em; font-weight: bold;">\1</h3>', 
+        r'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">\1</h3>', 
         text
     )
     
-    # 단락 구분을 명확히 하기 위해 줄바꿈을 `<p>` 태그로 변환하여 신문 기사처럼 단락감 부여
+    # 단락(<p>) 단위로 깔끔하게 포맷팅
     paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
     formatted_paragraphs = []
     
     for p in paragraphs:
-        # 소제목 태그(<h3>)인 경우는 그대로 유지하고, 일반 텍스트는 문단(<p>)으로 감싸줍니다.
         if p.startswith('<h3'):
             formatted_paragraphs.append(p)
         else:
-            formatted_paragraphs.append(f'<p style="margin-bottom: 16px; text-align: justify;">{p}</p>')
+            formatted_paragraphs.append(f'<p style="margin-bottom: 18px; text-align: justify; word-break: keep-all;">{p}</p>')
             
     final_html = "".join(formatted_paragraphs)
     
-    # 해시태그를 맨 아래에 예쁘게 장식
+    # 해시태그 정돈 (비어있으면 카테고리별 기본 태그로 알차게 채워줌)
     unique_tags = list(dict.fromkeys(hashtags))
-    if unique_tags:
-        tag_html = "<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em;'>" + " ".join(unique_tags[:5]) + "</div>"
-        final_html += tag_html
+    fallback_tags = {
+        "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
+        "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략"],
+        "세상이야기": ["#세상이야기", "#라이프스타일", "#감동글", "#일상소통", "#휴식"],
+        "시니어/복지": ["#시니어복지", "#은퇴설계", "#건강관리", "#노후준비", "#행복한삶"]
+    }
+    
+    if len(unique_tags) < 3:
+        unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
+
+    tag_html = "<div style='margin-top: 40px; padding-top: 18px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em; word-spacing: 5px;'>" + " ".join(unique_tags[:5]) + "</div>"
+    final_html += tag_html
 
     return final_html
 
@@ -119,20 +125,15 @@ def generate_ai_article(category_name):
     img_keyword = keyword_map.get(category_name, "news")
     
     img_url, author_name = fetch_single_image(img_keyword)
-    content = clean_and_format_content(content)
-
-    lines = content.split("</p>", 1)
-    # 첫 번째 문단이나 제목 추출 안전 장치
-    title = f"{category_name} 심층 리포트"
     
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    
-    # 프롬프트나 자동 생성에서 첫 줄을 제목으로 분리
-    raw_response_text = response.text.strip()
-    split_lines = raw_response_text.split("\n", 1)
+    # 제목 추출
+    split_lines = content.split("\n", 1)
     art_title = split_lines[0].replace("#", "").replace("제목:", "").strip() if len(split_lines) > 0 else f"{category_name} 소식"
     
+    content = clean_and_format_content(content, category_name)
+
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
     cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
                    (category_name, art_title, content, img_url, author_name))
     conn.commit()
@@ -308,7 +309,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (인터넷 신문 스타일 소제목 + 단락 정돈)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (선명한 소제목 + 완벽 해시태그 보정)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -321,7 +322,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 신문 스타일 기사 확장 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
     </body>
@@ -339,7 +340,6 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     keyword = keyword_map.get(category, "news")
     img_url, author_name = fetch_single_image(keyword)
     
-    # 수동 글 작성 시에도 줄바꿈 태그(<p>) 적용
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -376,7 +376,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword = keyword_map.get(category, "news")
     
     img_url, author_name = fetch_single_image(keyword)
-    final_content = clean_and_format_content(final_content)
+    final_content = clean_and_format_content(final_content, category)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -425,7 +425,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
