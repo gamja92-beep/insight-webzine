@@ -3,3 +3,4 @@ uvicorn
 google-genai
 jinja2
 APScheduler
+python-multipart
