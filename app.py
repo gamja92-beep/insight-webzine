@@ -39,48 +39,61 @@ def init_db():
 
 init_db()
 
-# Unsplash에서 서로 다른 사진을 확실하게 보장하며 2장을 따로 요청하는 함수
-def fetch_unsplash_images(query_keyword, count=2):
+# Unsplash에서 완전히 다른 두 장의 사진을 보장하며 가져오는 함수 (서브 키워드 조합 활용)
+def fetch_distinct_images(query_keyword):
     images = []
     seen_ids = set()
     headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
     
-    # 필요한 장수만큼 개별적으로 요청을 보내서 고유한 사진 ID를 확보합니다.
-    for _ in range(count):
-        try:
-            params = {"query": query_keyword, "orientation": "landscape"}
-            response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params)
-            
-            if response.status_code == 200:
-                item = response.json()
-                photo_id = item.get("id")
-                img_url = item["urls"]["regular"]
-                author_name = item["user"]["name"]
-                
-                # 만약 아이디가 겹치면 한 번 더 시도
-                if photo_id and photo_id not in seen_ids:
-                    seen_ids.add(photo_id)
-                    images.append({"url": img_url, "author": author_name})
-        except Exception as e:
-            print(f"[이미지 검색 오류]: {e}")
+    # 첫 번째 이미지 (기본 키워드)
+    try:
+        res1 = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": query_keyword, "orientation": "landscape"})
+        if res1.status_code == 200:
+            item1 = res1.json()
+            seen_ids.add(item1.get("id"))
+            images.append({"url": item1["urls"]["regular"], "author": item1["user"]["name"]})
+    except Exception as e:
+        print(f"Img 1 Error: {e}")
+
+    # 두 번째 이미지 (중복 방지를 위해 약간 다른 서브 키워드나 시도 추가)
+    sub_keywords = [query_keyword + " business", query_keyword + " modern", query_keyword + " view", query_keyword + " abstract"]
+    sub_q = random.choice(sub_keywords)
     
-    # 혹시라도 부족하면 기본 이미지로 채움
-    while len(images) < count:
+    try:
+        res2 = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": sub_q, "orientation": "landscape"})
+        if res2.status_code == 200:
+            item2 = res2.json()
+            if item2.get("id") not in seen_ids:
+                images.append({"url": item2["urls"]["regular"], "author": item2["user"]["name"]})
+    except Exception as e:
+        print(f"Img 2 Error: {e}")
+
+    # 혹시라도 2장이 안 채워졌으면 기본 이미지로 보완
+    while len(images) < 2:
         images.append({"url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "author": "Unsplash"})
     
     return images
 
-# 마크다운 정리 및 해시태그 줄바꿈 보장 함수
+# 마크다운 정리 및 해시태그 깔끔 정돈 함수 (색상 코드 간섭 원천 차단)
 def clean_and_format_content(text):
+    # 1. 먼저 본문에서 실제 해시태그들(#으로 시작하는 단어들)을 안전하게 추출해 둡니다.
+    # 단, 소제목 태그 내의 #(#2c3e50 등)은 제외하고 실제 한글/영문 해시태그만 잡습니다.
+    all_words = text.split()
+    hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
+    
+    # 본문에 있던 해시태그 원문들은 일단 지웁니다.
+    for tag in hashtags:
+        text = text.replace(tag, '')
+    
+    # 2. ### 소제목을 깔끔한 HTML 스타일로 변환 (여기서 색상 코드가 들어가도 해시태그 오작동 안 함)
     text = re.sub(r'###\s*(.*)', r'<br><b style="font-size: 1.15em; color: #2c3e50; display: block; margin-top: 20px; margin-bottom: 10px;">📌 \1</b>', text)
     text = text.replace('**', '')
     
-    hashtags = re.findall(r'(#[\w가-힣]+)', text)
-    if hashtags:
-        for tag in hashtags:
-            text = text.replace(tag, '')
+    # 3. 추출한 해시태그 중 중복을 제거하고 맨 아래에 예쁘게 붙여줍니다.
+    unique_tags = list(dict.fromkeys(hashtags)) # 순서 유지하며 중복 제거
+    if unique_tags:
         text = text.strip()
-        tag_html = "<br><br><div style='margin-top: 25px; color: #2980b9; font-weight: bold;'>" + " ".join(hashtags) + "</div>"
+        tag_html = "<br><br><div style='margin-top: 25px; color: #2980b9; font-weight: bold;'>" + " ".join(unique_tags[:5]) + "</div>"
         text += tag_html
 
     return text
@@ -88,10 +101,10 @@ def clean_and_format_content(text):
 # 1. 상단 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "technology"),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "stock market economy"),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "warm lifestyle people"),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 해시태그 5개를 #태그 형태로 붙여줘.", "senior elderly care")
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘.", "technology"),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여줘.", "stock market economy"),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여줘.", "warm lifestyle people"),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 문단은 명확히 여러 개로 나누고 소제목(### 형태)을 포함해줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여줘.", "senior elderly care")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
@@ -110,7 +123,7 @@ def generate_ai_article(category_name):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     img_keyword = keyword_map.get(category_name, "news")
     
-    imgs = fetch_unsplash_images(img_keyword, count=2)
+    imgs = fetch_distinct_images(img_keyword)
     content = clean_and_format_content(content)
 
     paragraphs = content.split("\n\n")
@@ -299,7 +312,7 @@ def admin_page(request: Request):
 
         <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (서로 다른 2개의 고화질 이미지)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (멀티 이미지 + 완벽 정돈된 해시태그)</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -312,7 +325,7 @@ def admin_page(request: Request):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
                 <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 완벽한 멀티 이미지 기사 발행하기</button>
+                <button type="submit" class="ai-expand-btn">🪄 완벽한 기사 확장 발행하기</button>
             </form>
         </div>
     </body>
@@ -328,7 +341,7 @@ def create_auto(category: str = Form(...)):
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
-    imgs = fetch_unsplash_images(keyword, count=1)
+    imgs = fetch_distinct_images(keyword)
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -338,14 +351,14 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     conn.close()
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행 (서로 다른 이미지 고유 ID 보장 로직 적용)
+# 3. AI 프롬프트 확장 발행 (해시태그 중복/오류 방지 및 서로 다른 2장 이미지 적용)
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
     system_directive = (
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
         "독자들이 읽기 편하도록 여러 개의 단락과 깔끔한 소제목(### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
-        "마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #태그 형태로 포함해 주세요."
+        "마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 포함해 주세요."
     )
     
     full_query = f"{system_directive}\n\n[기사 제목]: {title}\n[작성 요청사항/메모]: {prompt}"
@@ -362,11 +375,13 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     keyword = keyword_map.get(category, "news")
     
-    # 2번 개별 요청을 통해 완전히 서로 다른 고유 사진 2장을 확보합니다.
-    imgs = fetch_unsplash_images(keyword, count=2)
+    # 완전히 다른 두 장의 이미지를 따로 확보합니다.
+    imgs = fetch_distinct_images(keyword)
     
+    # 해시태그 오류 및 중복을 방지하는 정돈 함수 실행
     final_content = clean_and_format_content(final_content)
 
+    # 본문 중간에 서로 다른 두 번째 이미지 삽입
     paragraphs = final_content.split("\n\n")
     if len(paragraphs) > 1:
         mid_idx = len(paragraphs) // 2
@@ -421,7 +436,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
