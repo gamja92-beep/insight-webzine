@@ -1,13 +1,13 @@
+import sys
+import os
 import sqlite3
 import random
+import requests
+import re
 from datetime import datetime
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
-import os
-import requests
-import re
-
 from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI()
@@ -39,11 +39,11 @@ def init_db():
 
 init_db()
 
-# 단일 고화질 대표 이미지 가져오기
+# 단일 고화질 대표 이미지 동적 가져오기
 def fetch_single_image(query_keyword):
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": query_keyword, "orientation": "landscape"})
+        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": query_keyword, "orientation": "landscape"}, timeout=5)
         if response.status_code == 200:
             item = response.json()
             return item["urls"]["regular"], item["user"]["name"]
@@ -52,8 +52,9 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [완벽 자동화] 제미니가 소제목과 본문을 신문 스타일 HTML로 다듬어주는 함수
+# 🌟 [완벽 자동화] 마크다운 정제, 소제목 변환, 해시태그 및 영구저장 세팅 함수
 def clean_and_format_content(text, category_name="종합"):
+    # 볼드(**), 이탤릭(*) 등 마크다운 기호 제거
     text = text.replace('**', '').replace('--', '').replace('*', '')
     
     # 해시태그 추출
@@ -63,7 +64,7 @@ def clean_and_format_content(text, category_name="종합"):
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 소제목(### 또는 일반 소제목 문장)을 원장님이 만드신 그 멋진 스타일로 자동 변환
+    # 소제목(###)을 신문 스타일 HTML 태그로 자동 변환
     text = re.sub(
         r'###\s*(.*)', 
         r'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">\1</h3>', 
@@ -99,6 +100,17 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
+# 기사 데이터베이스 안전 저장 함수 (Commit 보장)
+def save_article_to_db(category, title, content, image_url, image_author):
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
+        (category, title, content, image_url, image_author)
+    )
+    conn.commit()
+    conn.close()
+
 # 1. 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
@@ -110,7 +122,6 @@ def generate_ai_article(category_name):
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
     prompt = cat_info[1]
-    keyword = cat_info[2]
     
     try:
         response = client.models.generate_content(
@@ -127,16 +138,10 @@ def generate_ai_article(category_name):
     img_url, author_name = fetch_single_image(img_keyword)
     
     split_lines = content.split("\n", 1)
-    art_title = split_lines[0].replace("#", "").replace("제목:", "").strip() if len(split_lines) > 0 else f"{category_name} 소식"
+    art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip() if len(split_lines) > 0 else f"{category_name} 소식"
     
-    content = clean_and_format_content(content, category_name)
-
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category_name, art_title, content, img_url, author_name))
-    conn.commit()
-    conn.close()
+    formatted_content = clean_and_format_content(content, category_name)
+    save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
     categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
@@ -272,7 +277,6 @@ def admin_page(request: Request):
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
         <h1>⚙️ 웹진 관리자 스튜디오</h1>
         
-        <!-- 1. 상단: 자동화 기사 생성 -->
         <div class="box" style="border-top: 5px solid #27ae60;">
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
             <form action="/admin/create-auto" method="post">
@@ -287,7 +291,6 @@ def admin_page(request: Request):
             </form>
         </div>
 
-        <!-- 2. 중단: 완전 수동 글 작성 -->
         <div class="box" style="border-top: 5px solid #2980b9;">
             <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
             <form action="/admin/create-manual" method="post">
@@ -306,7 +309,6 @@ def admin_page(request: Request):
             </form>
         </div>
 
-        <!-- 3. 하단: AI 프롬프트 확장 발행 -->
         <div class="box" style="border-top: 5px solid #8e44ad;">
             <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (신문 스타일 자동 적용)</h3>
             <form action="/admin/create-ai-expand" method="post">
@@ -339,17 +341,12 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     keyword = keyword_map.get(category, "news")
     img_url, author_name = fetch_single_image(keyword)
     
+    clean_title = title.replace('**', '').replace('*', '').strip()
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, formatted_content, img_url, author_name))
-    conn.commit()
-    conn.close()
+    save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/", status_code=303)
 
-# 3. AI 프롬프트 확장 발행
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
     system_directive = (
@@ -375,14 +372,10 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     keyword = keyword_map.get(category, "news")
     
     img_url, author_name = fetch_single_image(keyword)
+    clean_title = title.replace('**', '').replace('*', '').strip()
     final_content = clean_and_format_content(final_content, category)
 
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-                   (category, title, final_content, img_url, author_name))
-    conn.commit()
-    conn.close()
+    save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/", status_code=303)
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
@@ -424,7 +417,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
@@ -439,9 +432,10 @@ def edit_page(article_id: int):
 
 @app.post("/admin/update/{article_id}")
 def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...)):
+    clean_title = title.replace('**', '').replace('*', '').strip()
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, title, content, article_id))
+    cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, clean_title, content, article_id))
     conn.commit()
     conn.close()
     return RedirectResponse(url="/", status_code=303)
