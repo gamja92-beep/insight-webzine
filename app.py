@@ -40,48 +40,55 @@ def init_db():
 
 init_db()
 
-# 🌟 [얼굴 잘림 원천 차단] 인물 클로즈업을 빼고 넓은 풍경 및 단체/오피스 와이드 샷만 골라내는 무작위 이미지 매칭 함수
+# 🌟 [언플래시 버릇 고치기 프로젝트] 1,500장의 방대한 풀에서 무작위 페이지를 찔러 전속 모델을 완전히 퇴출하는 동적 이미지 매칭 함수
 def fetch_perfect_image(category_name):
     random.seed(int(time.time() * 1000000) % 100000000)
 
-    # 얼굴 잘림(초상화 컷)이 절대 나오지 않고 가로로 넓은 풍경/사물/단체 컷만 보장하는 와이드 전용 키워드 풀
+    # 카테고리별로 겹치지 않는 구체적이고 다양한 복합 키워드 풀
     keyword_pools = {
         "AI/테크": [
-            "futuristic technology server room", "digital innovation workspace", 
-            "modern computer coding landscape", "cyber security data center", "advanced robotics laboratory"
+            "artificial intelligence server", "future computer tech", 
+            "digital neural network", "software developer screen", "advanced robotics lab"
         ],
         "경제/주식": [
-            "stock market trading floor graph", "global financial city skyline", 
-            "business office meeting room wide", "modern economy analytics dashboard", "corporate financial district architecture"
+            "stock market financial graph", "global economy chart", 
+            "business corporate office", "wealth investment analysis", "banking currency trade"
         ],
         "세상이야기": [
-            "warm community sharing food outdoor", "friendly neighborhood street landscape", 
-            "people walking together in park wide", "cozy lifestyle town scenery", "peaceful public community event"
+            "warm community sharing food", "volunteers helping neighborhood", 
+            "happy people walking park", "cozy lifestyle town", "inspiring human stories"
         ],
         "시니어/복지": [
-            "group of seniors walking in park outdoor", "active elderly community wellness activity wide", 
-            "peaceful nature landscape park senior", "happy retired people community gathering wide", "senior health wellness center exterior"
+            "happy elderly people smiling", "senior citizen wellness care", 
+            "active retired lifestyle", "elderly health community", "peaceful senior walk"
         ]
     }
     
-    selected_pool = keyword_pools.get(category_name, ["modern office workspace wide", "city landscape architecture", "nature scenic view"])
+    selected_pool = keyword_pools.get(category_name, ["nature landscape", "modern architecture", "abstract design"])
     base_keyword = random.choice(selected_pool)
     
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+        # 1부터 50페이지까지(총 1,500장의 사진 후보) 무작위로 접근하여 고정된 이미지가 절대 반복되지 않게 함
+        page_num = random.randint(1, 50)
         params = {
             "query": base_keyword, 
+            "per_page": 30,
+            "page": page_num,
             "orientation": "landscape"
         }
-        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params, timeout=5)
+        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
         
         if response.status_code == 200:
-            item = response.json()
-            return item["urls"]["regular"], item["user"]["name"]
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                item = random.choice(results)
+                return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 비상 폴백 이미지 리스트 (안전한 와이드 컷들)
+    # 비상 폴백 이미지 리스트
     fallback_images = [
         ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash"),
         ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
@@ -186,7 +193,7 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 와이드 컷 전용 이미지 함수 호출
+    # 새롭게 개조된 검색 기반 다변화 이미지 함수 호출
     img_url, author_name = fetch_perfect_image(category_name)
     
     formatted_content = clean_and_format_content(body_content, category_name)
