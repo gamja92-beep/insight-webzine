@@ -40,50 +40,44 @@ def init_db():
 
 init_db()
 
-# 🌟 [와이드 컷 이미지 풀]
+# 🌟 [머리 잘린 괴물 100% 차단] 순수 와이드 풍경/사물/경기장/도시 전용 풀
 def fetch_bulletproof_image(category_name):
     direct_pools = {
         "AI/테크": [
             ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
             ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
             ("https://images.unsplash.com/photo-1531482615713-2afd69097998", "Unsplash"),
-            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1519389950473-47ba0277781c", "Unsplash")
+            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash")
         ],
         "경제/주식": [
             ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
             ("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f", "Unsplash"),
             ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash"),
-            ("https://images.unsplash.com/photo-1460925895917-afdab827c52f", "Unsplash"),
-            ("https://images.unsplash.com/photo-1559526324-4b87b5e36e44", "Unsplash")
+            ("https://images.unsplash.com/photo-1460925895917-afdab827c52f", "Unsplash")
         ],
         "세상이야기": [
             ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
             ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash"),
             ("https://images.unsplash.com/photo-1469571486292-0ba58a3f068b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash"),
-            ("https://images.unsplash.com/photo-1488521787991-ed7bbaae773c", "Unsplash")
+            ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash")
         ],
         "시니어/복지": [
             ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
+            ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash"),
             ("https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1581579438747-1dc8d17ccce4", "Unsplash"),
-            ("https://images.unsplash.com/photo-1511632765486-a01980e01a18", "Unsplash"),
-            ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash")
+            ("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05", "Unsplash")
         ],
         "연예계뉴스": [
-            ("https://images.unsplash.com/photo-1514525253161-7a46d19cd819", "Unsplash"),
             ("https://images.unsplash.com/photo-1492684223066-81342ee5ff30", "Unsplash"),
-            ("https://images.unsplash.com/photo-1516450360452-9312f5e86fc7", "Unsplash"),
             ("https://images.unsplash.com/photo-1470225620780-dba8ba36b745", "Unsplash"),
-            ("https://images.unsplash.com/photo-1526478806334-5fd488fcaabc", "Unsplash")
+            ("https://images.unsplash.com/photo-1514525253161-7a46d19cd819", "Unsplash"),
+            ("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4", "Unsplash")
         ],
         "스포츠": [
             ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
             ("https://images.unsplash.com/photo-1517649763962-0c623066013b", "Unsplash"),
             ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash"),
-            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
-            ("https://images.unsplash.com/photo-1551958219-acbc608c6377", "Unsplash")
+            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash")
         ]
     }
 
@@ -91,22 +85,22 @@ def fetch_bulletproof_image(category_name):
     
     try:
         search_queries = {
-            "AI/테크": "futuristic technology architecture wide",
-            "경제/주식": "modern city skyline finance wide",
-            "세상이야기": "beautiful nature landscape wide",
+            "AI/테크": "futuristic technology abstract background wide",
+            "경제/주식": "modern city skyscraper architecture wide",
+            "세상이야기": "beautiful nature landscape sceneries wide",
             "시니어/복지": "peaceful nature park scenery wide",
-            "연예계뉴스": "concert stage lights performance wide",
-            "스포츠": "stadium sports action wide"
+            "연예계뉴스": "empty concert stage lights background wide",
+            "스포츠": "empty stadium sports arena field wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 40)}
+        params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 50)}
         response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
         
         if response.status_code == 200:
             data = response.json()
             results = data.get("results", [])
             if results:
-                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people'])]
+                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people', 'player', 'athlete'])]
                 if not safe_results:
                     safe_results = results
                 item = random.choice(safe_results)
@@ -192,19 +186,25 @@ def save_article_to_db(category, title, content, image_url, image_author):
     conn.close()
 
 def generate_ai_article(category_name):
-    # 🌟 [실시간 최신 트렌드 반영 핵심 프롬프트] 현재 시점(2026년 9월)을 명시하고, 지나간 과거 뉴스가 아닌 가장 최근의 핫한 속보/이슈 스타일로 작성하도록 강력 지시
-    current_date_context = "현재 시점은 2026년 9월입니다. 절대 과거의 지나간 사건이나 이미 팀을 옮긴 선수의 옛날 소식을 현재인 것처럼 쓰지 말고, 2026년 9월 현재 가장 주목받는 최신 핫 이슈나 실시간 트렌드, 최신 경기 결과 및 방송/연예계 동향을 반영하여 생생한 속보 형태로 기사를 작성해 주세요."
+    # 🌟 [오보 방지 철저 팩트체크 지침] 가상의 기록이나 미래 날짜를 지어내는 할루시네이션을 원천 차단하도록 매우 엄격하게 프롬프트 지시
+    strict_factcheck_context = (
+        "STRICT FACT-CHECKING RULE: Today is September 4, 2026. "
+        "You are writing for a professional news webzine. "
+        "NEVER fabricate fake records, fake future match dates, or unverified sensational rumors (especially in Sports and Entertainment). "
+        "All news must adhere strictly to verified, realistic, up-to-date facts as of September 2026. "
+        "Do not invent false scores, fictitious game schedules, or fake future timelines. Keep it strictly truthful, accurate, and professional."
+    )
 
     prompts = {
-        "AI/테크": ("AI/테크", f"{current_date_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
-        "경제/주식": ("경제/주식", f"{current_date_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
-        "세상이야기": ("세상이야기", f"{current_date_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
-        "시니어/복지": ("시니어/복지", f"{current_date_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘."),
-        "연예계뉴스": ("연예계뉴스", f"{current_date_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 가장 핫한 연예계 동향, 최근 방영 중인 화제작, 스타들의 가장 최신 근황에 대한 흥미진진한 속보형 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #연예계소식 #스타뉴스 형태로 공백을 두고 붙여 줘."),
-        "스포츠": ("스포츠", f"{current_date_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 진행 중인 실제 최신 리그 경기 결과, 활약 중인 스타 선수들의 생생한 최근 소식, 핫한 스포츠 이슈를 반영한 역동적인 속보형 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #스포츠종합 #경기결과 형태로 공백을 두고 붙여 줘.")
+        "AI/테크": ("AI/테크", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 2026년 9월 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
+        "경제/주식": ("경제/주식", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
+        "세상이야기": ("세상이야기", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
+        "시니어/복지": ("시니어/복지", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘."),
+        "연예계뉴스": ("연예계뉴스", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 4일 현재 검증된 연예계 동향, 최근 방영 중인 작품이나 방송가 이슈에 대해서만 팩트 기반의 깔끔하고 정확한 뉴스 기사를 작성해 주고, 절대 가짜 루머나 지어낸 스토리를 쓰지 마라. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #연예계소식 #스타뉴스 형태로 공백을 두고 붙여 줘."),
+        "스포츠": ("스포츠", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 4일 오늘 기준으로 최근에 실제로 열린 스포츠 경기 결과나 확정된 팩트만을 다룰 것. 절대 존재하지 않는 미래의 경기 일정이나 가짜 대기록(예: 조작된 홈런 기록, 거짓 경기 결과 등)을 지어내어 오보를 내지 마라. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #스포츠종합 #경기결과 형태로 공백을 두고 붙여 줘.")
     }
     
-    cat_info = prompts.get(category_name, ("종합", f"{current_date_context} 최신 트렌드 뉴스 기사 작성"))
+    cat_info = prompts.get(category_name, ("종합", f"{strict_factcheck_context} 최신 트렌드 뉴스 기사 작성"))
     prompt = cat_info[1]
     
     try:
