@@ -40,62 +40,53 @@ def init_db():
 
 init_db()
 
-# 🌟 [전속 모델 은퇴 프로젝트] Unsplash 전체 사진 목록에서 완전히 무작위 페이지와 인덱스를 찔러 매번 100% 새로운 사진을 가져오는 함수
+# 🌟 [얼굴 잘림 원천 차단] 인물 클로즈업을 빼고 넓은 풍경 및 단체/오피스 와이드 샷만 골라내는 무작위 이미지 매칭 함수
 def fetch_perfect_image(category_name):
     random.seed(int(time.time() * 1000000) % 100000000)
 
-    # 카테고리별로 완전히 다른 방대한 영어 검색어 풀 (매번 이 중 하나가 무작위 선택됨)
+    # 얼굴 잘림(초상화 컷)이 절대 나오지 않고 가로로 넓은 풍경/사물/단체 컷만 보장하는 와이드 전용 키워드 풀
     keyword_pools = {
         "AI/테크": [
-            "technology", "futuristic", "code", "cyber", "robotics", 
-            "innovation", "computer", "algorithm", "server", "matrix"
+            "futuristic technology server room", "digital innovation workspace", 
+            "modern computer coding landscape", "cyber security data center", "advanced robotics laboratory"
         ],
         "경제/주식": [
-            "finance", "money", "stock", "trading", "economy", 
-            "wealth", "investment", "bank", "chart", "business"
+            "stock market trading floor graph", "global financial city skyline", 
+            "business office meeting room wide", "modern economy analytics dashboard", "corporate financial district architecture"
         ],
         "세상이야기": [
-            "people", "community", "street", "lifestyle", "warm", 
-            "city", "friends", "culture", "TRAVEL", "happiness"
+            "warm community sharing food outdoor", "friendly neighborhood street landscape", 
+            "people walking together in park wide", "cozy lifestyle town scenery", "peaceful public community event"
         ],
         "시니어/복지": [
-            "elderly", "senior", "care", "health", "park", 
-            "walking", "smile", "retire", "peaceful", "family"
+            "group of seniors walking in park outdoor", "active elderly community wellness activity wide", 
+            "peaceful nature landscape park senior", "happy retired people community gathering wide", "senior health wellness center exterior"
         ]
     }
     
-    selected_pool = keyword_pools.get(category_name, ["nature", "abstract", "architecture", "minimal"])
-    random_query = random.choice(selected_pool)
+    selected_pool = keyword_pools.get(category_name, ["modern office workspace wide", "city landscape architecture", "nature scenic view"])
+    base_keyword = random.choice(selected_pool)
     
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # 페이지 번호를 1부터 200까지 아주 넓게 무작위 지정하여 매번 완전히 다른 사진 배열을 받아옴
-        page_num = random.randint(1, 200)
         params = {
-            "query": random_query,
-            "per_page": 30,
-            "page": page_num,
+            "query": base_keyword, 
             "orientation": "landscape"
         }
-        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
+        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params, timeout=5)
         
         if response.status_code == 200:
-            data = response.json()
-            results = data.get("results", [])
-            if results:
-                item = random.choice(results)
-                return item["urls"]["regular"], item["user"]["name"]
+            item = response.json()
+            return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 비상 폴백 이미지 리스트 (완전 무작위 선택)
+    # 비상 폴백 이미지 리스트 (안전한 와이드 컷들)
     fallback_images = [
-        ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
-        ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
-        ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash"),
-        ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash"),
-        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash"),
-        ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash")
+        ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash"),
+        ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
+        ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
+        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash")
     ]
     return random.choice(fallback_images)
 
@@ -195,7 +186,7 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 완벽하게 개조된 무작위 이미지 함수 호출
+    # 와이드 컷 전용 이미지 함수 호출
     img_url, author_name = fetch_perfect_image(category_name)
     
     formatted_content = clean_and_format_content(body_content, category_name)
