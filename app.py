@@ -210,8 +210,8 @@ def clean_and_format_content(text, category_name="종합"):
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            # 🌟 [붕 뜸 현상 완벽 해결] 글자 크기를 살짝 줄이고(0.98em), 자간(-0.4px)을 좁혀서 연합뉴스처럼 촘촘하게 정돈
-            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left; word-break: keep-all; line-height: 1.7; color: #111111; font-size: 0.98em; letter-spacing: -0.4px;">{line_str}</p>')
+            # 🌟 [붕 뜸 현상 완전 박멸] text-align을 무조건 'left'로 고정하여 단어 간격이 늘어나는 버그 원천 차단
+            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -401,7 +401,7 @@ def index(request: Request, category: str = None, view: int = None):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.7; box-sizing: border-box; }}
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.75; box-sizing: border-box; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
@@ -411,9 +411,9 @@ def index(request: Request, category: str = None, view: int = None):
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 
-                /* 🌟 [프로 뉴스 스타일] 폰트 크기 최적화 및 촘촘한 자간으로 붕 뜸 현상 해결 */
-                .content {{ font-size: 0.98em; color: #111111; word-break: keep-all; text-align: left; line-height: 1.7; letter-spacing: -0.4px; }}
-                .content p {{ margin-bottom: 16px; text-align: left; word-break: keep-all; }}
+                /* 🌟 [완전한 왼쪽 정렬 적용] 붕 뜸 현상을 없애고 연합뉴스처럼 촘촘한 밀도감 확보 */
+                .content {{ font-size: 1em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.75; letter-spacing: -0.3px; }}
+                .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -719,7 +719,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left; word-break: keep-all; line-height: 1.7; color: #111111; font-size: 0.98em; letter-spacing: -0.4px;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
