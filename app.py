@@ -40,7 +40,7 @@ def init_db():
 
 init_db()
 
-# 🌟 [머리 잘린 괴물 100% 차단] 순수 와이드 풍경/사물/경기장/도시 전용 풀
+# 🌟 [괴물 컷 100% 차단] 순수 와이드 풍경/사물/경기장/도시 전용 풀
 def fetch_bulletproof_image(category_name):
     direct_pools = {
         "AI/테크": [
@@ -137,11 +137,11 @@ def clean_and_format_content(text, category_name="종합"):
             continue
         if line_str.startswith('###'):
             title_text = line_str.replace('###', '').strip()
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            processed_lines.append(f'<p style="margin-bottom: 18px; text-align: justify; word-break: keep-all;">{line_str}</p>')
+            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: justify; word-break: keep-all; line-height: 1.8;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -151,8 +151,8 @@ def clean_and_format_content(text, category_name="종합"):
         "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략"],
         "세상이야기": ["#세상이야기", "#라이프스타일", "#감동글", "#일상소통", "#휴식"],
         "시니어/복지": ["#시니어복지", "#은퇴설계", "#건강관리", "#노후준비", "#행복한삶"],
-        "연예계뉴스": ["#연예계소식", "#스타뉴스", "#문화예술", "#방송가트렌드", "#엔터테인먼트"],
-        "스포츠": ["#스포츠종합", "#경기결과", "#선수소식", "#응원열기", "#스포츠하이라이트"]
+        "연예계뉴스": ["#연예계트렌드", "#방송가전망", "#문화예술", "#엔터인사이트", "#미디어분석"],
+        "스포츠": ["#스포츠분석", "#기록전망", "#스포츠인사이트", "#전술연구", "#스포츠칼럼"]
     }
     
     if len(unique_tags) < 3:
@@ -166,7 +166,7 @@ def clean_and_format_content(text, category_name="종합"):
         cleaned_tags.append(t_clean)
 
     clean_tags_str = " ".join(cleaned_tags)
-    tag_html = f"<div style='margin-top: 40px; padding-top: 18px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em; word-spacing: 5px;'>{clean_tags_str}</div>"
+    tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
     return final_html
@@ -186,25 +186,23 @@ def save_article_to_db(category, title, content, image_url, image_author):
     conn.close()
 
 def generate_ai_article(category_name):
-    # 🌟 [오보 방지 철저 팩트체크 지침] 가상의 기록이나 미래 날짜를 지어내는 할루시네이션을 원천 차단하도록 매우 엄격하게 프롬프트 지시
-    strict_factcheck_context = (
-        "STRICT FACT-CHECKING RULE: Today is September 4, 2026. "
-        "You are writing for a professional news webzine. "
-        "NEVER fabricate fake records, fake future match dates, or unverified sensational rumors (especially in Sports and Entertainment). "
-        "All news must adhere strictly to verified, realistic, up-to-date facts as of September 2026. "
-        "Do not invent false scores, fictitious game schedules, or fake future timelines. Keep it strictly truthful, accurate, and professional."
+    strict_insight_context = (
+        "STRICT EDITORIAL RULE: Today is September 4, 2026. "
+        "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
+        "Instead, write professional, analytical insight columns focusing on sports/entertainment industry trends, tactical evolution, player milestone predictions, structural issues, or future outlooks. "
+        "Never fabricate past game scores or fake match results."
     )
 
     prompts = {
-        "AI/테크": ("AI/테크", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 2026년 9월 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
-        "경제/주식": ("경제/주식", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
-        "세상이야기": ("세상이야기", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
-        "시니어/복지": ("시니어/복지", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘."),
-        "연예계뉴스": ("연예계뉴스", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 4일 현재 검증된 연예계 동향, 최근 방영 중인 작품이나 방송가 이슈에 대해서만 팩트 기반의 깔끔하고 정확한 뉴스 기사를 작성해 주고, 절대 가짜 루머나 지어낸 스토리를 쓰지 마라. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #연예계소식 #스타뉴스 형태로 공백을 두고 붙여 줘."),
-        "스포츠": ("스포츠", f"{strict_factcheck_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 4일 오늘 기준으로 최근에 실제로 열린 스포츠 경기 결과나 확정된 팩트만을 다룰 것. 절대 존재하지 않는 미래의 경기 일정이나 가짜 대기록(예: 조작된 홈런 기록, 거짓 경기 결과 등)을 지어내어 오보를 내지 마라. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #스포츠종합 #경기결과 형태로 공백을 두고 붙여 줘.")
+        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
+        "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
+        "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
+        "시니어/복지": ("시니어/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘."),
+        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 절대 가짜 스캔들나 찌라시성 가십을 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #연예계트렌드 #방송가전망 형태로 공백을 두고 붙여 줘."),
+        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 2026년 9월 현재 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측, 스포츠 산업의 구조적 과제 등을 다루는 전문적이고 품격 있는 '스포츠 인사이트 칼럼'을 작성해 주세요. 절대 지난 경기 스코어나 가짜 경기 결과를 기사로 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #스포츠분석 #기록전망 형태로 공백을 두고 붙여 줘.")
     }
     
-    cat_info = prompts.get(category_name, ("종합", f"{strict_factcheck_context} 최신 트렌드 뉴스 기사 작성"))
+    cat_info = prompts.get(category_name, ("종합", f"{strict_insight_context} 최신 트렌드 뉴스 기사 작성"))
     prompt = cat_info[1]
     
     try:
@@ -237,11 +235,55 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
+# 🌟 [메인 홈 및 상세 보기 / 미디어 스타일 그리드 홈페이지]
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, category: str = None):
+def index(request: Request, category: str = None, view: int = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     
+    # 특정 기사 상세 보기 모드인 경우
+    if view:
+        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (view,))
+        art = cursor.fetchone()
+        conn.close()
+        if not art:
+            return RedirectResponse(url="/", status_code=303)
+        
+        detail_html = f"""
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+            <meta charset="UTF-8">
+            <title>{art[2]} - 인사이트 종합 웹진</title>
+            <style>
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 30px; background: #f8f9fa; color: #2c3e50; line-height: 1.8; }}
+                .back-btn {{ display: inline-block; padding: 10px 20px; background: #2980b9; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
+                .back-btn:hover {{ background: #1f618d; }}
+                .article-container {{ background: white; padding: 45px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
+                .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
+                h1 {{ font-size: 2.1em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; }}
+                .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
+                .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
+                .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
+                .content {{ font-size: 1.12em; color: #34495e; }}
+            </style>
+        </head>
+        <body>
+            <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
+            <div class="article-container">
+                <span class="badge">{art[1]}</span>
+                <h1>{art[2]}</h1>
+                <div class="date">발행일시: {art[6]}</div>
+                <img src="{art[4]}" class="article-img">
+                <div class="img-source">📷 Photo by {art[5]} / Unsplash</div>
+                <div class="content">{art[3]}</div>
+            </div>
+        </body>
+        </html>
+        """
+        return detail_html
+
+    # 메인 뉴스 그리드 리스트 모드
     if category and category != "전체":
         cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
     else:
@@ -262,39 +304,44 @@ def index(request: Request, category: str = None):
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
-        <title>인사이트 종합 웹진</title>
+        <title>인사이트 종합 웹진 - 프리미엄 미디어</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 850px; margin: 40px auto; padding: 20px; background: #f4f6f7; color: #333; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #2980b9; padding-bottom: 15px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
-            h1 {{ color: #2c3e50; margin: 0; font-size: 1.6em; }}
-            .admin-link {{ display: inline-block; padding: 8px 16px; background: #2980b9; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; }}
-            .admin-link:hover {{ background: #1f618d; }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; margin: 30px auto; padding: 20px; background: #f0f3f4; color: #333; }}
+            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }}
+            h1 {{ color: #1a252f; margin: 0; font-size: 1.8em; letter-spacing: -0.5px; }}
+            .admin-link {{ display: inline-block; padding: 9px 18px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
+            .admin-link:hover {{ background: #12334a; }}
             
-            .nav-tabs {{ display: flex; gap: 10px; margin: 25px 0; flex-wrap: wrap; }}
-            .tab-item {{ padding: 8px 18px; background: #e2e8f0; color: #475569; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
-            .tab-item:hover, .tab-item.active {{ background: #2980b9; color: white; }}
+            .nav-tabs {{ display: flex; gap: 8px; margin: 25px 0; flex-wrap: wrap; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
+            .tab-item {{ padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
+            .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
 
-            .article {{ background: white; padding: 35px; margin-bottom: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); position: relative; }}
-            .badge {{ display: inline-block; padding: 4px 12px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.85em; font-weight: bold; margin-bottom: 10px; }}
-            .article h2 {{ margin-top: 5px; color: #2c3e50; font-size: 1.5em; line-height: 1.4; }}
-            .date {{ font-size: 0.85em; color: #888; margin-bottom: 20px; }}
+            /* 🌟 방송/신문사 스타일 그리드 카드 레이아웃 */
+            .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; margin-top: 20px; }}
+            .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; position: relative; }}
+            .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
             
-            .article-img {{ width: 100%; max-height: 450px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }}
-            .img-source {{ font-size: 0.8em; color: #777; margin-bottom: 25px; font-style: italic; }}
+            .card-img-wrap {{ width: 100%; height: 200px; overflow: hidden; background: #ddd; }}
+            .card-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
+            .news-card:hover .card-img {{ transform: scale(1.03); }}
             
-            .content {{ line-height: 1.85; font-size: 1.08em; color: #2c3e50; }}
+            .card-body {{ padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }}
+            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
+            .card-title {{ font-size: 1.25em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
+            .card-title a {{ color: inherit; text-decoration: none; }}
+            .card-title a:hover {{ color: #2980b9; }}
             
-            .btn-group {{ position: absolute; top: 35px; right: 35px; display: flex; gap: 6px; }}
-            .edit-btn {{ background: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
-            .edit-btn:hover {{ background: #d68910; }}
-            .delete-btn {{ background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none; font-weight: bold; }}
-            .delete-btn:hover {{ background: #c0392b; }}
+            .card-date {{ font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }}
+            
+            .btn-group {{ position: absolute; top: 15px; right: 15px; display: flex; gap: 5px; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+            .edit-btn {{ color: #d68910; text-decoration: none; font-size: 12px; font-weight: bold; }}
+            .delete-btn {{ color: #c0392b; text-decoration: none; font-size: 12px; font-weight: bold; }}
         </style>
     </head>
     <body>
         <div class="header-flex">
-            <h1>📰 인사이트 종합 웹진 (24시 자동운영)</h1>
-            <a href="/admin" class="admin-link">⚙️ 관리자 페이지</a>
+            <h1>📰 인사이트 종합 미디어 (24시 프리미엄 웹진)</h1>
+            <a href="/admin" class="admin-link">⚙️ 관리자 스튜디오</a>
         </div>
 
         <div class="nav-tabs">
@@ -308,30 +355,35 @@ def index(request: Request, category: str = None):
     html += "</div>"
 
     if not articles:
-        html += "<p style='text-align:center; color:#777; margin-top:50px;'>등록된 기사가 없습니다. 관리자 페이지에서 뉴스를 발행해 보세요!</p>"
+        html += "<p style='text-align:center; color:#777; margin-top:80px; font-size: 1.1em;'>등록된 기사가 없습니다. 관리자 페이지에서 뉴스를 발행해 보세요!</p>"
     else:
+        html += '<div class="news-grid">'
         for art in articles:
             cat_name = art['category'] if art['category'] else '종합'
-            img_tag = f"<img src='{art['image_url']}' class='article-img'>" if art['image_url'] else ""
-            source_tag = f"<div class='img-source'>📷 Photo by {art['image_author']} / Unsplash</div>" if art['image_author'] else ""
+            img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
             
             html += f"""
-            <div class="article">
+            <div class="news-card">
                 <div class="btn-group">
-                    <a href="/admin/edit/{art['id']}" class="edit-btn">✏️ 수정</a>
-                    <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
+                    <a href="/admin/edit/{art['id']}" class="edit-btn">✏️수정</a>
+                    <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️삭제</a>
                 </div>
-                <span class="badge">{cat_name}</span>
-                <h2>{art['title']}</h2>
-                <div class="date">발행일시: {art['created_at']}</div>
-                {img_tag}
-                {source_tag}
-                <div class="content">{art['content']}</div>
+                <div class="card-img-wrap">
+                    <a href="/?view={art['id']}"><img src="{img_url}" class="card-img"></a>
+                </div>
+                <div class="card-body">
+                    <span class="badge">{cat_name}</span>
+                    <h3 class="card-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
+                    <div class="card-date">발행 | {art['created_at']}</div>
+                </div>
             </div>
             """
+        html += "</div>"
+        
     html += "</body></html>"
     return html
 
+# 관리자 페이지
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return """
