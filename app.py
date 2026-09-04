@@ -39,14 +39,22 @@ def init_db():
 
 init_db()
 
-# 단일 고화질 대표 이미지 동적 가져오기
+# 🌟 [이미지 고정 문제 해결] Unsplash 검색 API를 통해 매번 다른 다양한 사진을 랜덤 선택하는 함수
 def fetch_single_image(query_keyword):
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params={"query": query_keyword, "orientation": "landscape"}, timeout=5)
+        # random 대신 search API를 사용하여 페이지를 무작위로 호출하거나 결과 리스트 확보
+        page_num = random.randint(1, 5)
+        params = {"query": query_keyword, "per_page": 20, "page": page_num, "orientation": "landscape"}
+        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
+        
         if response.status_code == 200:
-            item = response.json()
-            return item["urls"]["regular"], item["user"]["name"]
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                # 검색된 여러 장의 사진 중 무작위로 하나를 선택
+                item = random.choice(results)
+                return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
