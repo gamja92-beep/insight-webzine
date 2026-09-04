@@ -10,6 +10,7 @@ from fastapi import FastAPI, Form, Request, Response, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
+from supabase import create_client, Client
 
 app = FastAPI()
 
@@ -19,31 +20,41 @@ MODEL_NAME = "gemini-3.5-flash"
 # Unsplash API 키
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 
-# 🌟 관리자 비밀번호 설정
+# 관리자 비밀번호
 ADMIN_PASSWORD = "1234"
 
 client = genai.Client(api_key=API_KEY)
 
+# 🌟 [철옹성 금고 연동] 외부 Supabase 클라우드 DB 연결 설정
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 def init_db():
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT DEFAULT '종합',
-            title TEXT,
-            content TEXT,
-            image_url TEXT,
-            image_author TEXT,
-            created_at TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
+    if supabase:
+        pass
+    else:
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT DEFAULT '종합',
+                title TEXT,
+                content TEXT,
+                image_url TEXT,
+                image_author TEXT,
+                created_at TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
 
 init_db()
 
-# 🌟 [괴물 컷 100% 차단] 순수 와이드 풍경/사물/경기장/도시 전용 풀
 def fetch_bulletproof_image(category_name):
     direct_pools = {
         "AI/테크": [
@@ -114,7 +125,6 @@ def fetch_bulletproof_image(category_name):
     chosen = random.choice(pool)
     return chosen[0], chosen[1]
 
-# 🌟 [최종 완성 정제 함수]
 def clean_and_format_content(text, category_name="종합"):
     text = text.replace('**', '').replace('__', '')
     
@@ -174,19 +184,99 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
-# 🌟 [한국 시간(KST) 및 영구 저장]
 def save_article_to_db(category, title, content, image_url, image_author):
     kst = timezone(timedelta(hours=9))
     current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
     
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
-        (category, title, content, image_url, image_author, current_time_str)
-    )
-    conn.commit()
-    conn.close()
+    if supabase:
+        supabase.table("articles").insert({
+            "category": category,
+            "title": title,
+            "content": content,
+            "image_url": image_url,
+            "image_author": image_author,
+            "created_at": current_time_str
+        }).execute()
+    else:
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
+            (category, title, content, image_url, image_author, current_time_str)
+        )
+        conn.commit()
+        conn.close()
+
+def get_all_articles(category=None):
+    if supabase:
+        query = supabase.table("articles").select("*").order("id", desc=True)
+        if category and category != "전체":
+            query = query.eq("category", category)
+        response = query.execute()
+        return response.data
+    else:
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        if category and category != "전체":
+            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
+        else:
+            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [{
+            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
+            "image_url": r[4], "image_author": r[5], "created_at": r[6]
+        } for r in rows]
+
+def get_article_by_id(article_id):
+    if supabase:
+        response = supabase.table("articles").select("*").eq("id", article_id).execute()
+        return response.data[0] if response.data else None
+    else:
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (article_id,))
+        r = cursor.fetchone()
+        conn.close()
+        if not r:
+            return None
+        return {
+            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
+            "image_url": r[4], "image_author": r[5], "created_at": r[6]
+        }
+
+# 🌟 [이미지 주소 수정 기능이 포함된 업데이트 함수]
+def update_article_in_db(article_id, category, title, content, image_url):
+    if supabase:
+        update_data = {
+            "category": category,
+            "title": title,
+            "content": content
+        }
+        if image_url and image_url.strip():
+            update_data["image_url"] = image_url.strip()
+            update_data["image_author"] = "User Custom"
+            
+        supabase.table("articles").update(update_data).eq("id", article_id).execute()
+    else:
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        if image_url and image_url.strip():
+            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", (category, title, content, image_url.strip(), "User Custom", article_id))
+        else:
+            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, title, content, article_id))
+        conn.commit()
+        conn.close()
+
+def delete_article_from_db(article_id):
+    if supabase:
+        supabase.table("articles").delete().eq("id", article_id).execute()
+    else:
+        conn = sqlite3.connect("database.db", check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+        conn.commit()
+        conn.close()
 
 def generate_ai_article(category_name):
     strict_insight_context = (
@@ -238,16 +328,10 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 🌟 [독자 전용 메인 홈페이지]
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    
     if view:
-        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (view,))
-        art = cursor.fetchone()
-        conn.close()
+        art = get_article_by_id(view)
         if not art:
             return RedirectResponse(url="/", status_code=303)
         
@@ -256,7 +340,7 @@ def index(request: Request, category: str = None, view: int = None):
         <html lang="ko">
         <head>
             <meta charset="UTF-8">
-            <title>{art[2]} - 인사이트 종합 웹진</title>
+            <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 30px; background: #f8f9fa; color: #2c3e50; line-height: 1.8; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
@@ -273,31 +357,19 @@ def index(request: Request, category: str = None, view: int = None):
         <body>
             <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
             <div class="article-container">
-                <span class="badge">{art[1]}</span>
-                <h1>{art[2]}</h1>
-                <div class="date">발행일시: {art[6]}</div>
-                <img src="{art[4]}" class="article-img">
-                <div class="img-source">📷 Photo by {art[5]} / Unsplash</div>
-                <div class="content">{art[3]}</div>
+                <span class="badge">{art['category']}</span>
+                <h1>{art['title']}</h1>
+                <div class="date">발행일시: {art['created_at']}</div>
+                <img src="{art['image_url']}" class="article-img">
+                <div class="img-source">📷 Photo by {art['image_author']}</div>
+                <div class="content">{art['content']}</div>
             </div>
         </body>
         </html>
         """
         return detail_html
 
-    if category and category != "전체":
-        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
-    else:
-        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
-        
-    rows = cursor.fetchall()
-    conn.close()
-
-    articles = [{
-        "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-        "image_url": r[4], "image_author": r[5], "created_at": r[6]
-    } for r in rows]
-    
+    articles = get_all_articles(category)
     categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
 
     html = f"""
@@ -310,34 +382,27 @@ def index(request: Request, category: str = None, view: int = None):
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; margin: 30px auto; padding: 20px; background: #f0f3f4; color: #333; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.8em; letter-spacing: -0.5px; }}
-            
             .nav-tabs {{ display: flex; gap: 8px; margin: 25px 0; flex-wrap: wrap; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
-
             .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; margin-top: 20px; }}
             .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }}
             .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
-            
             .card-img-wrap {{ width: 100%; height: 200px; overflow: hidden; background: #ddd; }}
             .card-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
             .news-card:hover .card-img {{ transform: scale(1.03); }}
-            
             .card-body {{ padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }}
             .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
-            
             .card-title {{ font-size: 1.2em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
             .card-title a {{ color: inherit; text-decoration: none; }}
             .card-title a:hover {{ color: #2980b9; }}
-            
             .card-date {{ font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }}
         </style>
     </head>
     <body>
         <div class="header-flex">
-            <h1>📰 인사이트 종합 미디어 (24시 프리미엄 웹진)</h1>
+            <h1>📰 인사이트 종합 미디어 (24시 철옹성 웹진)</h1>
         </div>
-
         <div class="nav-tabs">
     """
     
@@ -373,7 +438,6 @@ def index(request: Request, category: str = None, view: int = None):
     html += "</body></html>"
     return html
 
-# 🌟 [비밀 로그인 화면]
 @app.get("/admin", response_class=HTMLResponse)
 def admin_login_page(request: Request, error: str = None):
     err_msg = "<p style='color: #e74c3c; font-size: 0.9em; margin-bottom: 15px;'>비밀번호가 틀렸습니다!</p>" if error else ""
@@ -416,28 +480,23 @@ def admin_login(response: Response, password: str = Form(...)):
     else:
         return RedirectResponse(url="/admin?error=true", status_code=303)
 
-# 🌟 [관리자 스튜디오 대시보드 - 버튼 줄바꿈 방지 정렬 완료]
 @app.get("/admin/studio", response_class=HTMLResponse)
 def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
 
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, category, title, created_at FROM articles ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
+    rows = get_all_articles()
 
     articles_list_html = ""
     for r in rows:
         articles_list_html += f"""
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px 10px; font-size: 0.9em;">{r[1]}</td>
-            <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r[0]}" target="_blank" style="color: #2980b9; text-decoration: none;">{r[2]}</a></td>
-            <td style="padding: 12px 10px; font-size: 0.85em; color: #777; white-space: nowrap;">{r[3]}</td>
-            <td style="padding: 12px 10px; text-align: right; white-space: nowrap; width: 140px;">
-                <a href="/admin/edit/{r[0]}" style="background: #f39c12; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; display: inline-block;">✏️ 수정</a>
-                <a href="/admin/delete/{r[0]}" style="background: #e74c3c; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
+            <td style="padding: 10px; font-size: 0.9em;">{r['category']}</td>
+            <td style="padding: 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
+            <td style="padding: 10px; font-size: 0.85em; color: #777;">{r['created_at']}</td>
+            <td style="padding: 10px; text-align: right;">
+                <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px;">✏️ 수정</a>
+                <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
             </td>
         </tr>
         """
@@ -452,7 +511,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         <meta charset="UTF-8">
         <title>인사이트 웹진 관리자 스튜디오</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 950px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
             h1 {{ color: #2c3e50; }}
             .box {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             button {{ background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
@@ -470,7 +529,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>⚙️ 웹진 관리자 스튜디오 (보안 인증됨)</h1>
+        <h1>🛡️ 철옹성 웹진 관리자 스튜디오 (클라우드 연동됨)</h1>
         
         <div class="box" style="border-top: 5px solid #27ae60;">
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
@@ -533,10 +592,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <table>
                 <thead>
                     <tr style="border-bottom: 2px solid #ccc; text-align: left;">
-                        <th style="padding: 10px; width: 100px;">카테고리</th>
+                        <th style="padding: 10px;">카테고리</th>
                         <th style="padding: 10px;">기사 제목</th>
-                        <th style="padding: 10px; width: 150px;">발행일시</th>
-                        <th style="padding: 10px; width: 140px; text-align: right;">관리</th>
+                        <th style="padding: 10px;">발행일시</th>
+                        <th style="padding: 10px; text-align: right;">관리</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -597,19 +656,17 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
+# 🌟 [이미지 주소 변경 칸이 추가된 수정 페이지]
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
 
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, category, title, content FROM articles WHERE id = ?", (article_id,))
-    art = cursor.fetchone()
-    conn.close()
-
+    art = get_article_by_id(article_id)
     if not art:
         return RedirectResponse(url="/admin/studio", status_code=303)
+
+    current_img = art.get('image_url', '')
 
     return f"""
     <!DOCTYPE html>
@@ -627,26 +684,35 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             textarea {{ height: 250px; resize: vertical; }}
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
+            .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
         </style>
     </head>
     <body>
         <a href="/admin/studio" class="back-link">← 관리자 스튜디오로 돌아가기</a>
         <div class="box">
-            <h1>✏️ 기사 수정하기</h1>
-            <form action="/admin/update/{art[0]}" method="post">
+            <h1>✏️ 기사 및 이미지 수정하기</h1>
+            <form action="/admin/update/{art['id']}" method="post">
                 <label>카테고리</label>
                 <select name="category">
-                    <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
-                    <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
-                    <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
-                    <option value="연예계뉴스" {"selected" if art[1]=="연예계뉴스" else ""}>연예계뉴스</option>
-                    <option value="스포츠" {"selected" if art[1]=="스포츠" else ""}>스포츠</option>
+                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
+                    <option value="경제/주식" {"selected" if art['category']=="경제/주식" else ""}>경제/주식</option>
+                    <option value="세상이야기" {"selected" if art['category']=="세상이야기" else ""}>세상이야기</option>
+                    <option value="시니어/복지" {"selected" if art['category']=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
+                    <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
                 </select>
+                
                 <label>기사 제목</label>
-                <input type="text" name="title" value="{art[2]}" required>
+                <input type="text" name="title" value="{art['title']}" required>
+                
+                <label>이미지 주소 (URL)</label>
+                <input type="text" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소(URL)를 입력하세요">
+                <small style="color: #7f8c8d; display: block; margin-top: -10px; margin-bottom: 15px;">현재 등록된 이미지 미리보기:</small>
+                <img src="{current_img}" class="preview-img" onerror="this.style.display='none'">
+
                 <label>기사 내용</label>
-                <textarea name="content" required>{art[3]}</textarea>
+                <textarea name="content" required>{art['content']}</textarea>
+                
                 <button type="submit">💾 수정 사항 저장하기</button>
             </form>
         </div>
@@ -655,24 +721,16 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     """
 
 @app.post("/admin/update/{article_id}")
-def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), admin_auth: str = Cookie(None)):
+def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), image_url: str = Form(None), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, clean_title, content, article_id))
-    conn.commit()
-    conn.close()
+    update_article_in_db(article_id, category, clean_title, content, image_url)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/delete/{article_id}")
 def delete_article(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
-    conn.commit()
-    conn.close()
+    delete_article_from_db(article_id)
     return RedirectResponse(url="/admin/studio", status_code=303)
