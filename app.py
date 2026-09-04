@@ -235,13 +235,12 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 🌟 [메인 홈 및 상세 보기 / 미디어 스타일 그리드 홈페이지]
+# 🌟 [메인 홈 및 상세 보기 / 안정적인 버튼 배치 미디어 스타일]
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     
-    # 특정 기사 상세 보기 모드인 경우
     if view:
         cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (view,))
         art = cursor.fetchone()
@@ -283,7 +282,6 @@ def index(request: Request, category: str = None, view: int = None):
         """
         return detail_html
 
-    # 메인 뉴스 그리드 리스트 모드
     if category and category != "전체":
         cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
     else:
@@ -316,9 +314,8 @@ def index(request: Request, category: str = None, view: int = None):
             .tab-item {{ padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
 
-            /* 🌟 방송/신문사 스타일 그리드 카드 레이아웃 */
             .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; margin-top: 20px; }}
-            .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; position: relative; }}
+            .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }}
             .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
             
             .card-img-wrap {{ width: 100%; height: 200px; overflow: hidden; background: #ddd; }}
@@ -326,16 +323,21 @@ def index(request: Request, category: str = None, view: int = None):
             .news-card:hover .card-img {{ transform: scale(1.03); }}
             
             .card-body {{ padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
-            .card-title {{ font-size: 1.25em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
+            .badge-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
+            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; }}
+            
+            /* 🌟 [수정/삭제 버튼 안정화] 카드 내부 상단 바에 고정 노출되어 절대 사라지거나 도망가지 않음 */
+            .btn-group {{ display: flex; gap: 6px; }}
+            .edit-btn {{ background: #f39c12; color: white; text-decoration: none; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }}
+            .edit-btn:hover {{ background: #d68910; }}
+            .delete-btn {{ background: #e74c3c; color: white; text-decoration: none; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }}
+            .delete-btn:hover {{ background: #c0392b; }}
+
+            .card-title {{ font-size: 1.2em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
             .card-title a {{ color: inherit; text-decoration: none; }}
             .card-title a:hover {{ color: #2980b9; }}
             
             .card-date {{ font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }}
-            
-            .btn-group {{ position: absolute; top: 15px; right: 15px; display: flex; gap: 5px; background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-            .edit-btn {{ color: #d68910; text-decoration: none; font-size: 12px; font-weight: bold; }}
-            .delete-btn {{ color: #c0392b; text-decoration: none; font-size: 12px; font-weight: bold; }}
         </style>
     </head>
     <body>
@@ -364,15 +366,17 @@ def index(request: Request, category: str = None, view: int = None):
             
             html += f"""
             <div class="news-card">
-                <div class="btn-group">
-                    <a href="/admin/edit/{art['id']}" class="edit-btn">✏️수정</a>
-                    <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️삭제</a>
-                </div>
                 <div class="card-img-wrap">
                     <a href="/?view={art['id']}"><img src="{img_url}" class="card-img"></a>
                 </div>
                 <div class="card-body">
-                    <span class="badge">{cat_name}</span>
+                    <div class="badge-bar">
+                        <span class="badge">{cat_name}</span>
+                        <div class="btn-group">
+                            <a href="/admin/edit/{art['id']}" class="edit-btn">✏️수정</a>
+                            <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️삭제</a>
+                        </div>
+                    </div>
                     <h3 class="card-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
                     <div class="card-date">발행 | {art['created_at']}</div>
                 </div>
