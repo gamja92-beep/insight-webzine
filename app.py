@@ -17,15 +17,11 @@ app = FastAPI()
 API_KEY = os.environ.get("API_KEY", "")
 MODEL_NAME = "gemini-3.5-flash"
 
-# Unsplash API 키
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
-
-# 관리자 비밀번호
 ADMIN_PASSWORD = "1234"
 
 client = genai.Client(api_key=API_KEY)
 
-# 🌟 [철옹성 금고 연동] 외부 Supabase 클라우드 DB 연결 설정
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
@@ -154,8 +150,8 @@ def clean_and_format_content(text, category_name="종합"):
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            # 🌟 [가독성 개선] 양쪽 정렬(justify) 제거 및 진한 검은색(#1a1a1a) 적용
-            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left; word-break: keep-all; line-height: 1.8; color: #1a1a1a;">{line_str}</p>')
+            # 🌟 단어 간격 뭉개짐(양쪽정렬 버그)을 막기 위해 text-align을 left로 확실히 고정하고 자간/줄간격 정돈
+            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left !important; word-break: normal; word-wrap: break-word; line-height: 1.8; color: #1a1a1a;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -352,9 +348,11 @@ def index(request: Request, category: str = None, view: int = None):
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
-                /* 🌟 [상세페이지 본문] 진한 검은색(#1a1a1a) 및 왼쪽 정렬로 띄어쓰기 뭉개짐 완벽 해결 */
-                .content {{ font-size: 1.1em; color: #1a1a1a; word-break: keep-all; text-align: left; line-height: 1.8; }}
-                .content p {{ margin-bottom: 16px; text-align: left; }}
+                
+                /* 🌟 [연합뉴스처럼 완벽한 좌측 정렬 및 촘촘한 단어 간격 적용] */
+                .content {{ font-size: 1.1em; color: #1a1a1a; word-break: normal; word-wrap: break-word; text-align: left !important; line-height: 1.8; }}
+                .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; word-wrap: break-word; }}
+                
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
@@ -387,12 +385,9 @@ def index(request: Request, category: str = None, view: int = None):
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.6em; letter-spacing: -0.5px; word-break: keep-all; }}
-            
-            /* 🌟 [메인 화면 카테고리 탭 정렬 깔끔하게 개선] */
             .nav-tabs {{ display: flex; gap: 6px; margin: 20px 0; flex-wrap: wrap; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ padding: 7px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
-            
             .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }}
             .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }}
             .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
@@ -633,7 +628,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left; word-break: keep-all; color: #1a1a1a;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left !important; word-break: normal; word-wrap: break-word; color: #1a1a1a;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
@@ -745,4 +740,4 @@ def delete_article(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     delete_article_from_db(article_id)
-    return RedirectResponse(url="/admin/studio", status_code=303)
+    return Redirect.Response(url="/admin/studio", status_code=303) if False else RedirectResponse(url="/admin/studio", status_code=303)
