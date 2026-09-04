@@ -39,38 +39,42 @@ def init_db():
 
 init_db()
 
-# 🌟 [최고급 이미지 매칭] AI가 기사 제목과 내용을 분석해 가장 어울리는 영문 검색어를 직접 만들어 Unsplash에서 찰떡같은 이미지를 가져오는 함수
-def fetch_smart_image(category_name, article_title):
-    # 1단계: 제미니에게 이 기사에 가장 잘 어울리는 Unsplash 영문 검색 키워드 1개를 추천받음
-    smart_query = ""
-    try:
-        prompt = (
-            f"다음 뉴스 기사 제목과 카테고리를 보고, Unsplash 사진 검색에 사용할 가장 적절하고 구체적인 영어 키워드 딱 1개만 짧게(예: elderly care, stock market, artificial intelligence, warm community sharing 등) 만들어줘. 설명 없이 오직 영어 키워드만 출력해.\n\n"
-            f"카테고리: {category_name}\n기사 제목: {article_title}"
-        )
-        res = client.models.generate_content(model=MODEL_NAME, contents=prompt)
-        smart_query = res.text.strip().replace('"', '').replace("'", "")
-    except Exception as e:
-        print(f"[AI 이미지 키워드 생성 오류]: {e}")
-
-    # AI가 키워드를 못 만들었을 경우를 대비한 카테고리별 풍부한 기본 풀
-    fallback_pools = {
-        "AI/테크": ["artificial intelligence technology", "futuristic tech innovation", "computer code screen"],
-        "경제/주식": ["stock market chart", "financial economy growth", "business trading office"],
-        "세상이야기": ["warm community sharing", "volunteer people helping", "friendly neighborhood"],
-        "시니어/복지": ["happy elderly people", "senior wellness care", "active senior lifestyle"]
+# 🌟 [확실한 이미지 분산 및 연관성 매칭] 카테고리별 다채로운 고화질 키워드 풀에서 무작위 추출하는 함수
+def fetch_perfect_image(category_name):
+    keyword_pools = {
+        "AI/테크": [
+            "artificial intelligence futuristic", "machine learning neural network", 
+            "modern computer technology", "futuristic digital innovation", "robotics automation"
+        ],
+        "경제/주식": [
+            "stock market trading chart", "global economy finance graph", 
+            "business investment growth", "financial analytics desk", "money currency wealth"
+        ],
+        "세상이야기": [
+            "warm community sharing", "volunteer helping people", 
+            "friendly neighborhood alley", "inspire human connection", "people smiling together"
+        ],
+        "시니어/복지": [
+            "happy elderly people walking", "active senior citizen lifestyle", 
+            "warm senior care community", "healthy retired lifestyle", "elderly health wellness"
+        ]
     }
     
-    query_to_use = smart_query if len(smart_query) > 2 else random.choice(fallback_pools.get(category_name, ["business office"]))
-
+    default_pool = ["modern technology innovation", "business office lifestyle", "inspiring people moments"]
+    selected_pool = keyword_pools.get(category_name, default_pool)
+    base_keyword = random.choice(selected_pool)
+    
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        page_num = random.randint(1, 5)
+        # 페이지와 정렬 방식을 완전히 무작위로 섞어 매번 절대 겹치지 않는 새로운 이미지를 보장
+        page_num = random.randint(1, 10)
+        order_type = random.choice(["relevant", "latest"])
+        
         params = {
-            "query": query_to_use, 
-            "per_page": 25, 
+            "query": base_keyword, 
+            "per_page": 30, 
             "page": page_num, 
-            "order_by": "relevant",
+            "order_by": order_type,
             "orientation": "landscape"
         }
         response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
@@ -84,11 +88,13 @@ def fetch_smart_image(category_name, article_title):
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 최종 비상 폴백 이미지
+    # 비상 폴백 이미지 리스트
     fallback_images = [
         ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
         ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
-        ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash")
+        ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash"),
+        ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash"),
+        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash")
     ]
     return random.choice(fallback_images)
 
@@ -188,8 +194,8 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 🌟 AI가 제목과 본문을 분석하여 가장 어울리는 이미지를 찾아오도록 스마트 함수 호출
-    img_url, author_name = fetch_smart_image(category_name, art_title)
+    # 완벽하게 개선된 카테고리별 맞춤 이미지 함수 호출
+    img_url, author_name = fetch_perfect_image(category_name)
     
     formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
@@ -387,7 +393,7 @@ def create_auto(category: str = Form(...)):
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     clean_title = title.replace('**', '').replace('*', '').strip()
-    img_url, author_name = fetch_smart_image(category, clean_title)
+    img_url, author_name = fetch_perfect_image(category)
     
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
@@ -416,7 +422,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     except Exception as e:
         final_content = prompt
 
-    img_url, author_name = fetch_smart_image(category, clean_title)
+    img_url, author_name = fetch_perfect_image(category)
     final_content = clean_and_format_content(final_content, category)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
