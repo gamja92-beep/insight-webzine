@@ -340,6 +340,7 @@ def index(request: Request, category: str = None, view: int = None):
         <html lang="ko">
         <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 30px; background: #f8f9fa; color: #2c3e50; line-height: 1.8; }}
