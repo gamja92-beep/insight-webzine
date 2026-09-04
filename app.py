@@ -206,12 +206,12 @@ def clean_and_format_content(text, category_name="종합"):
             continue
         if line_str.startswith('###'):
             title_text = line_str.replace('###', '').strip()
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            # 🌟 [가독성 극대화] 왼쪽 정렬(left)로 붕 뜨는 현상 완벽 차단, 적절한 문단 간격과 자간 적용
-            processed_lines.append(f'<p style="margin-bottom: 20px; text-align: left; word-break: keep-all; line-height: 1.8; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;">{line_str}</p>')
+            # 🌟 [붕 뜸 현상 완벽 해결] 글자 크기를 살짝 줄이고(0.98em), 자간(-0.4px)을 좁혀서 연합뉴스처럼 촘촘하게 정돈
+            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left; word-break: keep-all; line-height: 1.7; color: #111111; font-size: 0.98em; letter-spacing: -0.4px;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -236,7 +236,7 @@ def clean_and_format_content(text, category_name="종합"):
         cleaned_tags.append(t_clean)
 
     clean_tags_str = " ".join(cleaned_tags)
-    tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
+    tag_html = f"<div style='margin-top: 30px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.85em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
     return final_html
@@ -386,7 +386,6 @@ scheduler.start()
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
-    # 방문자 기록 로깅
     log_visitor()
 
     if view:
@@ -402,19 +401,19 @@ def index(request: Request, category: str = None, view: int = None):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.7; box-sizing: border-box; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
-                h1 {{ font-size: 1.7em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
+                h1 {{ font-size: 1.6em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 
-                /* 🌟 [프로 뉴스 스타일 상세 본문] 왼쪽 정렬로 붕뜸 현상 해결 및 가독성 최적화 */
-                .content {{ font-size: 1.08em; color: #111111; word-break: keep-all; text-align: left; line-height: 1.8; letter-spacing: -0.3px; }}
-                .content p {{ margin-bottom: 20px; text-align: left; word-break: keep-all; }}
+                /* 🌟 [프로 뉴스 스타일] 폰트 크기 최적화 및 촘촘한 자간으로 붕 뜸 현상 해결 */
+                .content {{ font-size: 0.98em; color: #111111; word-break: keep-all; text-align: left; line-height: 1.7; letter-spacing: -0.4px; }}
+                .content p {{ margin-bottom: 16px; text-align: left; word-break: keep-all; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -608,7 +607,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
         <h1>🛡️ 철옹성 웹진 관리자 스튜디오 (클라우드 연동됨)</h1>
         
-        <!-- 🌟 [방문자 통계 위젯] -->
         <div class="box" style="border-top: 5px solid #e67e22;">
             <h3>📊 실시간 방문자 현황</h3>
             <div style="margin-top: 15px; display: flex; justify-content: space-between;">
@@ -721,7 +719,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 20px; text-align: left; word-break: keep-all; line-height: 1.8; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left; word-break: keep-all; line-height: 1.7; color: #111111; font-size: 0.98em; letter-spacing: -0.4px;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
