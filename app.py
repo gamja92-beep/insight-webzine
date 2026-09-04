@@ -377,26 +377,28 @@ def index(request: Request, category: str = None, view: int = None):
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>인사이트 종합 웹진 - 프리미엄 미디어</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; margin: 30px auto; padding: 20px; background: #f0f3f4; color: #333; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }}
-            h1 {{ color: #1a252f; margin: 0; font-size: 1.8em; letter-spacing: -0.5px; }}
-            .nav-tabs {{ display: flex; gap: 8px; margin: 25px 0; flex-wrap: wrap; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
-            .tab-item {{ padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
-            .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
-            .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; margin-top: 20px; }}
-            .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }}
-            .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
-            .card-img-wrap {{ width: 100%; height: 200px; overflow: hidden; background: #ddd; }}
-            .card-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
-            .news-card:hover .card-img {{ transform: scale(1.03); }}
-            .card-body {{ padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
-            .card-title {{ font-size: 1.2em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
-            .card-title a {{ color: inherit; text-decoration: none; }}
-            .card-title a:hover {{ color: #2980b9; }}
-            .card-date {{ font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }}
+            body { font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }
+            .header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }
+            h1 { color: #1a252f; margin: 0; font-size: 1.8em; letter-spacing: -0.5px; }
+            .nav-tabs { display: flex; gap: 8px; margin: 25px 0; flex-wrap: wrap; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+            .tab-item { padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }
+            .tab-item:hover, .tab-item.active { background: #1b4f72; color: white; }
+            .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+            .news-card { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
+            .news-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+            .card-img-wrap { width: 100%; height: 200px; overflow: hidden; background: #ddd; }
+            .card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+            .news-card:hover .card-img { transform: scale(1.03); }
+            .card-body { padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }
+            .badge { display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }
+            .card-title { font-size: 1.2em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }
+            .card-title a { color: inherit; text-decoration: none; }
+            .card-title a:hover { color: #2980b9; }
+            .card-date { font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }
+            img { max-width: 100% !important; height: auto !important; }
         </style>
     </head>
     <body>
