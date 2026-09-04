@@ -40,56 +40,62 @@ def init_db():
 
 init_db()
 
-# 🌟 [이미지 중복 100% 박멸] Unsplash Random API와 카테고리별 세밀한 키워드 조합을 통한 완전 무작위 동적 이미지 매칭
+# 🌟 [전속 모델 은퇴 프로젝트] Unsplash 전체 사진 목록에서 완전히 무작위 페이지와 인덱스를 찔러 매번 100% 새로운 사진을 가져오는 함수
 def fetch_perfect_image(category_name):
     random.seed(int(time.time() * 1000000) % 100000000)
 
-    # 카테고리별로 아주 구체적이고 다양한 세부 키워드 풀을 구축하여 매번 완전히 다른 사진이 걸리도록 유도
+    # 카테고리별로 완전히 다른 방대한 영어 검색어 풀 (매번 이 중 하나가 무작위 선택됨)
     keyword_pools = {
         "AI/테크": [
-            "artificial intelligence", "machine learning", "futuristic technology", 
-            "cyber security", "data science", "digital server room", "software coding screen", "robotics lab"
+            "technology", "futuristic", "code", "cyber", "robotics", 
+            "innovation", "computer", "algorithm", "server", "matrix"
         ],
         "경제/주식": [
-            "stock market graph", "global economy finance", "business investment", 
-            "financial analytics", "stock trading desk", "corporate office building", "money currency wealth"
+            "finance", "money", "stock", "trading", "economy", 
+            "wealth", "investment", "bank", "chart", "business"
         ],
         "세상이야기": [
-            "warm community sharing", "volunteer helping people", "friendly neighborhood", 
-            "human connection moments", "people smiling together", "cozy lifestyle cafe", "city street scenery"
+            "people", "community", "street", "lifestyle", "warm", 
+            "city", "friends", "culture", "TRAVEL", "happiness"
         ],
         "시니어/복지": [
-            "happy elderly people", "senior citizen wellness", "active senior lifestyle", 
-            "retired couple smiling", "elderly health care", "senior community center", "peaceful nature walk senior"
+            "elderly", "senior", "care", "health", "park", 
+            "walking", "smile", "retire", "peaceful", "family"
         ]
     }
     
-    default_pool = ["modern technology", "business office", "inspiring lifestyle", "global digital network"]
-    selected_pool = keyword_pools.get(category_name, default_pool)
-    base_keyword = random.choice(selected_pool)
+    selected_pool = keyword_pools.get(category_name, ["nature", "abstract", "architecture", "minimal"])
+    random_query = random.choice(selected_pool)
     
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # search 대신 photos/random 엔드포인트를 사용하여 매번 완전히 새로운 랜덤 고화질 사진을 단독 추출
+        # 페이지 번호를 1부터 200까지 아주 넓게 무작위 지정하여 매번 완전히 다른 사진 배열을 받아옴
+        page_num = random.randint(1, 200)
         params = {
-            "query": base_keyword, 
+            "query": random_query,
+            "per_page": 30,
+            "page": page_num,
             "orientation": "landscape"
         }
-        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params, timeout=5)
+        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
         
         if response.status_code == 200:
-            item = response.json()
-            return item["urls"]["regular"], item["user"]["name"]
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                item = random.choice(results)
+                return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 비상 폴백 이미지 리스트
+    # 비상 폴백 이미지 리스트 (완전 무작위 선택)
     fallback_images = [
         ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
         ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
         ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash"),
         ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash"),
-        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash")
+        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash"),
+        ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash")
     ]
     return random.choice(fallback_images)
 
@@ -189,7 +195,7 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 완벽하게 개선된 Unsplash Random API 기반 이미지 함수 호출
+    # 완벽하게 개조된 무작위 이미지 함수 호출
     img_url, author_name = fetch_perfect_image(category_name)
     
     formatted_content = clean_and_format_content(body_content, category_name)
