@@ -32,7 +32,7 @@ def init_db():
             content TEXT,
             image_url TEXT,
             image_author TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT
         )
     """)
     conn.commit()
@@ -40,17 +40,16 @@ def init_db():
 
 init_db()
 
-# 🌟 [언플래시 기강 잡기 프로젝트] AI가 기사 내용을 완벽히 이해해 직접 영어 검색어를 창조하고 와이드 컷을 가져오는 스마트 함수
+# 🌟 [스마트 이미지 매칭 함수]
 def fetch_smart_matched_image(category_name, article_title, article_content):
     random.seed(int(time.time() * 1000000) % 100000000)
 
-    # 1단계: 제미니 AI에게 기사 내용과 제목을 분석시켜 가장 어울리는 Unsplash 영문 검색어 1개를 직접 받아냄
     smart_query = ""
     try:
         analysis_prompt = (
             "당신은 전문 사진 에디터입니다. 아래 뉴스 기사의 제목과 본문을 읽고, Unsplash 사진 검색에 사용할 "
             "가장 직관적이고 구체적인 영어 키워드 딱 1개만 골라주세요. "
-            "(예: 주식/경제면 stock market 또는 finance, 시니어 복지면 elderly care 또는 senior wellness, AI/테크면 artificial intelligence, 따뜻한 이야기면 warm community 등) "
+            "(예: 주식/경제면 stock market 또는 finance, 시니어 복지면 elderly care, AI/테크면 artificial intelligence, 따뜻한 이야기면 warm community sharing 등) "
             "다른 설명이나 문장 부호 없이, 오직 영단어 1~3개로 이루어진 검색어만 영어로 출력하세요.\n\n"
             f"카테고리: {category_name}\n제목: {article_title}\n본문 요약: {article_content[:200]}"
         )
@@ -59,37 +58,30 @@ def fetch_smart_matched_image(category_name, article_title, article_content):
     except Exception as e:
         print(f"[AI 이미지 키워드 분석 오류]: {e}")
 
-    # AI가 키워드를 못 뽑았을 때 쓸 카테고리별 예비 안전 풀
     fallback_pools = {
-        "AI/테크": ["artificial intelligence technology", "futuristic tech innovation", "digital server room"],
-        "경제/주식": ["stock market financial graph", "global economy chart", "business corporate office"],
-        "세상이야기": ["warm community sharing food", "volunteers helping neighborhood", "friendly people street"],
-        "시니어/복지": ["happy elderly people smiling", "senior citizen wellness care", "active retired lifestyle"]
+        "AI/테크": ["artificial intelligence technology", "futuristic tech innovation"],
+        "경제/주식": ["stock market financial graph", "global economy finance"],
+        "세상이야기": ["warm community sharing food", "volunteers helping people"],
+        "시니어/복지": ["happy elderly people smiling", "senior citizen wellness care"]
     }
     
     query_to_use = smart_query if len(smart_query) > 2 else random.choice(fallback_pools.get(category_name, ["modern business office"]))
 
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        page_num = random.randint(1, 30)
         params = {
             "query": query_to_use, 
-            "per_page": 30,
-            "page": page_num,
             "orientation": "landscape"
         }
-        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
+        response = requests.get("https://api.unsplash.com/photos/random", headers=headers, params=params, timeout=5)
         
         if response.status_code == 200:
-            data = response.json()
-            results = data.get("results", [])
-            if results:
-                item = random.choice(results)
+            item = response.json()
+            if "urls" in item and "regular" in item:
                 return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 비상 폴백 이미지 리스트
     fallback_images = [
         ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash"),
         ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
@@ -98,7 +90,7 @@ def fetch_smart_matched_image(category_name, article_title, article_content):
     ]
     return random.choice(fallback_images)
 
-# 🌟 [최종 완성 정제 함수] 해시태그 앞 ### 오염 완벽 차단 및 소제목 포맷팅
+# 🌟 [최종 완성 정제 함수]
 def clean_and_format_content(text, category_name="종합"):
     text = text.replace('**', '').replace('__', '')
     
@@ -156,12 +148,14 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
+# 🌟 [실시간 발행 시간 반영] 기사가 저장되는 순간의 정확한 시스템 시각을 문자열로 삽입
 def save_article_to_db(category, title, content, image_url, image_author):
+    current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO articles (category, title, content, image_url, image_author) VALUES (?, ?, ?, ?, ?)", 
-        (category, title, content, image_url, image_author)
+        "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
+        (category, title, content, image_url, image_author, current_time_str)
     )
     conn.commit()
     conn.close()
@@ -194,9 +188,7 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 🌟 AI가 기사 제목과 내용을 완벽히 분석해 찰떡같은 이미지를 가져오도록 스마트 매칭 함수 호출
     img_url, author_name = fetch_smart_matched_image(category_name, art_title, body_content)
-    
     formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
@@ -467,7 +459,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
