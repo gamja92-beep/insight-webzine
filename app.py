@@ -245,7 +245,6 @@ def get_article_by_id(article_id):
             "image_url": r[4], "image_author": r[5], "created_at": r[6]
         }
 
-# 🌟 [이미지 주소 수정 기능이 포함된 업데이트 함수]
 def update_article_in_db(article_id, category, title, content, image_url):
     if supabase:
         update_data = {
@@ -343,16 +342,17 @@ def index(request: Request, category: str = None, view: int = None):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 30px; background: #f8f9fa; color: #2c3e50; line-height: 1.8; }}
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #2c3e50; line-height: 1.8; box-sizing: border-box; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
-                .article-container {{ background: white; padding: 45px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
+                .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
-                h1 {{ font-size: 2.1em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; }}
+                h1 {{ font-size: 1.8em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; }}
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
-                .content {{ font-size: 1.12em; color: #34495e; }}
+                .content {{ font-size: 1.12em; color: #34495e; word-break: keep-all; }}
+                img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
         <body>
@@ -381,25 +381,25 @@ def index(request: Request, category: str = None, view: int = None):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>인사이트 종합 웹진 - 프리미엄 미디어</title>
         <style>
-            body { font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }
-            .header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }
-            h1 { color: #1a252f; margin: 0; font-size: 1.8em; letter-spacing: -0.5px; }
-            .nav-tabs { display: flex; gap: 8px; margin: 25px 0; flex-wrap: wrap; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-            .tab-item { padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }
-            .tab-item:hover, .tab-item.active { background: #1b4f72; color: white; }
-            .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
-            .news-card { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }
-            .news-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
-            .card-img-wrap { width: 100%; height: 200px; overflow: hidden; background: #ddd; }
-            .card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
-            .news-card:hover .card-img { transform: scale(1.03); }
-            .card-body { padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }
-            .badge { display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }
-            .card-title { font-size: 1.2em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }
-            .card-title a { color: inherit; text-decoration: none; }
-            .card-title a:hover { color: #2980b9; }
-            .card-date { font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }
-            img { max-width: 100% !important; height: auto !important; }
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
+            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }}
+            h1 {{ color: #1a252f; margin: 0; font-size: 1.6em; letter-spacing: -0.5px; word-break: keep-all; }}
+            .nav-tabs {{ display: flex; gap: 8px; margin: 20px 0; flex-wrap: wrap; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
+            .tab-item {{ padding: 8px 14px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
+            .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
+            .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }}
+            .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }}
+            .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
+            .card-img-wrap {{ width: 100%; height: 200px; overflow: hidden; background: #ddd; }}
+            .card-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
+            .news-card:hover .card-img {{ transform: scale(1.03); }}
+            .card-body {{ padding: 18px; display: flex; flex-direction: column; flex-grow: 1; }}
+            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
+            .card-title {{ font-size: 1.15em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; word-break: keep-all; }}
+            .card-title a {{ color: inherit; text-decoration: none; }}
+            .card-title a:hover {{ color: #2980b9; }}
+            .card-date {{ font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }}
+            img {{ max-width: 100% !important; height: auto !important; }}
         </style>
     </head>
     <body>
@@ -449,10 +449,11 @@ def admin_login_page(request: Request, error: str = None):
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>관리자 로그인</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; background: #f0f3f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-            .login-box {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 320px; text-align: center; }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; background: #f0f3f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; box-sizing: border-box; padding: 15px; }}
+            .login-box {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 320px; text-align: center; }}
             h2 {{ color: #1b4f72; margin-bottom: 20px; }}
             input[type="password"] {{ width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; text-align: center; }}
             button {{ width: 100%; padding: 12px; background: #1b4f72; color: white; border: none; border-radius: 5px; font-weight: bold; font-size: 16px; cursor: pointer; }}
@@ -511,11 +512,12 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>인사이트 웹진 관리자 스튜디오</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
-            h1 {{ color: #2c3e50; }}
-            .box {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
+            h1 {{ color: #2c3e50; font-size: 1.5em; }}
+            .box {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             button {{ background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
             button:hover {{ background: #219653; }}
             .manual-btn {{ background: #2980b9; }}
@@ -591,19 +593,21 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 
         <div class="box" style="border-top: 5px solid #34495e;">
             <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
-            <table>
-                <thead>
-                    <tr style="border-bottom: 2px solid #ccc; text-align: left;">
-                        <th style="padding: 10px;">카테고리</th>
-                        <th style="padding: 10px;">기사 제목</th>
-                        <th style="padding: 10px;">발행일시</th>
-                        <th style="padding: 10px; text-align: right;">관리</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {articles_list_html}
-                </tbody>
-            </table>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr style="border-bottom: 2px solid #ccc; text-align: left;">
+                            <th style="padding: 10px;">카테고리</th>
+                            <th style="padding: 10px;">기사 제목</th>
+                            <th style="padding: 10px;">발행일시</th>
+                            <th style="padding: 10px; text-align: right;">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {articles_list_html}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </body>
     </html>
@@ -623,7 +627,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify; word-break: keep-all;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
@@ -658,7 +662,6 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
-# 🌟 [이미지 주소 변경 칸이 추가된 수정 페이지]
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
@@ -675,11 +678,12 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>기사 수정하기</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
-            h1 {{ color: #2c3e50; }}
-            .box {{ background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
+            h1 {{ color: #2c3e50; font-size: 1.5em; }}
+            .box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             button {{ background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
             button:hover {{ background: #d68910; }}
             input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
