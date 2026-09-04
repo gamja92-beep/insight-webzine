@@ -52,7 +52,7 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [최종 완성 정제 함수] 소제목 누락 완벽 보완 및 기호 청소
+# 🌟 [최종 완성 정제 함수] 해시태그 앞 ### 오염 완벽 차단 및 소제목 포맷팅
 def clean_and_format_content(text, category_name="종합"):
     # 1. 마크다운 특수문자 정리
     text = text.replace('**', '').replace('__', '')
@@ -66,20 +66,20 @@ def clean_and_format_content(text, category_name="종합"):
         lines_cleaned.append(line)
     text = '\n'.join(lines_cleaned)
 
-    # 3. 해시태그 분리 및 추출
-    all_words = text.split()
+    # 3. 해시태그 추출 전, 텍스트 내 잔류하는 ### 기호를 먼저 제거하여 오염 방지
+    text_for_tags = re.sub(r'###+', '', text)
+    all_words = text_for_tags.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
     
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 4. 소제목 변환 (### 형태뿐만 아니라, AI가 기호 없이 쓴 짧은 독립 문장 형태의 소제목도 완벽하게 HTML로 승격)
+    # 4. 소제목 변환 (### 형태 및 짧은 독립 문장 형태 처리)
     processed_lines = []
     for line in text.split('\n'):
         line_str = line.strip()
         if not line_str:
             continue
-        # 명시적 ### 소제목이거나, 문장이 짧고(예: 40자 미만) 마침표로 끝나지 않는 독립 소제목 패턴인 경우
         if line_str.startswith('###'):
             title_text = line_str.replace('###', '').strip()
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
@@ -90,7 +90,7 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    # 5. 해시태그 보정 및 깔끔한 출력
+    # 5. 해시태그 보정 및 순수 태그만 깔끔하게 출력
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
@@ -102,8 +102,14 @@ def clean_and_format_content(text, category_name="종합"):
     if len(unique_tags) < 3:
         unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
 
-    clean_tags_list = [t if t.startswith('#') else f"#{t}" for t in unique_tags[:5]]
-    clean_tags_str = " ".join(clean_tags_list)
+    cleaned_tags = []
+    for t in unique_tags[:5]:
+        t_clean = re.sub(r'^[#\s#]+', '#', str(t).strip())
+        if not t_clean.startswith('#'):
+            t_clean = '#' + t_clean
+        cleaned_tags.append(t_clean)
+
+    clean_tags_str = " ".join(cleaned_tags)
     
     tag_html = f"<div style='margin-top: 40px; padding-top: 18px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
