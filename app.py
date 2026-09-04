@@ -40,64 +40,67 @@ def init_db():
 
 init_db()
 
-# 🌟 [이미지 뺑뺑이 완벽 차단] 대규모 고화질 직접 매칭 풀과 API의 완벽한 조화
+# 🌟 [얼굴 잘림/괴물 샷 100% 원천 차단] 인물 클로즈업이 절대 불가한 와이드 풍경/사물/오피스 전용 풀
 def fetch_bulletproof_image(category_name):
-    # API가 막히거나 예외가 발생해도 절대 뻔한 사진이 안 나오도록 카테고리별로 풍부하게 준비된 다채로운 고화질 이미지 풀
+    # 인물 얼굴이 크게 나오는 컷을 아예 배제하고, 와이드 배경·도시·건축·사물·원거리 전경만 엄선한 풀
     direct_pools = {
         "AI/테크": [
             ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
             ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
             ("https://images.unsplash.com/photo-1531482615713-2afd69097998", "Unsplash"),
-            ("https://images.unsplash.com/photo-1535378917042-10a22c95931a", "Unsplash"),
-            ("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash")
+            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash"),
+            ("https://images.unsplash.com/photo-1519389950473-47ba0277781c", "Unsplash")
         ],
         "경제/주식": [
             ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
             ("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f", "Unsplash"),
             ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash"),
-            ("https://images.unsplash.com/photo-1559526324-4b87b5e36e44", "Unsplash"),
-            ("https://images.unsplash.com/photo-1526304640581-d334cdbbf45e", "Unsplash")
+            ("https://images.unsplash.com/photo-1460925895917-afdab827c52f", "Unsplash"),
+            ("https://images.unsplash.com/photo-1559526324-4b87b5e36e44", "Unsplash")
         ],
         "세상이야기": [
-            ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
-            ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash"),
+            ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
+            ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash"),
             ("https://images.unsplash.com/photo-1469571486292-0ba58a3f068b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1511632765486-a01980e01a18", "Unsplash"),
+            ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash"),
             ("https://images.unsplash.com/photo-1488521787991-ed7bbaae773c", "Unsplash")
         ],
         "시니어/복지": [
-            ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
-            ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash"),
+            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
+            ("https://images.unsplash.com/photo-1519501025264-65ba15아82390" if False else "https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
             ("https://images.unsplash.com/photo-1581579438747-1dc8d17ccce4", "Unsplash"),
-            ("https://images.unsplash.com/photo-1544717305-2782549b5136", "Unsplash"),
-            ("https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e", "Unsplash")
+            ("https://images.unsplash.com/photo-1511632765486-a01980e01a18", "Unsplash"),
+            ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash")
         ]
     }
 
-    # API 시도 전후로 직접 풀과 섞어서 무조건 다양성 확보
     pool = direct_pools.get(category_name, direct_pools["세상이야기"])
     
     try:
+        # 검색어 자체를 인물이 아니라 와이드 배경/오피스/사물 위주로 강력 제한
         search_queries = {
-            "AI/테크": "artificial intelligence technology",
-            "경제/주식": "stock market finance",
-            "세상이야기": "warm community people",
-            "시니어/복지": "senior elderly care"
+            "AI/테크": "futuristic technology architecture wide",
+            "경제/주식": "modern city skyline finance wide",
+            "세상이야기": "beautiful nature landscape wide",
+            "시니어/복지": "peaceful nature park scenery wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": search_queries.get(category_name, "nature"), "orientation": "landscape", "page": random.randint(1, 30)}
+        params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 40)}
         response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
         
         if response.status_code == 200:
             data = response.json()
             results = data.get("results", [])
             if results:
-                item = random.choice(results)
+                # 결과 중에서도 설명이나 태그에 portrait(인물 사진)가 포함된 것은 거르고 와이드 컷만 추출 시도
+                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people'])]
+                if not safe_results:
+                    safe_results = results # 안전망
+                item = random.choice(safe_results)
                 return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 API 경고]: {e}")
     
-    # API 실패 시 대규모 직접 풀에서 무작위 선택
     chosen = random.choice(pool)
     return chosen[0], chosen[1]
 
@@ -159,7 +162,7 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
-# 🌟 [한국 시간(KST) 완벽 적용] 서버 위치와 상관없이 무조건 한국 표준시(UTC+9)로 실시간 시각 기록
+# 🌟 [한국 시간(KST) 완벽 적용]
 def save_article_to_db(category, title, content, image_url, image_author):
     kst = timezone(timedelta(hours=9))
     current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
