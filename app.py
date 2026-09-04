@@ -495,9 +495,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <td style="padding: 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
             <td style="padding: 10px; font-size: 0.85em; color: #777;">{r['created_at']}</td>
             <td style="padding: 10px; text-align: right;">
-                <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px;">✏️ 수정</a>
-                <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
-            </td>
+<a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px; white-space: nowrap;">✏️ 수정</a>
+<a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; white-space: nowrap;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
         </tr>
         """
 
