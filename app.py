@@ -39,25 +39,36 @@ def init_db():
 
 init_db()
 
-# 🌟 [이미지 연관성 정밀 제어] 카테고리별 엄격한 키워드 매칭 함수
-def fetch_strict_image(category_name):
-    keyword_pools = {
-        "AI/테크": ["artificial intelligence", "futuristic technology", "computer code", "digital innovation"],
-        "경제/주식": ["stock market chart", "financial graph", "business investment", "economy finance"],
-        "세상이야기": ["warm community", "volunteer people", "friendly neighborhood", "human connection"],
-        "시니어/복지": ["elderly people walking", "senior wellness", "retired lifestyle", "happy elderly care"]
+# 🌟 [최고급 이미지 매칭] AI가 기사 제목과 내용을 분석해 가장 어울리는 영문 검색어를 직접 만들어 Unsplash에서 찰떡같은 이미지를 가져오는 함수
+def fetch_smart_image(category_name, article_title):
+    # 1단계: 제미니에게 이 기사에 가장 잘 어울리는 Unsplash 영문 검색 키워드 1개를 추천받음
+    smart_query = ""
+    try:
+        prompt = (
+            f"다음 뉴스 기사 제목과 카테고리를 보고, Unsplash 사진 검색에 사용할 가장 적절하고 구체적인 영어 키워드 딱 1개만 짧게(예: elderly care, stock market, artificial intelligence, warm community sharing 등) 만들어줘. 설명 없이 오직 영어 키워드만 출력해.\n\n"
+            f"카테고리: {category_name}\n기사 제목: {article_title}"
+        )
+        res = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+        smart_query = res.text.strip().replace('"', '').replace("'", "")
+    except Exception as e:
+        print(f"[AI 이미지 키워드 생성 오류]: {e}")
+
+    # AI가 키워드를 못 만들었을 경우를 대비한 카테고리별 풍부한 기본 풀
+    fallback_pools = {
+        "AI/테크": ["artificial intelligence technology", "futuristic tech innovation", "computer code screen"],
+        "경제/주식": ["stock market chart", "financial economy growth", "business trading office"],
+        "세상이야기": ["warm community sharing", "volunteer people helping", "friendly neighborhood"],
+        "시니어/복지": ["happy elderly people", "senior wellness care", "active senior lifestyle"]
     }
     
-    default_pool = ["modern technology", "business office", "lifestyle people"]
-    selected_pool = keyword_pools.get(category_name, default_pool)
-    base_keyword = random.choice(selected_pool)
-    
+    query_to_use = smart_query if len(smart_query) > 2 else random.choice(fallback_pools.get(category_name, ["business office"]))
+
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        page_num = random.randint(1, 3)
+        page_num = random.randint(1, 5)
         params = {
-            "query": base_keyword, 
-            "per_page": 15, 
+            "query": query_to_use, 
+            "per_page": 25, 
             "page": page_num, 
             "order_by": "relevant",
             "orientation": "landscape"
@@ -73,11 +84,11 @@ def fetch_strict_image(category_name):
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
+    # 최종 비상 폴백 이미지
     fallback_images = [
         ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
         ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
-        ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash"),
-        ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
+        ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash")
     ]
     return random.choice(fallback_images)
 
@@ -154,7 +165,7 @@ def generate_ai_article(category_name):
         "AI/테크": ("AI/테크", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
         "경제/주식": ("경제/주식", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
         "세상이야기": ("세상이야기", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
-        "시니어/복지": ("시니어/복지", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여  줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘.")
+        "시니어/복지": ("시니어/복지", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘.")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드 뉴스 기사 작성"))
@@ -169,7 +180,6 @@ def generate_ai_article(category_name):
     except Exception as e:
         raw_content = f"기사 생성 오류: {e}"
 
-    # 🌟 [제목 길이 폭주 완벽 차단] 첫 줄을 제목으로 잡되, 너무 길면(50자 초과) 첫 문장이나 기본 제목으로 강제 대체
     split_lines = raw_content.split("\n", 1)
     if len(split_lines) > 1 and len(split_lines[0].strip()) <= 55:
         art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
@@ -178,7 +188,9 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    img_url, author_name = fetch_strict_image(category_name)
+    # 🌟 AI가 제목과 본문을 분석하여 가장 어울리는 이미지를 찾아오도록 스마트 함수 호출
+    img_url, author_name = fetch_smart_image(category_name, art_title)
+    
     formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
@@ -374,9 +386,9 @@ def create_auto(category: str = Form(...)):
 
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
-    img_url, author_name = fetch_strict_image(category)
-    
     clean_title = title.replace('**', '').replace('*', '').strip()
+    img_url, author_name = fetch_smart_image(category, clean_title)
+    
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
@@ -384,6 +396,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
 
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
+    clean_title = title.replace('**', '').replace('*', '').strip()
     system_directive = (
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
@@ -392,7 +405,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
         "마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 포함해 주세요."
     )
     
-    full_query = f"{system_directive}\n\n[기사 제목]: {title}\n[작성 요청사항/메모]: {prompt}"
+    full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[작성 요청사항/메모]: {prompt}"
 
     try:
         response = client.models.generate_content(
@@ -403,8 +416,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     except Exception as e:
         final_content = prompt
 
-    img_url, author_name = fetch_strict_image(category)
-    clean_title = title.replace('**', '').replace('*', '').strip()
+    img_url, author_name = fetch_smart_image(category, clean_title)
     final_content = clean_and_format_content(final_content, category)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
@@ -449,7 +461,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
