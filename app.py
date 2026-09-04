@@ -40,39 +40,40 @@ def init_db():
 
 init_db()
 
-# 🌟 [언플래시 버릇 고치기 프로젝트] 1,500장의 방대한 풀에서 무작위 페이지를 찔러 전속 모델을 완전히 퇴출하는 동적 이미지 매칭 함수
-def fetch_perfect_image(category_name):
+# 🌟 [언플래시 기강 잡기 프로젝트] AI가 기사 내용을 완벽히 이해해 직접 영어 검색어를 창조하고 와이드 컷을 가져오는 스마트 함수
+def fetch_smart_matched_image(category_name, article_title, article_content):
     random.seed(int(time.time() * 1000000) % 100000000)
 
-    # 카테고리별로 겹치지 않는 구체적이고 다양한 복합 키워드 풀
-    keyword_pools = {
-        "AI/테크": [
-            "artificial intelligence server", "future computer tech", 
-            "digital neural network", "software developer screen", "advanced robotics lab"
-        ],
-        "경제/주식": [
-            "stock market financial graph", "global economy chart", 
-            "business corporate office", "wealth investment analysis", "banking currency trade"
-        ],
-        "세상이야기": [
-            "warm community sharing food", "volunteers helping neighborhood", 
-            "happy people walking park", "cozy lifestyle town", "inspiring human stories"
-        ],
-        "시니어/복지": [
-            "happy elderly people smiling", "senior citizen wellness care", 
-            "active retired lifestyle", "elderly health community", "peaceful senior walk"
-        ]
+    # 1단계: 제미니 AI에게 기사 내용과 제목을 분석시켜 가장 어울리는 Unsplash 영문 검색어 1개를 직접 받아냄
+    smart_query = ""
+    try:
+        analysis_prompt = (
+            "당신은 전문 사진 에디터입니다. 아래 뉴스 기사의 제목과 본문을 읽고, Unsplash 사진 검색에 사용할 "
+            "가장 직관적이고 구체적인 영어 키워드 딱 1개만 골라주세요. "
+            "(예: 주식/경제면 stock market 또는 finance, 시니어 복지면 elderly care 또는 senior wellness, AI/테크면 artificial intelligence, 따뜻한 이야기면 warm community 등) "
+            "다른 설명이나 문장 부호 없이, 오직 영단어 1~3개로 이루어진 검색어만 영어로 출력하세요.\n\n"
+            f"카테고리: {category_name}\n제목: {article_title}\n본문 요약: {article_content[:200]}"
+        )
+        res = client.models.generate_content(model=MODEL_NAME, contents=analysis_prompt)
+        smart_query = res.text.strip().replace('"', '').replace("'", "").lower()
+    except Exception as e:
+        print(f"[AI 이미지 키워드 분석 오류]: {e}")
+
+    # AI가 키워드를 못 뽑았을 때 쓸 카테고리별 예비 안전 풀
+    fallback_pools = {
+        "AI/테크": ["artificial intelligence technology", "futuristic tech innovation", "digital server room"],
+        "경제/주식": ["stock market financial graph", "global economy chart", "business corporate office"],
+        "세상이야기": ["warm community sharing food", "volunteers helping neighborhood", "friendly people street"],
+        "시니어/복지": ["happy elderly people smiling", "senior citizen wellness care", "active retired lifestyle"]
     }
     
-    selected_pool = keyword_pools.get(category_name, ["nature landscape", "modern architecture", "abstract design"])
-    base_keyword = random.choice(selected_pool)
-    
+    query_to_use = smart_query if len(smart_query) > 2 else random.choice(fallback_pools.get(category_name, ["modern business office"]))
+
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # 1부터 50페이지까지(총 1,500장의 사진 후보) 무작위로 접근하여 고정된 이미지가 절대 반복되지 않게 함
-        page_num = random.randint(1, 50)
+        page_num = random.randint(1, 30)
         params = {
-            "query": base_keyword, 
+            "query": query_to_use, 
             "per_page": 30,
             "page": page_num,
             "orientation": "landscape"
@@ -193,8 +194,8 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 새롭게 개조된 검색 기반 다변화 이미지 함수 호출
-    img_url, author_name = fetch_perfect_image(category_name)
+    # 🌟 AI가 기사 제목과 내용을 완벽히 분석해 찰떡같은 이미지를 가져오도록 스마트 매칭 함수 호출
+    img_url, author_name = fetch_smart_matched_image(category_name, art_title, body_content)
     
     formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
@@ -392,7 +393,7 @@ def create_auto(category: str = Form(...)):
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
     clean_title = title.replace('**', '').replace('*', '').strip()
-    img_url, author_name = fetch_perfect_image(category)
+    img_url, author_name = fetch_smart_matched_image(category, clean_title, content)
     
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
@@ -421,7 +422,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     except Exception as e:
         final_content = prompt
 
-    img_url, author_name = fetch_perfect_image(category)
+    img_url, author_name = fetch_smart_matched_image(category, clean_title, final_content)
     final_content = clean_and_format_content(final_content, category)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
@@ -466,7 +467,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
