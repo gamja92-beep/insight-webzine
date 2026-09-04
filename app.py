@@ -39,33 +39,41 @@ def init_db():
 
 init_db()
 
-# 🌟 [이미지 다양성 및 연관성 대폭 개선] 카테고리별 다양한 검색 풀과 무작위 페이지/정렬을 통한 동적 이미지 매칭
+# 🌟 [이미지 연관성 정밀 개선] 우주/추상 사진 배제 및 시니어/나눔에 특화된 정밀 키워드 동적 매칭 함수
 def fetch_dynamic_image(category_name, article_title=""):
-    # 카테고리별로 훨씬 풍부하고 구체적인 영어 키워드 풀을 마련하여 기사 내용과 연관성 높임
+    # 카테고리별로 우주나 무관한 이미지가 절대 나오지 않고 문맥에 딱 맞는 구체적인 고품질 영어 키워드 세팅
     keyword_pools = {
-        "AI/테크": ["artificial intelligence technology", "futuristic digital circuit", "modern computer software", "cyber security data", "robotics innovation", "smartphone futuristic tech"],
-        "경제/주식": ["stock market chart graph", "global economy finance", "business investment growth", "financial trading office", "money currency wealth", "corporate boardroom analytics"],
-        "세상이야기": ["warm human lifestyle", "happy people daily life", "cozy cafe culture", "beautiful city street", "inspiring travel scenery", "peaceful nature moment"],
-        "시니어/복지": ["elderly senior happiness", "healthy retirement life", "senior healthcare support", "warm care community", "active aging lifestyle", " peaceful elderly walk"]
+        "AI/테크": [
+            "artificial intelligence technology", "futuristic computer coding", 
+            "modern software engineer", "digital innovation screen", "robotics automation lab"
+        ],
+        "경제/주식": [
+            "stock market trading chart", "financial growth graph", 
+            "business investment office", "modern economy analysis", "wealth management desk"
+        ],
+        "세상이야기": [
+            "warm community sharing", "volunteer helping people", 
+            "warm human connection", "friendly neighborhood alley", "kindness and charity people"
+        ],
+        "시니어/복지": [
+            "happy elderly people walking", "active senior citizen lifestyle", 
+            "warm senior care community", "healthy retired lifestyle", "elderly health wellness"
+        ]
     }
     
-    # 기본 폴백 풀
-    default_pool = ["futuristic technology innovation", "modern business economy", "inspiring lifestyle people", "global digital network"]
-    
+    default_pool = ["warm lifestyle people", "happy community sharing", "modern business office"]
     selected_pool = keyword_pools.get(category_name, default_pool)
     base_keyword = random.choice(selected_pool)
     
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # 페이지와 정렬 방식을 무작위로 조합하여 항상 새롭고 다양한 사진이 수집되도록 유도
-        page_num = random.randint(1, 15)
-        order_type = random.choice(["relevant", "latest"])
-        
+        # 연관성(relevant) 위주로 안전하게 검색하되 페이지를 무작위로 주어 다양성 확보
+        page_num = random.randint(1, 5)
         params = {
             "query": base_keyword, 
-            "per_page": 30, 
+            "per_page": 20, 
             "page": page_num, 
-            "order_by": order_type,
+            "order_by": "relevant",
             "orientation": "landscape"
         }
         response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
@@ -79,13 +87,12 @@ def fetch_dynamic_image(category_name, article_title=""):
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 비상 폴백 이미지
+    # 안전한 기본 폴백 이미지
     fallback_images = [
-        ("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"),
-        ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash"),
-        ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
-        ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
-        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash")
+        ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
+        ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
+        ("https://images.unsplash.com/photo-1529156069898-49953e39b3ac", "Unsplash"),
+        ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
     ]
     return random.choice(fallback_images)
 
@@ -194,7 +201,7 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 소식"
         body_content = raw_content
 
-    # 카테고리와 추출된 제목을 함께 고려하여 훨씬 입체적이고 다양한 연관 이미지를 동적 조회
+    # 세밀하게 조정된 이미지 연관성 함수 호출
     img_url, author_name = fetch_dynamic_image(category_name, art_title)
     
     formatted_content = clean_and_format_content(body_content, category_name)
@@ -469,7 +476,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
