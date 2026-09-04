@@ -39,39 +39,25 @@ def init_db():
 
 init_db()
 
-# 🌟 [이미지 연관성 정밀 개선] 우주/추상 사진 배제 및 시니어/나눔에 특화된 정밀 키워드 동적 매칭 함수
-def fetch_dynamic_image(category_name, article_title=""):
-    # 카테고리별로 우주나 무관한 이미지가 절대 나오지 않고 문맥에 딱 맞는 구체적인 고품질 영어 키워드 세팅
+# 🌟 [이미지 연관성 정밀 제어] 카테고리별 엄격한 키워드 매칭 함수
+def fetch_strict_image(category_name):
     keyword_pools = {
-        "AI/테크": [
-            "artificial intelligence technology", "futuristic computer coding", 
-            "modern software engineer", "digital innovation screen", "robotics automation lab"
-        ],
-        "경제/주식": [
-            "stock market trading chart", "financial growth graph", 
-            "business investment office", "modern economy analysis", "wealth management desk"
-        ],
-        "세상이야기": [
-            "warm community sharing", "volunteer helping people", 
-            "warm human connection", "friendly neighborhood alley", "kindness and charity people"
-        ],
-        "시니어/복지": [
-            "happy elderly people walking", "active senior citizen lifestyle", 
-            "warm senior care community", "healthy retired lifestyle", "elderly health wellness"
-        ]
+        "AI/테크": ["artificial intelligence", "futuristic technology", "computer code", "digital innovation"],
+        "경제/주식": ["stock market chart", "financial graph", "business investment", "economy finance"],
+        "세상이야기": ["warm community", "volunteer people", "friendly neighborhood", "human connection"],
+        "시니어/복지": ["elderly people walking", "senior wellness", "retired lifestyle", "happy elderly care"]
     }
     
-    default_pool = ["warm lifestyle people", "happy community sharing", "modern business office"]
+    default_pool = ["modern technology", "business office", "lifestyle people"]
     selected_pool = keyword_pools.get(category_name, default_pool)
     base_keyword = random.choice(selected_pool)
     
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # 연관성(relevant) 위주로 안전하게 검색하되 페이지를 무작위로 주어 다양성 확보
-        page_num = random.randint(1, 5)
+        page_num = random.randint(1, 3)
         params = {
             "query": base_keyword, 
-            "per_page": 20, 
+            "per_page": 15, 
             "page": page_num, 
             "order_by": "relevant",
             "orientation": "landscape"
@@ -87,7 +73,6 @@ def fetch_dynamic_image(category_name, article_title=""):
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 안전한 기본 폴백 이미지
     fallback_images = [
         ("https://images.unsplash.com/photo-1517486808906-6ca8b3f04846", "Unsplash"),
         ("https://images.unsplash.com/photo-1573496359142-b8d87734a5a2", "Unsplash"),
@@ -98,10 +83,8 @@ def fetch_dynamic_image(category_name, article_title=""):
 
 # 🌟 [최종 완성 정제 함수] 해시태그 앞 ### 오염 완벽 차단 및 소제목 포맷팅
 def clean_and_format_content(text, category_name="종합"):
-    # 1. 마크다운 특수문자 정리
     text = text.replace('**', '').replace('__', '')
     
-    # 2. 불필요한 특수 기호 줄 제거
     lines_cleaned = []
     for line in text.split('\n'):
         stripped = line.strip()
@@ -110,7 +93,6 @@ def clean_and_format_content(text, category_name="종합"):
         lines_cleaned.append(line)
     text = '\n'.join(lines_cleaned)
 
-    # 3. 해시태그 추출 전, 텍스트 내 잔류하는 ### 기호를 먼저 제거하여 오염 방지
     text_for_tags = re.sub(r'###+', '', text)
     all_words = text_for_tags.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
@@ -118,7 +100,6 @@ def clean_and_format_content(text, category_name="종합"):
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 4. 소제목 변환 (### 형태 및 짧은 독립 문장 형태 처리)
     processed_lines = []
     for line in text.split('\n'):
         line_str = line.strip()
@@ -134,7 +115,6 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    # 5. 해시태그 보정 및 순수 태그만 깔끔하게 출력
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
@@ -154,13 +134,11 @@ def clean_and_format_content(text, category_name="종합"):
         cleaned_tags.append(t_clean)
 
     clean_tags_str = " ".join(cleaned_tags)
-    
     tag_html = f"<div style='margin-top: 40px; padding-top: 18px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
     return final_html
 
-# 기사 데이터베이스 안전 저장 함수 (Commit 보장)
 def save_article_to_db(category, title, content, image_url, image_author):
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
@@ -171,16 +149,15 @@ def save_article_to_db(category, title, content, image_url, image_author):
     conn.commit()
     conn.close()
 
-# 1. 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘."),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여줘."),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여줘."),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여줘.")
+        "AI/테크": ("AI/테크", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
+        "경제/주식": ("경제/주식", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
+        "세상이야기": ("세상이야기", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
+        "시니어/복지": ("시니어/복지", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여  줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘.")
     }
     
-    cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘."))
+    cat_info = prompts.get(category_name, ("종합", "최신 트렌드 뉴스 기사 작성"))
     prompt = cat_info[1]
     
     try:
@@ -192,18 +169,16 @@ def generate_ai_article(category_name):
     except Exception as e:
         raw_content = f"기사 생성 오류: {e}"
 
-    # 첫 줄(제목)을 깔끔하게 분리
+    # 🌟 [제목 길이 폭주 완벽 차단] 첫 줄을 제목으로 잡되, 너무 길면(50자 초과) 첫 문장이나 기본 제목으로 강제 대체
     split_lines = raw_content.split("\n", 1)
-    if len(split_lines) > 1:
+    if len(split_lines) > 1 and len(split_lines[0].strip()) <= 55:
         art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
         body_content = split_lines[1].strip()
     else:
-        art_title = f"{category_name} 소식"
+        art_title = f"{category_name} 인사이트 리포트"
         body_content = raw_content
 
-    # 세밀하게 조정된 이미지 연관성 함수 호출
-    img_url, author_name = fetch_dynamic_image(category_name, art_title)
-    
+    img_url, author_name = fetch_strict_image(category_name)
     formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
@@ -216,7 +191,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 메인 홈페이지
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -312,7 +286,6 @@ def index(request: Request, category: str = None):
     html += "</body></html>"
     return html
 
-# 관리자 페이지
 @app.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     return """
@@ -401,7 +374,7 @@ def create_auto(category: str = Form(...)):
 
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
-    img_url, author_name = fetch_dynamic_image(category, title)
+    img_url, author_name = fetch_strict_image(category)
     
     clean_title = title.replace('**', '').replace('*', '').strip()
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
@@ -430,7 +403,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     except Exception as e:
         final_content = prompt
 
-    img_url, author_name = fetch_dynamic_image(category, title)
+    img_url, author_name = fetch_strict_image(category)
     clean_title = title.replace('**', '').replace('*', '').strip()
     final_content = clean_and_format_content(final_content, category)
 
