@@ -401,7 +401,7 @@ def index(request: Request, category: str = None, view: int = None):
     </head>
     <body>
         <div class="header-flex">
-            <h1>📰 인사이트 종합 미디어 (24시 철옹성 웹진)</h1>
+            <h1>📰 인사이트 종합 미디어</h1>
         </div>
         <div class="nav-tabs">
     """
