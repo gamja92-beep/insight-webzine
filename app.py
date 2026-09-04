@@ -150,8 +150,8 @@ def clean_and_format_content(text, category_name="종합"):
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            # 🌟 단어 간격 뭉개짐(양쪽정렬 버그)을 막기 위해 text-align을 left로 확실히 고정하고 자간/줄간격 정돈
-            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left !important; word-break: normal; word-wrap: break-word; line-height: 1.8; color: #1a1a1a;">{line_str}</p>')
+            # 🌟 [프로 뉴스 스타일 적용] 양끝 정렬(justify)과 단어 단위 줄바꿈(break-all)으로 연합뉴스처럼 꽉 찬 밀도감 구현
+            processed_lines.append(f'<p style="margin-bottom: 18px; text-align: justify; word-break: break-all; line-height: 1.75; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -339,19 +339,19 @@ def index(request: Request, category: str = None, view: int = None):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #1a1a1a; line-height: 1.8; box-sizing: border-box; }}
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.75; box-sizing: border-box; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
-                h1 {{ font-size: 1.7em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; }}
+                h1 {{ font-size: 1.7em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 
-                /* 🌟 [연합뉴스처럼 완벽한 좌측 정렬 및 촘촘한 단어 간격 적용] */
-                .content {{ font-size: 1.1em; color: #1a1a1a; word-break: normal; word-wrap: break-word; text-align: left !important; line-height: 1.8; }}
-                .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; word-wrap: break-word; }}
+                /* 🌟 [언론사 뉴스 스타일 본문] 양끝 정렬과 촘촘한 밀도감 부여 */
+                .content {{ font-size: 1.08em; color: #111111; word-break: break-all; text-align: justify; line-height: 1.75; letter-spacing: -0.3px; }}
+                .content p {{ margin-bottom: 18px; text-align: justify; word-break: break-all; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -628,13 +628,13 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left !important; word-break: normal; word-wrap: break-word; color: #1a1a1a;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 18px; text-align: justify; word-break: break-all; line-height: 1.75; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-ai-expand")
-def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
+def create_ai_expand(category: str, title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
@@ -740,4 +740,4 @@ def delete_article(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     delete_article_from_db(article_id)
-    return Redirect.Response(url="/admin/studio", status_code=303) if False else RedirectResponse(url="/admin/studio", status_code=303)
+    return RedirectResponse(url="/admin/studio", status_code=303)
