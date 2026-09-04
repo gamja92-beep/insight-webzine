@@ -432,7 +432,6 @@ def index(request: Request, category: str = None, view: int = None):
     articles = get_all_articles(category)
     categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
 
-    # 🌟 [네이버 스타일 분리] 최신 기사 상위 2개는 썸네일 카드형, 나머지는 깔끔한 텍스트 리스트형으로 배치
     featured_articles = articles[:2] if articles else []
     list_articles = articles[2:] if len(articles) > 2 else []
 
@@ -453,12 +452,11 @@ def index(request: Request, category: str = None, view: int = None):
         </div>
         """
 
+    # 🌟 [목록에서 카테고리 뱃지 제거] 네이버 뉴스처럼 제목과 날짜만 깔끔하게 일직선으로 정렬
     list_html = ""
     for art in list_articles:
-        cat_name = art['category'] if art['category'] else '종합'
         list_html += f"""
         <div class="news-list-item">
-            <span class="badge" style="margin-bottom: 0; margin-right: 10px; font-size: 0.75em; padding: 2px 8px;">{cat_name}</span>
             <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
             <span class="list-date">{art['created_at'].split()[0]}</span>
         </div>
@@ -479,7 +477,6 @@ def index(request: Request, category: str = None, view: int = None):
             .tab-item {{ padding: 6px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
             
-            /* 🌟 상단 핵심 썸네일 카드 레이아웃 (네이버 메인 스타일) */
             .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
             .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
             .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
@@ -492,11 +489,11 @@ def index(request: Request, category: str = None, view: int = None):
             .featured-title a:hover {{ color: #2980b9; }}
             .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
 
-            /* 🌟 하단 깔끔한 텍스트 리스트형 레이아웃 (네이버 뉴스 본문 스타일) */
+            /* 🌟 [네이버 뉴스 리스트 스타일] 뱃지를 없애고 제목과 날짜가 깔끔하게 정돈된 형태 */
             .news-list-box {{ background: white; border-radius: 10px; padding: 10px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 15px; }}
-            .news-list-item {{ display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f2f6; }}
+            .news-list-item {{ display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f1f2f6; }}
             .news-list-item:last-child {{ border-bottom: none; }}
-            .list-title {{ flex-grow: 1; font-size: 0.98em; color: #2c3e50; text-decoration: none; font-weight: 600; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }}
+            .list-title {{ flex-grow: 1; font-size: 0.98em; color: #2c3e50; text-decoration: none; font-weight: 600; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 15px; }}
             .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
             .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
 
