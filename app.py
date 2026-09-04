@@ -52,26 +52,35 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [완벽 자동화] 마크다운 정제, 소제목 변환, 해시태그 및 영구저장 세팅 함수
+# 🌟 [완벽 정제 및 포맷팅] 소제목, 불필요 기호, 중복 제목 완벽 차단 함수
 def clean_and_format_content(text, category_name="종합"):
-    # 볼드(**), 이탤릭(*) 등 마크다운 기호 제거
-    text = text.replace('**', '').replace('--', '').replace('*', '')
+    # 1. 마크다운 특수문자 및 불필요한 대시(-) 라인 제거
+    text = text.replace('**', '').replace('--', '*')
     
-    # 해시태그 추출
+    # 의미 없는 단독 하이픈(-) 라인 청소
+    lines_cleaned = []
+    for line in text.split('\n'):
+        stripped_line = line.strip()
+        if stripped_line == '-' or stripped_line == '—':
+            continue
+        lines_cleaned.append(line)
+    text = '\n'.join(lines_cleaned)
+
+    # 2. 해시태그 분리 및 추출
     all_words = text.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
     
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 소제목(###)을 신문 스타일 HTML 태그로 자동 변환
+    # 3. 소제목 변환 (### 형태뿐만 아니라 '1. ', '2. ' 형태의 소제목도 완벽하게 캐치하여 변환)
     text = re.sub(
-        r'###\s*(.*)', 
+        r'(?:###\s*|\d+\.\s+)(.+)', 
         r'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">\1</h3>', 
         text
     )
     
-    # 단락 구분을 명확히 하여 <p> 태그로 감싸기
+    # 4. 단락 구분을 명확히 하여 <p> 태그로 감싸기
     paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
     formatted_paragraphs = []
     
@@ -83,7 +92,7 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(formatted_paragraphs)
     
-    # 해시태그 보정 및 장식
+    # 5. 해시태그 보정 및 깔끔한 출력 장식 (앞에 붙던 쓸데없는 ### 원천 차단)
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
@@ -95,7 +104,9 @@ def clean_and_format_content(text, category_name="종합"):
     if len(unique_tags) < 3:
         unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
 
-    tag_html = "<div style='margin-top: 40px; padding-top: 18px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em; word-spacing: 5px;'>" + " ".join(unique_tags[:5]) + "</div>"
+    # 해시태그 목록 앞에 절대 ###이 붙지 않고 순수 태그만 공백으로 출력되도록 수정
+    clean_tags_str = " ".join([t if t.startswith('#') else f"#{t}" for t in unique_tags[:5]])
+    tag_html = f"<div style='margin-top: 40px; padding-top: 18px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.95em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
     return final_html
@@ -128,19 +139,25 @@ def generate_ai_article(category_name):
             model=MODEL_NAME,
             contents=prompt,
         )
-        content = response.text.strip()
+        raw_content = response.text.strip()
     except Exception as e:
-        content = f"기사 생성 오류: {e}"
+        raw_content = f"기사 생성 오류: {e}"
 
     keyword_map = {"AI/테크": "technology", "경제/주식": "stock market economy", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
     img_keyword = keyword_map.get(category_name, "news")
     
     img_url, author_name = fetch_single_image(img_keyword)
     
-    split_lines = content.split("\n", 1)
-    art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip() if len(split_lines) > 0 else f"{category_name} 소식"
+    # 첫 줄(제목)을 깔끔하게 분리하고 본문에서 확실하게 도려내어 중복 노출 원천 차단
+    split_lines = raw_content.split("\n", 1)
+    if len(split_lines) > 1:
+        art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
+        body_content = split_lines[1].strip()
+    else:
+        art_title = f"{category_name} 소식"
+        body_content = raw_content
     
-    formatted_content = clean_and_format_content(content, category_name)
+    formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
