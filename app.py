@@ -6,7 +6,7 @@ import time
 import requests
 import re
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, Response, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,6 +18,9 @@ MODEL_NAME = "gemini-3.5-flash"
 
 # Unsplash API 키
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
+
+# 🌟 관리자 비밀번호 설정 (원하시는 비밀번호로 언제든 변경 가능합니다!)
+ADMIN_PASSWORD = "1234"
 
 client = genai.Client(api_key=API_KEY)
 
@@ -235,7 +238,7 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 🌟 [메인 홈 및 상세 보기 / 안정적인 버튼 배치 미디어 스타일]
+# 🌟 [독자 전용 메인 홈페이지 - 관리자 버튼 완전 감춤]
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -256,8 +259,8 @@ def index(request: Request, category: str = None, view: int = None):
             <title>{art[2]} - 인사이트 종합 웹진</title>
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 30px; background: #f8f9fa; color: #2c3e50; line-height: 1.8; }}
-                .back-btn {{ display: inline-block; padding: 10px 20px; background: #2980b9; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
-                .back-btn:hover {{ background: #1f618d; }}
+                .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
+                .back-btn:hover {{ background: #12334a; }}
                 .article-container {{ background: white; padding: 45px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
                 h1 {{ font-size: 2.1em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; }}
@@ -307,8 +310,6 @@ def index(request: Request, category: str = None, view: int = None):
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; margin: 30px auto; padding: 20px; background: #f0f3f4; color: #333; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 30px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.8em; letter-spacing: -0.5px; }}
-            .admin-link {{ display: inline-block; padding: 9px 18px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
-            .admin-link:hover {{ background: #12334a; }}
             
             .nav-tabs {{ display: flex; gap: 8px; margin: 25px 0; flex-wrap: wrap; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ padding: 8px 16px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 14px; transition: 0.2s; }}
@@ -323,16 +324,8 @@ def index(request: Request, category: str = None, view: int = None):
             .news-card:hover .card-img {{ transform: scale(1.03); }}
             
             .card-body {{ padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
-            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; }}
+            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
             
-            /* 🌟 [수정/삭제 버튼 안정화] 카드 내부 상단 바에 고정 노출되어 절대 사라지거나 도망가지 않음 */
-            .btn-group {{ display: flex; gap: 6px; }}
-            .edit-btn {{ background: #f39c12; color: white; text-decoration: none; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }}
-            .edit-btn:hover {{ background: #d68910; }}
-            .delete-btn {{ background: #e74c3c; color: white; text-decoration: none; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }}
-            .delete-btn:hover {{ background: #c0392b; }}
-
             .card-title {{ font-size: 1.2em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
             .card-title a {{ color: inherit; text-decoration: none; }}
             .card-title a:hover {{ color: #2980b9; }}
@@ -343,7 +336,6 @@ def index(request: Request, category: str = None, view: int = None):
     <body>
         <div class="header-flex">
             <h1>📰 인사이트 종합 미디어 (24시 프리미엄 웹진)</h1>
-            <a href="/admin" class="admin-link">⚙️ 관리자 스튜디오</a>
         </div>
 
         <div class="nav-tabs">
@@ -357,7 +349,7 @@ def index(request: Request, category: str = None, view: int = None):
     html += "</div>"
 
     if not articles:
-        html += "<p style='text-align:center; color:#777; margin-top:80px; font-size: 1.1em;'>등록된 기사가 없습니다. 관리자 페이지에서 뉴스를 발행해 보세요!</p>"
+        html += "<p style='text-align:center; color:#777; margin-top:80px; font-size: 1.1em;'>등록된 기사가 없습니다.</p>"
     else:
         html += '<div class="news-grid">'
         for art in articles:
@@ -370,13 +362,7 @@ def index(request: Request, category: str = None, view: int = None):
                     <a href="/?view={art['id']}"><img src="{img_url}" class="card-img"></a>
                 </div>
                 <div class="card-body">
-                    <div class="badge-bar">
-                        <span class="badge">{cat_name}</span>
-                        <div class="btn-group">
-                            <a href="/admin/edit/{art['id']}" class="edit-btn">✏️수정</a>
-                            <a href="/admin/delete/{art['id']}" class="delete-btn" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️삭제</a>
-                        </div>
-                    </div>
+                    <span class="badge">{cat_name}</span>
                     <h3 class="card-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
                     <div class="card-date">발행 | {art['created_at']}</div>
                 </div>
@@ -387,34 +373,106 @@ def index(request: Request, category: str = None, view: int = None):
     html += "</body></html>"
     return html
 
-# 관리자 페이지
+# 🌟 [비밀 로그인 화면] /admin으로 접속하면 먼저 비밀번호를 물어봄
 @app.get("/admin", response_class=HTMLResponse)
-def admin_page(request: Request):
-    return """
+def admin_login_page(request: Request, error: str = None):
+    err_msg = "<p style='color: #e74c3c; font-size: 0.9em; margin-bottom: 15px;'>비밀번호가 틀렸습니다!</p>" if error else ""
+    return f"""
     <!DOCTYPE html>
     <html lang="ko">
     <head>
         <meta charset="UTF-8">
-        <title>인사이트 웹진 관리자</title>
+        <title>관리자 로그인</title>
         <style>
-            body { font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f4f6f7; }
-            h1 { color: #2c3e50; }
-            .box { background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-            button { background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
-            button:hover { background: #219653; }
-            .manual-btn { background: #2980b9; }
-            .manual-btn:hover { background: #1f618d; }
-            .ai-expand-btn { background: #8e44ad; }
-            .ai-expand-btn:hover { background: #732d91; }
-            input[type="text"], select, textarea { width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }
-            textarea { height: 150px; resize: vertical; }
-            label { font-weight: bold; color: #34495e; display: block; margin-top: 10px; }
-            .back-link { display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }
+            body {{ font-family: 'Malgun Gothic', sans-serif; background: #f0f3f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+            .login-box {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 320px; text-align: center; }}
+            h2 {{ color: #1b4f72; margin-bottom: 20px; }}
+            input[type="password"] {{ width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; text-align: center; }}
+            button {{ width: 100%; padding: 12px; background: #1b4f72; color: white; border: none; border-radius: 5px; font-weight: bold; font-size: 16px; cursor: pointer; }}
+            button:hover {{ background: #12334a; }}
+            .back-link {{ display: block; margin-top: 15px; color: #7f8c8d; text-decoration: none; font-size: 0.9em; }}
+        </style>
+    </head>
+    <body>
+        <div class="login-box">
+            <h2>🔐 관리자 인증</h2>
+            {err_msg}
+            <form action="/admin/login" method="post">
+                <input type="password" name="password" placeholder="비밀번호를 입력하세요" required autofocus>
+                <button type="submit">로그인</button>
+            </form>
+            <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
+        </div>
+    </body>
+    </html>
+    """
+
+# 🌟 [로그인 검증 및 쿠키 발급]
+@app.post("/admin/login")
+def admin_login(response: Response, password: str = Form(...)):
+    if password == ADMIN_PASSWORD:
+        resp = RedirectResponse(url="/admin/studio", status_code=303)
+        # 1일간 유지되는 로그인 쿠키 발행
+        resp.set_cookie(key="admin_auth", value="authenticated", max_age=86400)
+        return resp
+    else:
+        return RedirectResponse(url="/admin?error=true", status_code=303)
+
+# 🌟 [보안이 걸린 진짜 관리자 스튜디오 대시보드]
+@app.get("/admin/studio", response_class=HTMLResponse)
+def admin_studio(request: Request, admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
+
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, category, title, created_at FROM articles ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    articles_list_html = ""
+    for r in rows:
+        articles_list_html += f"""
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px; font-size: 0.9em;">{r[1]}</td>
+            <td style="padding: 10px; font-weight: bold;"><a href="/?view={r[0]}" target="_blank" style="color: #2980b9; text-decoration: none;">{r[2]}</a></td>
+            <td style="padding: 10px; font-size: 0.85em; color: #777;">{r[3]}</td>
+            <td style="padding: 10px; text-align: right;">
+                <a href="/admin/edit/{r[0]}" style="background: #f39c12; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px;">✏️ 수정</a>
+                <a href="/admin/delete/{r[0]}" style="background: #e74c3c; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
+            </td>
+        </tr>
+        """
+
+    if not articles_list_html:
+        articles_list_html = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: #777;'>등록된 기사가 없습니다.</td></tr>"
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <title>인사이트 웹진 관리자 스튜디오</title>
+        <style>
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
+            h1 {{ color: #2c3e50; }}
+            .box {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            button {{ background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
+            button:hover {{ background: #219653; }}
+            .manual-btn {{ background: #2980b9; }}
+            .manual-btn:hover {{ background: #1f618d; }}
+            .ai-expand-btn {{ background: #8e44ad; }}
+            .ai-expand-btn:hover {{ background: #732d91; }}
+            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
+            textarea {{ height: 150px; resize: vertical; }}
+            label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
+            .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
         </style>
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>⚙️ 웹진 관리자 스튜디오</h1>
+        <h1>⚙️ 웹진 관리자 스튜디오 (보안 인증됨)</h1>
         
         <div class="box" style="border-top: 5px solid #27ae60;">
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
@@ -471,27 +529,50 @@ def admin_page(request: Request):
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
+
+        <div class="box" style="border-top: 5px solid #34495e;">
+            <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
+            <table>
+                <thead>
+                    <tr style="border-bottom: 2px solid #ccc; text-align: left;">
+                        <th style="padding: 10px;">카테고리</th>
+                        <th style="padding: 10px;">기사 제목</th>
+                        <th style="padding: 10px;">발행일시</th>
+                        <th style="padding: 10px; text-align: right;">관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {articles_list_html}
+                </tbody>
+            </table>
+        </div>
     </body>
     </html>
     """
 
 @app.post("/admin/create-auto")
-def create_auto(category: str = Form(...)):
+def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
     generate_ai_article(category)
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-manual")
-def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
+def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-ai-expand")
-def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...)):
+def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
     system_directive = (
         "당신은 전문 수석 뉴스 기자입니다. "
@@ -516,10 +597,13 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     final_content = clean_and_format_content(final_content, category)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
-def edit_page(article_id: int):
+def edit_page(article_id: int, admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
+
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("SELECT id, category, title, content FROM articles WHERE id = ?", (article_id,))
@@ -527,7 +611,7 @@ def edit_page(article_id: int):
     conn.close()
 
     if not art:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url="/admin/studio", status_code=303)
 
     return f"""
     <!DOCTYPE html>
@@ -548,7 +632,7 @@ def edit_page(article_id: int):
         </style>
     </head>
     <body>
-        <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
+        <a href="/admin/studio" class="back-link">← 관리자 스튜디오로 돌아가기</a>
         <div class="box">
             <h1>✏️ 기사 수정하기</h1>
             <form action="/admin/update/{art[0]}" method="post">
@@ -573,20 +657,24 @@ def edit_page(article_id: int):
     """
 
 @app.post("/admin/update/{article_id}")
-def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...)):
+def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, clean_title, content, article_id))
     conn.commit()
     conn.close()
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/delete/{article_id}")
-def delete_article(article_id: int):
+def delete_article(article_id: int, admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
     conn.commit()
     conn.close()
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url="/admin/studio", status_code=303)
