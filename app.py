@@ -39,16 +39,33 @@ def init_db():
 
 init_db()
 
-# 🌟 [이미지 고정 문제 완전 해결] Unsplash 검색 결과에서 무작위로 다양한 이미지를 확실히 가져오는 함수
-def fetch_single_image(query_keyword):
+# 🌟 [이미지 다양성 및 연관성 대폭 개선] 카테고리별 다양한 검색 풀과 무작위 페이지/정렬을 통한 동적 이미지 매칭
+def fetch_dynamic_image(category_name, article_title=""):
+    # 카테고리별로 훨씬 풍부하고 구체적인 영어 키워드 풀을 마련하여 기사 내용과 연관성 높임
+    keyword_pools = {
+        "AI/테크": ["artificial intelligence technology", "futuristic digital circuit", "modern computer software", "cyber security data", "robotics innovation", "smartphone futuristic tech"],
+        "경제/주식": ["stock market chart graph", "global economy finance", "business investment growth", "financial trading office", "money currency wealth", "corporate boardroom analytics"],
+        "세상이야기": ["warm human lifestyle", "happy people daily life", "cozy cafe culture", "beautiful city street", "inspiring travel scenery", "peaceful nature moment"],
+        "시니어/복지": ["elderly senior happiness", "healthy retirement life", "senior healthcare support", "warm care community", "active aging lifestyle", " peaceful elderly walk"]
+    }
+    
+    # 기본 폴백 풀
+    default_pool = ["futuristic technology innovation", "modern business economy", "inspiring lifestyle people", "global digital network"]
+    
+    selected_pool = keyword_pools.get(category_name, default_pool)
+    base_keyword = random.choice(selected_pool)
+    
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        # 페이지 번호를 1부터 10 사이로 넓게 잡고 최신/관련순 정렬을 무작위로 섞어 매번 다른 결과 유도
-        page_num = random.randint(1, 10)
+        # 페이지와 정렬 방식을 무작위로 조합하여 항상 새롭고 다양한 사진이 수집되도록 유도
+        page_num = random.randint(1, 15)
+        order_type = random.choice(["relevant", "latest"])
+        
         params = {
-            "query": query_keyword, 
+            "query": base_keyword, 
             "per_page": 30, 
             "page": page_num, 
+            "order_by": order_type,
             "orientation": "landscape"
         }
         response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=5)
@@ -57,18 +74,18 @@ def fetch_single_image(query_keyword):
             data = response.json()
             results = data.get("results", [])
             if results:
-                # 검색된 여러 장의 사진 중 완전히 무작위로 하나를 선택
                 item = random.choice(results)
                 return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 검색 오류]: {e}")
     
-    # 만약의 경우를 대비한 다양한 기본 폴백 이미지 리스트
+    # 비상 폴백 이미지
     fallback_images = [
         ("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"),
         ("https://images.unsplash.com/photo-1451187580459-43490279c0fa", "Unsplash"),
         ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
-        ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash")
+        ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
+        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "Unsplash")
     ]
     return random.choice(fallback_images)
 
@@ -150,15 +167,14 @@ def save_article_to_db(category, title, content, image_url, image_author):
 # 1. 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘.", "technology innovation"),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여줘.", "stock market finance"),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여줘.", "warm lifestyle people"),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여줘.", "senior elderly care")
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘."),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여줘."),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여줘."),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여줘.")
     }
     
-    cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
+    cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘."))
     prompt = cat_info[1]
-    img_keyword = cat_info[2]
     
     try:
         response = client.models.generate_content(
@@ -169,9 +185,7 @@ def generate_ai_article(category_name):
     except Exception as e:
         raw_content = f"기사 생성 오류: {e}"
 
-    img_url, author_name = fetch_single_image(img_keyword)
-    
-    # 첫 줄(제목)을 깔끔하게 분리하고 본문에서 확실하게 도려내어 중복 노출 원천 차단
+    # 첫 줄(제목)을 깔끔하게 분리
     split_lines = raw_content.split("\n", 1)
     if len(split_lines) > 1:
         art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
@@ -179,6 +193,9 @@ def generate_ai_article(category_name):
     else:
         art_title = f"{category_name} 소식"
         body_content = raw_content
+
+    # 카테고리와 추출된 제목을 함께 고려하여 훨씬 입체적이고 다양한 연관 이미지를 동적 조회
+    img_url, author_name = fetch_dynamic_image(category_name, art_title)
     
     formatted_content = clean_and_format_content(body_content, category_name)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
@@ -377,9 +394,7 @@ def create_auto(category: str = Form(...)):
 
 @app.post("/admin/create-manual")
 def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...)):
-    keyword_map = {"AI/테크": "technology innovation", "경제/주식": "stock market finance", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
-    keyword = keyword_map.get(category, "news")
-    img_url, author_name = fetch_single_image(keyword)
+    img_url, author_name = fetch_dynamic_image(category, title)
     
     clean_title = title.replace('**', '').replace('*', '').strip()
     formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: justify;'>{p}</p>" for p in content.split('\n') if p.strip()])
@@ -408,10 +423,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     except Exception as e:
         final_content = prompt
 
-    keyword_map = {"AI/테크": "technology innovation", "경제/주식": "stock market finance", "세상이야기": "warm lifestyle people", "시니어/복지": "senior elderly care"}
-    keyword = keyword_map.get(category, "technology")
-    
-    img_url, author_name = fetch_single_image(keyword)
+    img_url, author_name = fetch_dynamic_image(category, title)
     clean_title = title.replace('**', '').replace('*', '').strip()
     final_content = clean_and_format_content(final_content, category)
 
@@ -457,7 +469,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
