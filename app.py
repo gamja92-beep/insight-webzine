@@ -210,7 +210,6 @@ def clean_and_format_content(text, category_name="종합"):
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            # 🌟 [붕 뜸 현상 완전 박멸] text-align을 무조건 'left'로 고정하여 단어 간격이 늘어나는 버그 원천 차단
             processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
@@ -410,11 +409,8 @@ def index(request: Request, category: str = None, view: int = None):
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
-                
-                /* 🌟 [완전한 왼쪽 정렬 적용] 붕 뜸 현상을 없애고 연합뉴스처럼 촘촘한 밀도감 확보 */
                 .content {{ font-size: 1em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.75; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; }}
-                
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
@@ -436,6 +432,38 @@ def index(request: Request, category: str = None, view: int = None):
     articles = get_all_articles(category)
     categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
 
+    # 🌟 [네이버 스타일 분리] 최신 기사 상위 2개는 썸네일 카드형, 나머지는 깔끔한 텍스트 리스트형으로 배치
+    featured_articles = articles[:2] if articles else []
+    list_articles = articles[2:] if len(articles) > 2 else []
+
+    featured_html = ""
+    for art in featured_articles:
+        cat_name = art['category'] if art['category'] else '종합'
+        img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
+        featured_html += f"""
+        <div class="featured-card">
+            <div class="featured-img-wrap">
+                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
+            </div>
+            <div class="featured-body">
+                <span class="badge">{cat_name}</span>
+                <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
+                <div class="card-date">발행 | {art['created_at']}</div>
+            </div>
+        </div>
+        """
+
+    list_html = ""
+    for art in list_articles:
+        cat_name = art['category'] if art['category'] else '종합'
+        list_html += f"""
+        <div class="news-list-item">
+            <span class="badge" style="margin-bottom: 0; margin-right: 10px; font-size: 0.75em; padding: 2px 8px;">{cat_name}</span>
+            <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+            <span class="list-date">{art['created_at'].split()[0]}</span>
+        </div>
+        """
+
     html = f"""
     <!DOCTYPE html>
     <html lang="ko">
@@ -444,24 +472,34 @@ def index(request: Request, category: str = None, view: int = None):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>인사이트 종합 웹진 - 프리미엄 미디어</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 1100px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 20px; background: white; padding: 25px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }}
-            h1 {{ color: #1a252f; margin: 0; font-size: 1.6em; letter-spacing: -0.5px; word-break: keep-all; }}
-            .nav-tabs {{ display: flex; gap: 6px; margin: 20px 0; flex-wrap: wrap; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
-            .tab-item {{ padding: 7px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
+            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }}
+            h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
+            .nav-tabs {{ display: flex; gap: 6px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
+            .tab-item {{ padding: 6px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
-            .news-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }}
-            .news-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; }}
-            .news-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }}
-            .card-img-wrap {{ width: 100%; height: 200px; overflow: hidden; background: #ddd; }}
-            .card-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
-            .news-card:hover .card-img {{ transform: scale(1.03); }}
-            .card-body {{ padding: 18px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge {{ display: inline-block; padding: 3px 10px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.78em; font-weight: bold; margin-bottom: 10px; width: fit-content; }}
-            .card-title {{ font-size: 1.15em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; word-break: keep-all; }}
-            .card-title a {{ color: inherit; text-decoration: none; }}
-            .card-title a:hover {{ color: #2980b9; }}
-            .card-date {{ font-size: 0.8em; color: #95a5a6; margin-top: auto; padding-top: 15px; border-top: 1px solid #f1f2f6; }}
+            
+            /* 🌟 상단 핵심 썸네일 카드 레이아웃 (네이버 메인 스타일) */
+            .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
+            .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
+            .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
+            .featured-card:hover .featured-img {{ transform: scale(1.03); }}
+            .featured-body {{ padding: 15px; display: flex; flex-direction: column; flex-grow: 1; }}
+            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; margin-bottom: 8px; width: fit-content; }}
+            .featured-title {{ font-size: 1.1em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; word-break: keep-all; }}
+            .featured-title a {{ color: inherit; text-decoration: none; }}
+            .featured-title a:hover {{ color: #2980b9; }}
+            .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
+
+            /* 🌟 하단 깔끔한 텍스트 리스트형 레이아웃 (네이버 뉴스 본문 스타일) */
+            .news-list-box {{ background: white; border-radius: 10px; padding: 10px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 15px; }}
+            .news-list-item {{ display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f2f6; }}
+            .news-list-item:last-child {{ border-bottom: none; }}
+            .list-title {{ flex-grow: 1; font-size: 0.98em; color: #2c3e50; text-decoration: none; font-weight: 600; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px; }}
+            .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
+            .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
+
             img {{ max-width: 100% !important; height: auto !important; }}
         </style>
     </head>
@@ -482,24 +520,10 @@ def index(request: Request, category: str = None, view: int = None):
     if not articles:
         html += "<p style='text-align:center; color:#777; margin-top:80px; font-size: 1.1em;'>등록된 기사가 없습니다.</p>"
     else:
-        html += '<div class="news-grid">'
-        for art in articles:
-            cat_name = art['category'] if art['category'] else '종합'
-            img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-            
-            html += f"""
-            <div class="news-card">
-                <div class="card-img-wrap">
-                    <a href="/?view={art['id']}"><img src="{img_url}" class="card-img"></a>
-                </div>
-                <div class="card-body">
-                    <span class="badge">{cat_name}</span>
-                    <h3 class="card-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
-                    <div class="card-date">발행 | {art['created_at']}</div>
-                </div>
-            </div>
-            """
-        html += "</div>"
+        if featured_html:
+            html += f'<div class="featured-grid">{featured_html}</div>'
+        if list_html:
+            html += f'<div class="news-list-box">{list_html}</div>'
         
     html += "</body></html>"
     return html
