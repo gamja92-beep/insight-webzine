@@ -52,12 +52,12 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [최종 정제 및 포맷팅] 오직 명확한 ### 소제목만 변환하고 혹을 완전히 제거하는 함수
+# 🌟 [최종 완성 정제 함수] 소제목 누락 완벽 보완 및 기호 청소
 def clean_and_format_content(text, category_name="종합"):
     # 1. 마크다운 특수문자 정리
     text = text.replace('**', '').replace('__', '')
     
-    # 2. 불필요한 특수 기호 줄(*-_, --- 등) 제거
+    # 2. 불필요한 특수 기호 줄 제거
     lines_cleaned = []
     for line in text.split('\n'):
         stripped = line.strip()
@@ -73,27 +73,24 @@ def clean_and_format_content(text, category_name="종합"):
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 4. [핵심 수정] 오직 명확하게 '### '으로 시작하는 줄만 소제목으로 변환 (일반 본문이 소제목으로 오인되는 현상 완벽 차단)
-    text = re.sub(
-        r'^###\s+(.+)$', 
-        r'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">\1</h3>', 
-        text, 
-        flags=re.MULTILINE
-    )
-    
-    # 5. 단락 구분을 명확히 하여 <p> 태그로 감싸기
-    paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
-    formatted_paragraphs = []
-    
-    for p in paragraphs:
-        if p.startswith('<h3'):
-            formatted_paragraphs.append(p)
+    # 4. 소제목 변환 (### 형태뿐만 아니라, AI가 기호 없이 쓴 짧은 독립 문장 형태의 소제목도 완벽하게 HTML로 승격)
+    processed_lines = []
+    for line in text.split('\n'):
+        line_str = line.strip()
+        if not line_str:
+            continue
+        # 명시적 ### 소제목이거나, 문장이 짧고(예: 40자 미만) 마침표로 끝나지 않는 독립 소제목 패턴인 경우
+        if line_str.startswith('###'):
+            title_text = line_str.replace('###', '').strip()
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
+        elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            formatted_paragraphs.append(f'<p style="margin-bottom: 18px; text-align: justify; word-break: keep-all;">{p}</p>')
+            processed_lines.append(f'<p style="margin-bottom: 18px; text-align: justify; word-break: keep-all;">{line_str}</p>')
             
-    final_html = "".join(formatted_paragraphs)
+    final_html = "".join(processed_lines)
     
-    # 6. 해시태그 보정 및 깔끔한 출력 (앞에 절대 ###이 붙지 않도록 보장)
+    # 5. 해시태그 보정 및 깔끔한 출력
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
@@ -436,7 +433,7 @@ def edit_page(article_id: int):
                     <option value="AI/테크" {"selected" if art[1]=="AI/테크" else ""}>AI/테크</option>
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
-                    <option value="시니어/복지" {"selected" if art[1]=="세상이야기" else ""}>시니어/복지</option>
+                    <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
