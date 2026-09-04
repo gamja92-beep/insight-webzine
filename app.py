@@ -46,10 +46,70 @@ def init_db():
                 created_at TEXT
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS visitors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                visited_at TEXT
+            )
+        """)
         conn.commit()
         conn.close()
 
 init_db()
+
+def log_visitor():
+    kst = timezone(timedelta(hours=9))
+    current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
+    if supabase:
+        try:
+            supabase.table("visitors").insert({"visited_at": current_time_str}).execute()
+        except Exception:
+            pass
+    else:
+        try:
+            conn = sqlite3.connect("database.db", check_same_thread=False)
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO visitors (visited_at) VALUES (?)", (current_time_str,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+def get_visitor_stats():
+    if supabase:
+        try:
+            res = supabase.table("visitors").select("*", count="exact").execute()
+            total_count = res.count if res.count is not None else len(res.data or [])
+            
+            kst = timezone(timedelta(hours=9))
+            today_str = datetime.now(kst).strftime("%Y-%m-%d")
+            res_today = supabase.table("visitors").select("*", count="exact").gte("visited_at", f"{today_str} 00:00:00").execute()
+            today_count = res_today.count if res_today.count is not None else len(res_today.data or [])
+            
+            recent_res = supabase.table("visitors").select("*").order("id", desc=True).limit(5).execute()
+            recent_logs = recent_res.data or []
+            return total_count, today_count, recent_logs
+        except Exception:
+            return 0, 0, []
+    else:
+        try:
+            conn = sqlite3.connect("database.db", check_same_thread=False)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM visitors")
+            total_count = cursor.fetchone()[0]
+            
+            kst = timezone(timedelta(hours=9))
+            today_str = datetime.now(kst).strftime("%Y-%m-%d")
+            cursor.execute("SELECT COUNT(*) FROM visitors WHERE visited_at >= ?", (f"{today_str} 00:00:00",))
+            today_count = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT id, visited_at FROM visitors ORDER BY id DESC LIMIT 5")
+            rows = cursor.fetchall()
+            conn.close()
+            recent_logs = [{"visited_at": r[1]} for r in rows]
+            return total_count, today_count, recent_logs
+        except Exception:
+            return 0, 0, []
 
 def fetch_bulletproof_image(category_name):
     direct_pools = {
@@ -150,8 +210,8 @@ def clean_and_format_content(text, category_name="종합"):
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.2em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            # 🌟 [프로 뉴스 스타일 적용] 양끝 정렬(justify)과 단어 단위 줄바꿈(break-all)으로 연합뉴스처럼 꽉 찬 밀도감 구현
-            processed_lines.append(f'<p style="margin-bottom: 18px; text-align: justify; word-break: break-all; line-height: 1.75; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;">{line_str}</p>')
+            # 🌟 [가독성 극대화] 왼쪽 정렬(left)로 붕 뜨는 현상 완벽 차단, 적절한 문단 간격과 자간 적용
+            processed_lines.append(f'<p style="margin-bottom: 20px; text-align: left; word-break: keep-all; line-height: 1.8; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -326,6 +386,9 @@ scheduler.start()
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
+    # 방문자 기록 로깅
+    log_visitor()
+
     if view:
         art = get_article_by_id(view)
         if not art:
@@ -339,7 +402,7 @@ def index(request: Request, category: str = None, view: int = None):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.75; box-sizing: border-box; }}
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
@@ -349,9 +412,9 @@ def index(request: Request, category: str = None, view: int = None):
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 
-                /* 🌟 [언론사 뉴스 스타일 본문] 양끝 정렬과 촘촘한 밀도감 부여 */
-                .content {{ font-size: 1.08em; color: #111111; word-break: break-all; text-align: justify; line-height: 1.75; letter-spacing: -0.3px; }}
-                .content p {{ margin-bottom: 18px; text-align: justify; word-break: break-all; }}
+                /* 🌟 [프로 뉴스 스타일 상세 본문] 왼쪽 정렬로 붕뜸 현상 해결 및 가독성 최적화 */
+                .content {{ font-size: 1.08em; color: #111111; word-break: keep-all; text-align: left; line-height: 1.8; letter-spacing: -0.3px; }}
+                .content p {{ margin-bottom: 20px; text-align: left; word-break: keep-all; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -491,6 +554,13 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         return RedirectResponse(url="/admin", status_code=303)
 
     rows = get_all_articles()
+    total_v, today_v, recent_logs = get_visitor_stats()
+
+    recent_logs_html = ""
+    for log in recent_logs:
+        recent_logs_html += f"<li style='margin-bottom: 5px; color: #555;'>🕒 방문 시각: {log['visited_at']}</li>"
+    if not recent_logs_html:
+        recent_logs_html = "<li style='color: #777;'>최근 방문 기록이 없습니다.</li>"
 
     articles_list_html = ""
     for r in rows:
@@ -530,12 +600,35 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+            .stat-card {{ display: inline-block; width: 45%; background: #ebf5fb; padding: 15px; border-radius: 6px; text-align: center; margin-right: 4%; }}
+            .stat-num {{ font-size: 1.8em; font-weight: bold; color: #2980b9; margin-top: 5px; }}
         </style>
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
         <h1>🛡️ 철옹성 웹진 관리자 스튜디오 (클라우드 연동됨)</h1>
         
+        <!-- 🌟 [방문자 통계 위젯] -->
+        <div class="box" style="border-top: 5px solid #e67e22;">
+            <h3>📊 실시간 방문자 현황</h3>
+            <div style="margin-top: 15px; display: flex; justify-content: space-between;">
+                <div class="stat-card" style="width: 48%;">
+                    <div style="color: #555; font-weight: bold;">오늘 방문 수</div>
+                    <div class="stat-num">{today_v} 명</div>
+                </div>
+                <div class="stat-card" style="width: 48%; margin-right: 0; background: #e8f8f5;">
+                    <div style="color: #555; font-weight: bold;">누적 총 방문 수</div>
+                    <div class="stat-num" style="color: #16a085;">{total_v} 명</div>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <h4 style="margin-bottom: 8px; color: #333;">최근 방문 로그 (최신 5건)</h4>
+                <ul style="padding-left: 20px; font-size: 0.9em; margin: 0;">
+                    {recent_logs_html}
+                </ul>
+            </div>
+        </div>
+
         <div class="box" style="border-top: 5px solid #27ae60;">
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
             <form action="/admin/create-auto" method="post">
@@ -628,13 +721,13 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 18px; text-align: justify; word-break: break-all; line-height: 1.75; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 20px; text-align: left; word-break: keep-all; line-height: 1.8; color: #111111; font-size: 1.08em; letter-spacing: -0.3px;'>{p}</p>" for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-ai-expand")
-def create_ai_expand(category: str, title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
+def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
