@@ -52,16 +52,15 @@ def fetch_single_image(query_keyword):
     
     return "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe", "Unsplash"
 
-# 🌟 [완벽 정제 및 포맷팅] 혹(*-_ 등) 및 불필요 기호 완벽 제거 함수
+# 🌟 [최종 정제 및 포맷팅] 오직 명확한 ### 소제목만 변환하고 혹을 완전히 제거하는 함수
 def clean_and_format_content(text, category_name="종합"):
-    # 1. AI가 남긴 마크다운 특수문자 및 기괴한 혹 제거
+    # 1. 마크다운 특수문자 정리
     text = text.replace('**', '').replace('__', '')
     
-    # 2. 불필요한 구분선 및 특수 기호 줄(*-_, ---, -, _ 등) 완벽 청소
+    # 2. 불필요한 특수 기호 줄(*-_, --- 등) 제거
     lines_cleaned = []
     for line in text.split('\n'):
         stripped = line.strip()
-        # 특수 기호로만 이루어진 불필요한 라인 제거 (*-_, ---, -, _, * 등)
         if re.match(r'^[\*\-\_\#\s]+$', stripped):
             continue
         lines_cleaned.append(line)
@@ -74,11 +73,12 @@ def clean_and_format_content(text, category_name="종합"):
     for tag in hashtags:
         text = text.replace(tag, '')
         
-    # 4. 소제목 변환 (### 또는 숫자 형태의 소제목을 멋진 HTML <h3>로 변환)
+    # 4. [핵심 수정] 오직 명확하게 '### '으로 시작하는 줄만 소제목으로 변환 (일반 본문이 소제목으로 오인되는 현상 완벽 차단)
     text = re.sub(
-        r'(?:###\s*|\d+\.\s+)(.+)', 
+        r'^###\s+(.+)$', 
         r'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 35px; margin-bottom: 14px; font-size: 1.25em; font-weight: 800; letter-spacing: -0.5px;">\1</h3>', 
-        text
+        text, 
+        flags=re.MULTILINE
     )
     
     # 5. 단락 구분을 명확히 하여 <p> 태그로 감싸기
@@ -93,7 +93,7 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(formatted_paragraphs)
     
-    # 6. 해시태그 보정 및 깔끔한 출력 (앞에 붙던 ### 원천 차단)
+    # 6. 해시태그 보정 및 깔끔한 출력 (앞에 절대 ###이 붙지 않도록 보장)
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
@@ -105,7 +105,6 @@ def clean_and_format_content(text, category_name="종합"):
     if len(unique_tags) < 3:
         unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
 
-    # 해시태그 앞에 절대 ###이 붙지 않도록 보장
     clean_tags_list = [t if t.startswith('#') else f"#{t}" for t in unique_tags[:5]]
     clean_tags_str = " ".join(clean_tags_list)
     
@@ -128,10 +127,10 @@ def save_article_to_db(category, title, content, image_url, image_author):
 # 1. 자동 발행 함수
 def generate_ai_article(category_name):
     prompts = {
-        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 중간중간 ### 소제목을 꼭 넣어줘. 마크다운 기호(-, *, _)는 절대 쓰지 말고 오직 텍스트와 ### 소제목만 써줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘.", "technology"),
-        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 중간중간 ### 소제목을 꼭 넣어줘. 마크다운 기호(-, *, _)는 절대 쓰지 말고 오직 텍스트와 ### 소제목만 써줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여줘.", "stock market economy"),
-        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 중간중간 ### 소제목을 꼭 넣어줘. 마크다운 기호(-, *, _)는 절대 쓰지 말고 오직 텍스트와 ### 소제목만 써줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여줘.", "warm lifestyle people"),
-        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 중간중간 ### 소제목을 꼭 넣어줘. 마크다운 기호(-, *, _)는 절대 쓰지 말고 오직 텍스트와 ### 소제목만 써줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여줘.", "senior elderly care")
+        "AI/테크": ("AI/테크", "최근 주목받는 AI 기술과 IT 혁신 트렌드에 대한 흥미롭고 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여줘.", "technology"),
+        "경제/주식": ("경제/주식", "최근 주식 시장과 경제 동향, 투자 인사이트에 대한 전문적인 SEO 최적화 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여줘.", "stock market economy"),
+        "세상이야기": ("세상이야기", "우리 주변의 따뜻한 세상 이야기나 일상 속 감동적인 트렌드에 대한 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여줘.", "warm lifestyle people"),
+        "시니어/복지": ("시니어/복지", "시니어 세대를 위한 유용한 복지 정책, 건강 관리, 은퇴 후 삶의 지혜에 대한 전문적인 뉴스 기사를 작성해줘. 단락은 깔끔하게 여러 개로 나누고, 소제목 앞에는 반드시 '### ' 기호를 붙여줘. 마크다운 기호(-, *, _)는 절대 쓰지 마. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여줘.", "senior elderly care")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드에 대한 유익한 뉴스 기사를 작성해줘.", "news"))
