@@ -40,9 +40,8 @@ def init_db():
 
 init_db()
 
-# 🌟 [얼굴 잘림/괴물 샷 100% 원천 차단] 인물 클로즈업이 절대 불가한 와이드 풍경/사물/오피스 전용 풀
+# 🌟 [연예/스포츠 확장 완료] 카테고리별 100% 와이드 컷 이미지 풀
 def fetch_bulletproof_image(category_name):
-    # 인물 얼굴이 크게 나오는 컷을 아예 배제하고, 와이드 배경·도시·건축·사물·원거리 전경만 엄선한 풀
     direct_pools = {
         "AI/테크": [
             ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
@@ -67,22 +66,37 @@ def fetch_bulletproof_image(category_name):
         ],
         "시니어/복지": [
             ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1519501025264-65ba15아82390" if False else "https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
+            ("https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
             ("https://images.unsplash.com/photo-1581579438747-1dc8d17ccce4", "Unsplash"),
             ("https://images.unsplash.com/photo-1511632765486-a01980e01a18", "Unsplash"),
             ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash")
+        ],
+        "연예계뉴스": [
+            ("https://images.unsplash.com/photo-1514525253161-7a46d19cd819", "Unsplash"),
+            ("https://images.unsplash.com/photo-1492684223066-81342ee5ff30", "Unsplash"),
+            ("https://images.unsplash.com/photo-1516450360452-9312f5e86fc7", "Unsplash"),
+            ("https://images.unsplash.com/photo-1470225620780-dba8ba36b745", "Unsplash"),
+            ("https://images.unsplash.com/photo-1526478806334-5fd488fcaabc", "Unsplash")
+        ],
+        "스포츠": [
+            ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
+            ("https://images.unsplash.com/photo-1517649763962-0c623066013b", "Unsplash"),
+            ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash"),
+            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
+            ("https://images.unsplash.com/photo-1551958219-acbc608c6377", "Unsplash")
         ]
     }
 
     pool = direct_pools.get(category_name, direct_pools["세상이야기"])
     
     try:
-        # 검색어 자체를 인물이 아니라 와이드 배경/오피스/사물 위주로 강력 제한
         search_queries = {
             "AI/테크": "futuristic technology architecture wide",
             "경제/주식": "modern city skyline finance wide",
             "세상이야기": "beautiful nature landscape wide",
-            "시니어/복지": "peaceful nature park scenery wide"
+            "시니어/복지": "peaceful nature park scenery wide",
+            "연예계뉴스": "concert stage lights performance wide",
+            "스포츠": "stadium sports action wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
         params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 40)}
@@ -92,10 +106,9 @@ def fetch_bulletproof_image(category_name):
             data = response.json()
             results = data.get("results", [])
             if results:
-                # 결과 중에서도 설명이나 태그에 portrait(인물 사진)가 포함된 것은 거르고 와이드 컷만 추출 시도
                 safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people'])]
                 if not safe_results:
-                    safe_results = results # 안전망
+                    safe_results = results
                 item = random.choice(safe_results)
                 return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
@@ -143,7 +156,9 @@ def clean_and_format_content(text, category_name="종합"):
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
         "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략"],
         "세상이야기": ["#세상이야기", "#라이프스타일", "#감동글", "#일상소통", "#휴식"],
-        "시니어/복지": ["#시니어복지", "#은퇴설계", "#건강관리", "#노후준비", "#행복한삶"]
+        "시니어/복지": ["#시니어복지", "#은퇴설계", "#건강관리", "#노후준비", "#행복한삶"],
+        "연예계뉴스": ["#연예계소식", "#스타뉴스", "#문화예술", "#방송가트렌드", "#엔터테인먼트"],
+        "스포츠": ["#스포츠종합", "#경기결과", "#선수소식", "#응원열기", "#스포츠하이라이트"]
     }
     
     if len(unique_tags) < 3:
@@ -162,7 +177,7 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
-# 🌟 [한국 시간(KST) 완벽 적용]
+# 🌟 [한국 시간(KST) 완벽 적용 및 영구 저장]
 def save_article_to_db(category, title, content, image_url, image_author):
     kst = timezone(timedelta(hours=9))
     current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
@@ -181,7 +196,9 @@ def generate_ai_article(category_name):
         "AI/테크": ("AI/테크", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
         "경제/주식": ("경제/주식", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
         "세상이야기": ("세상이야기", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
-        "시니어/복지": ("시니어/복지", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘.")
+        "시니어/복지": ("시니어/복지", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘."),
+        "연예계뉴스": ("연예계뉴스", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 연예계 동향, 방송가 소식, 스타들의 문화 예술 활동에 대한 흥미로운 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #연예계소식 #스타뉴스 형태로 공백을 두고 붙여 줘."),
+        "스포츠": ("스포츠", "첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 최근 스포츠계의 뜨거운 경기 결과, 선수 소식, 주요 스포츠 이슈에 대한 역동적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #스포츠종합 #경기결과 형태로 공백을 두고 붙여 줘.")
     }
     
     cat_info = prompts.get(category_name, ("종합", "최신 트렌드 뉴스 기사 작성"))
@@ -209,7 +226,7 @@ def generate_ai_article(category_name):
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
-    categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
+    categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
     target_cat = random.choice(categories)
     generate_ai_article(target_cat)
 
@@ -235,7 +252,7 @@ def index(request: Request, category: str = None):
         "image_url": r[4], "image_author": r[5], "created_at": r[6]
     } for r in rows]
     
-    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지"]
+    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
 
     html = f"""
     <!DOCTYPE html>
@@ -349,6 +366,8 @@ def admin_page(request: Request):
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
+                    <option value="연예계뉴스">연예계뉴스</option>
+                    <option value="스포츠">스포츠</option>
                 </select>
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
             </form>
@@ -363,6 +382,8 @@ def admin_page(request: Request):
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
+                    <option value="연예계뉴스">연예계뉴스</option>
+                    <option value="스포츠">스포츠</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
@@ -381,6 +402,8 @@ def admin_page(request: Request):
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
                     <option value="시니어/복지">시니어/복지</option>
+                    <option value="연예계뉴스">연예계뉴스</option>
+                    <option value="스포츠">스포츠</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
@@ -476,6 +499,8 @@ def edit_page(article_id: int):
                     <option value="경제/주식" {"selected" if art[1]=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art[1]=="세상이야기" else ""}>세상이야기</option>
                     <option value="시니어/복지" {"selected" if art[1]=="시니어/복지" else ""}>시니어/복지</option>
+                    <option value="연예계뉴스" {"selected" if art[1]=="연예계뉴스" else ""}>연예계뉴스</option>
+                    <option value="스포츠" {"selected" if art[1]=="스포츠" else ""}>스포츠</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art[2]}" required>
