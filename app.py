@@ -19,7 +19,7 @@ MODEL_NAME = "gemini-3.5-flash"
 # Unsplash API 키
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 
-# 🌟 관리자 비밀번호 설정 (원하시는 비밀번호로 언제든 변경 가능합니다!)
+# 🌟 관리자 비밀번호 설정
 ADMIN_PASSWORD = "1234"
 
 client = genai.Client(api_key=API_KEY)
@@ -238,7 +238,7 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 🌟 [독자 전용 메인 홈페이지 - 관리자 버튼 완전 감춤]
+# 🌟 [독자 전용 메인 홈페이지]
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
     conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -373,7 +373,7 @@ def index(request: Request, category: str = None, view: int = None):
     html += "</body></html>"
     return html
 
-# 🌟 [비밀 로그인 화면] /admin으로 접속하면 먼저 비밀번호를 물어봄
+# 🌟 [비밀 로그인 화면]
 @app.get("/admin", response_class=HTMLResponse)
 def admin_login_page(request: Request, error: str = None):
     err_msg = "<p style='color: #e74c3c; font-size: 0.9em; margin-bottom: 15px;'>비밀번호가 틀렸습니다!</p>" if error else ""
@@ -407,18 +407,16 @@ def admin_login_page(request: Request, error: str = None):
     </html>
     """
 
-# 🌟 [로그인 검증 및 쿠키 발급]
 @app.post("/admin/login")
 def admin_login(response: Response, password: str = Form(...)):
     if password == ADMIN_PASSWORD:
         resp = RedirectResponse(url="/admin/studio", status_code=303)
-        # 1일간 유지되는 로그인 쿠키 발행
         resp.set_cookie(key="admin_auth", value="authenticated", max_age=86400)
         return resp
     else:
         return RedirectResponse(url="/admin?error=true", status_code=303)
 
-# 🌟 [보안이 걸린 진짜 관리자 스튜디오 대시보드]
+# 🌟 [관리자 스튜디오 대시보드 - 버튼 줄바꿈 방지 정렬 완료]
 @app.get("/admin/studio", response_class=HTMLResponse)
 def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
@@ -434,12 +432,12 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     for r in rows:
         articles_list_html += f"""
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 10px; font-size: 0.9em;">{r[1]}</td>
-            <td style="padding: 10px; font-weight: bold;"><a href="/?view={r[0]}" target="_blank" style="color: #2980b9; text-decoration: none;">{r[2]}</a></td>
-            <td style="padding: 10px; font-size: 0.85em; color: #777;">{r[3]}</td>
-            <td style="padding: 10px; text-align: right;">
-                <a href="/admin/edit/{r[0]}" style="background: #f39c12; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px;">✏️ 수정</a>
-                <a href="/admin/delete/{r[0]}" style="background: #e74c3c; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
+            <td style="padding: 12px 10px; font-size: 0.9em;">{r[1]}</td>
+            <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r[0]}" target="_blank" style="color: #2980b9; text-decoration: none;">{r[2]}</a></td>
+            <td style="padding: 12px 10px; font-size: 0.85em; color: #777; white-space: nowrap;">{r[3]}</td>
+            <td style="padding: 12px 10px; text-align: right; white-space: nowrap; width: 140px;">
+                <a href="/admin/edit/{r[0]}" style="background: #f39c12; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; display: inline-block;">✏️ 수정</a>
+                <a href="/admin/delete/{r[0]}" style="background: #e74c3c; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
             </td>
         </tr>
         """
@@ -454,7 +452,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         <meta charset="UTF-8">
         <title>인사이트 웹진 관리자 스튜디오</title>
         <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 950px; margin: 40px auto; padding: 20px; background: #f4f6f7; }}
             h1 {{ color: #2c3e50; }}
             .box {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             button {{ background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
@@ -535,10 +533,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <table>
                 <thead>
                     <tr style="border-bottom: 2px solid #ccc; text-align: left;">
-                        <th style="padding: 10px;">카테고리</th>
+                        <th style="padding: 10px; width: 100px;">카테고리</th>
                         <th style="padding: 10px;">기사 제목</th>
-                        <th style="padding: 10px;">발행일시</th>
-                        <th style="padding: 10px; text-align: right;">관리</th>
+                        <th style="padding: 10px; width: 150px;">발행일시</th>
+                        <th style="padding: 10px; width: 140px; text-align: right;">관리</th>
                     </tr>
                 </thead>
                 <tbody>
