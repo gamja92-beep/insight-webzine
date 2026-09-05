@@ -404,6 +404,16 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
+# 🌟 [네이버 서치어드바이저를 위한 robots.txt 자동 생성 엔드포인트]
+@app.get("/robots.txt", response_class=PlainResponse)
+def robots_txt():
+    robots_content = (
+        "User-agent: *\n"
+        "Allow: /\n\n"
+        "Sitemap: https://insight-webzine.onrender.com/sitemap.xml"
+    )
+    return PlainResponse(content=robots_content, media_type="text/plain")
+
 @app.get("/sitemap.xml", response_class=PlainResponse)
 def sitemap():
     articles = get_all_articles()
