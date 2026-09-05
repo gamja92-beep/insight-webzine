@@ -8,11 +8,16 @@ import re
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
 from supabase import create_client, Client
 
 app = FastAPI()
+
+# 🌟 [자동 폴더 생성 안전 장치] static 폴더가 없으면 서버가 켜질 때 자동으로 생성합니다.
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
 MODEL_NAME = "gemini-3.5-flash"
@@ -381,7 +386,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
-# 🌟 [이미지 파일 업로드 API 엔드포인트 추가] 기기에서 선택한 이미지를 임시 저장 후 URL 반환
 @app.post("/admin/upload-image")
 async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
@@ -396,14 +400,10 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
         with open(file_path, "wb") as f:
             f.write(contents)
             
-        # 서버 주소를 기반으로 이미지 URL 생성
         image_url = f"/static/{unique_filename}"
         return {"url": image_url}
     except Exception as e:
         return {"error": str(e)}
-
-from fastapi.staticfiles import StaticFiles
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
@@ -724,7 +724,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 <label>기사 내용</label>
                 
-                <!-- 🌟 [이미지 입력 버튼 그룹: URL 입력 & 내 기기 파일 업로드] -->
                 <div class="img-btn-group">
                     <button type="button" class="img-btn" onclick="insertImageByUrl('manualContent')">🌐 웹 주소(URL)로 이미지 넣기</button>
                     <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('manualFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
@@ -763,7 +762,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             </form>
         </div>
 
-        <!-- 🌟 [이미지 URL 및 파일 업로드 처리 자바스크립트] -->
         <script>
         function insertImageByUrl(elementId) {{
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
@@ -938,7 +936,6 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
 
                 <label>기사 내용</label>
                 
-                <!-- 🌟 [수정 페이지에도 파일 업로드 버튼 추가] -->
                 <div class="img-btn-group">
                     <button type="button" class="img-btn" onclick="insertImageByUrl('editContent')">🌐 웹 주소(URL)로 이미지 넣기</button>
                     <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('editFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
