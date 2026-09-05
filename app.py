@@ -181,41 +181,38 @@ def fetch_bulletproof_image(category_name):
     chosen = random.choice(pool)
     return chosen[0], chosen[1]
 
+# 🌟 [강력한 단락 분할 포맷팅 함수] 엔터 줄바꿈을 완벽하게 인식해서 시원하게 쪼개줍니다!
 def clean_and_format_content(text, category_name="종합"):
     text = text.replace('**', '').replace('__', '')
     
-    lines_cleaned = []
-    for line in text.split('\n'):
-        stripped = line.strip()
-        if re.match(r'^[\*\-\_\#\s]+$', stripped):
-            continue
-        lines_cleaned.append(line)
-    text = '\n'.join(lines_cleaned)
+    # 이미 HTML <p> 태그나 이미지 태그가 포함되어 있다면 그대로 보존
+    if '<p' in text or '<img' in text:
+        return text
 
+    # 입력된 텍스트를 줄단위로 쪼개어 단락(Paragraph)으로 변환
+    paragraphs = text.split('\n')
+    processed_lines = []
+    
+    for p in paragraphs:
+        p_str = p.strip()
+        if not p_str:
+            continue
+        if p_str.startswith('<img') or p_str.startswith('<div'):
+            processed_lines.append(p_str)
+        elif p_str.startswith('###'):
+            title_text = p_str.replace('###', '').strip()
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
+        elif len(p_str) < 42 and not p_str.endswith(('.', '?', '!')) and not p_str.startswith('<'):
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{p_str}</h3>')
+        else:
+            processed_lines.append(f'<p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{p_str}</p>')
+            
+    final_html = "".join(processed_lines)
+    
+    # 해시태그 처리
     text_for_tags = re.sub(r'###+', '', text)
     all_words = text_for_tags.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
-    
-    for tag in hashtags:
-        text = text.replace(tag, '')
-        
-    processed_lines = []
-    for line in text.split('\n'):
-        line_str = line.strip()
-        if not line_str:
-            continue
-        if line_str.startswith('<img') or line_str.startswith('<div'):
-            processed_lines.append(line_str)
-        elif line_str.startswith('###'):
-            title_text = line_str.replace('###', '').strip()
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
-        elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
-        else:
-            # 🌟 [단락 호흡 개선] 문장이 너무 길게 이어지지 않도록 적절히 끊어 읽기 좋은 간격(<p> 마진 22px) 부여
-            processed_lines.append(f'<p style="margin-bottom: 22px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{line_str}</p>')
-            
-    final_html = "".join(processed_lines)
     
     unique_tags = list(dict.fromkeys(hashtags))
     fallback_tags = {
@@ -305,11 +302,14 @@ def get_article_by_id(article_id):
         }
 
 def update_article_in_db(article_id, category, title, content, image_url):
+    # 수정할 때도 엔터(줄바꿈)를 감지해서 단락으로 깔끔하게 재포맷팅합니다!
+    formatted_content = clean_and_format_content(content, category)
+    
     if supabase:
         update_data = {
             "category": category,
             "title": title,
-            "content": content
+            "content": formatted_content
         }
         if image_url and image_url.strip():
             update_data["image_url"] = image_url.strip()
@@ -320,9 +320,9 @@ def update_article_in_db(article_id, category, title, content, image_url):
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
         if image_url and image_url.strip():
-            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", (category, title, content, image_url.strip(), "User Custom", article_id))
+            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", (category, title, formatted_content, image_url.strip(), "User Custom", article_id))
         else:
-            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, title, content, article_id))
+            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, title, formatted_content, article_id))
         conn.commit()
         conn.close()
 
@@ -415,9 +415,8 @@ def index(request: Request, category: str = None, view: int = None):
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 
-                /* 🌟 [상세페이지 본문 단락 간격 및 호흡 최적화] */
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
-                .content p {{ margin-bottom: 22px; text-align: left !important; word-break: normal; }}
+                .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
                 .subscribe-btn-large {{ display: inline-block; padding: 12px 35px; background: #e74c3c; color: white; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 1.1em; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); transition: 0.2s; }}
@@ -781,7 +780,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 22px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;'>{p}</p>" if not p.strip().startswith('<img') else p for p in content.split('\n') if p.strip()])
+    formatted_content = clean_and_format_content(content, category)
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
