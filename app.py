@@ -191,7 +191,17 @@ def clean_and_format_content(text, category_name="종합"):
     if '<p' in text or '<img' in text:
         return text
 
-    paragraphs = text.split('\n')
+    # 🛠️ [수정] 본문 맨 마지막에 AI가 붙인 해시태그나 잡다한 줄(태그 기호로 시작하거나 짧은 줄)은 중복 출력을 막기 위해 미리 컷팅합니다.
+    lines_raw = text.split('\n')
+    cleaned_lines_input = []
+    for line in lines_raw:
+        l_stripped = line.strip()
+        # 해시태그로 도배된 줄이나 `#`으로 시작하는 마지막 줄들 걸러내기
+        if l_stripped.startswith('#') or ('#' in l_stripped and len(l_stripped.split()) <= 5):
+            continue
+        cleaned_lines_input.append(line)
+    
+    paragraphs = "\n".join(cleaned_lines_input).split('\n')
     processed_lines = []
     
     for p in paragraphs:
@@ -210,11 +220,7 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    text_for_tags = re.sub(r'###+', '', text)
-    all_words = text_for_tags.split()
-    hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
-    
-    unique_tags = list(dict.fromkeys(hashtags))
+    # 🛠️ [수정] 오직 시스템이 관리하는 깔끔한 해시태그 1세트만 하단에 예쁘게 붙도록 통일합니다.
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
         "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략", "#종목분석", "#금융분석"],
@@ -224,17 +230,10 @@ def clean_and_format_content(text, category_name="종합"):
         "스포츠": ["#스포츠분석", "#기록전망", "#스포츠인사이트", "#전술연구", "#스포츠칼럼", "#스포츠역사", "#스포츠기록"]
     }
     
-    if len(unique_tags) < 3:
-        unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
+    unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
+    chosen_tags = random.sample(unique_tags, min(5, len(unique_tags)))
 
-    cleaned_tags = []
-    for t in unique_tags[:5]:
-        t_clean = re.sub(r'^[#\s#]+', '#', str(t).strip())
-        if not t_clean.startswith('#'):
-            t_clean = '#' + t_clean
-        cleaned_tags.append(t_clean)
-
-    clean_tags_str = " ".join(cleaned_tags)
+    clean_tags_str = " ".join(chosen_tags)
     tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.85em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
@@ -337,19 +336,19 @@ def delete_article_from_db(article_id):
 
 def generate_ai_article(category_name):
     strict_insight_context = (
-        "STRICT EDITORIAL RULE: Today is September 4, 2026. "
+        "STRICT EDITORIAL RULE: Today is September 6, 2026. "
         "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
         "Instead, write professional, analytical insight columns focusing on sports/entertainment industry trends, tactical evolution, player milestone predictions, structural issues, or future outlooks. "
         "Never fabricate past game scores or fake match results."
     )
 
     prompts = {
-        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 붙여 줘."),
-        "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #주식투자 #경제동향 형태로 공백을 두고 붙여 줘."),
-        "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #세상이야기 #라이프 형태로 공백을 두고 붙여 줘."),
-        "시니어/복지": ("시니어/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #시니어복지 #은퇴설계 형태로 공백을 두고 붙여 줘."),
-        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 절대 가짜 스캔들나 찌라시성 가십을 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #연예계트렌드 #방송가전망 형태로 공백을 두고 붙여 줘."),
-        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 기사 내용 중 오보가 나지 않도록 꼼꼼하게 살펴서 작성해줘. 현재 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측, 스포츠 산업의 구조적 과제 등을 다루는 전문적이고 품격 있는 '스포츠 인사이트 칼럼'을 작성해 주세요. 절대 날짜와 경기 시간이 틀리지 않게 작성하고 기록을 꼼꼼하게 체크하고 가짜 경기 결과를 기사로 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에는 검색용 해시태그 5개를 #스포츠분석 #기록전망 형태로 공백을 두고 붙여 줘.")
+        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "시니어/복지": ("시니어/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 절대 가짜 스캔들나 찌라시성 가십을 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 오보가 나지 않도록 꼼꼼하게 살펴서 작성해줘. 현재 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측, 스포츠 산업의 구조적 과제 등을 다루는 전문적이고 품격 있는 '스포츠 인사이트 칼럼'을 작성해 주세요. 절대 날짜와 경기 시간이 틀리지 않게 작성하고 기록을 꼼꼼하게 체크하고 가짜 경기 결과를 기사로 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요.")
     }
     
     cat_info = prompts.get(category_name, ("종합", f"{strict_insight_context} 최신 트렌드 뉴스 기사 작성"))
@@ -404,7 +403,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [초강력 썬파워: 구글 봇 전용 방화벽 완전 해제형 robots.txt 및 표준 응답 헤더 장착]
 @app.get("/robots.txt", response_class=PlainResponse)
 def robots_txt():
     robots_text = (
@@ -484,12 +482,17 @@ def index(request: Request, category: str = None, view: int = None):
             <meta property="og:url" content="{art_link}">
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
-                .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }}
-                .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }}
+                .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
+                
+                /* 🛠️ [수정] 모바일 화면에서도 크지 않고 아담하게 보이도록 버튼 사이즈 대폭 슬림화 */
+                .back-btn {{ display: inline-block; padding: 6px 14px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
-                .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
+                
+                /* 🛠️ [수정] 모바일 가독성을 위해 기사 상세 페이지 상단 카테고리 뱃지는 숨김처리 */
+                .badge {{ display: none; }}
+                
                 h1 {{ font-size: 1.6em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
@@ -510,7 +513,6 @@ def index(request: Request, category: str = None, view: int = None):
             </div>
 
             <div class="article-container">
-                <span class="badge">{art['category']}</span>
                 <h1>{art['title']}</h1>
                 <div class="date">발행일시: {art['created_at']}</div>
                 <img src="{art['image_url']}" class="article-img">
@@ -575,9 +577,6 @@ def index(request: Request, category: str = None, view: int = None):
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
             
-            .main-subscribe-btn {{ padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
-            .main-subscribe-btn:hover {{ background: #c0392b; }}
-
             .nav-tabs {{ display: flex; gap: 6px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ padding: 6px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
@@ -921,7 +920,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
         "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(반드시 ### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
         "마크다운 특수기호(-, *, _)는 절대 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
-        "마지막 줄에는 반드시 검색에 유용한 해시태그 5개를 #인공지능 #테크 형태로 공백을 두고 포함해 주세요."
+        "본문 맨 마지막에 해시태그를 직접 작성하지 마세요."
     )
     
     full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[작성 요청사항/메모]: {prompt}"
