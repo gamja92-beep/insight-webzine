@@ -404,10 +404,12 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [구글 봇과 네이버 봇 모두에게 완전 개방하는 표준 robots.txt 엔드포인트]
+# 🌟 [구글봇(Googlebot)과 네이버봇 모두에게 확실히 개방하는 명시적 robots.txt]
 @app.get("/robots.txt", response_class=PlainResponse)
 def robots_txt():
     robots_text = (
+        "User-agent: Googlebot\n"
+        "Allow: /\n\n"
         "User-agent: *\n"
         "Allow: /\n\n"
         "Sitemap: https://insight-webzine.onrender.com/sitemap.xml"
@@ -991,6 +993,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art['title']}" required>
+                
                 <label>이미지 주소 (URL)</label>
                 <input type="text" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소(URL)를 입력하세요">
                 <small style="color: #7f8c8d; display: block; margin-top: -10px; margin-bottom: 15px;">현재 등록된 이미지 미리보기:</small>
@@ -1034,7 +1037,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                         body: formData
                     }});
                     const data = await response.json();
-                    if (data.url) {{
+                    if (data.url) {
                         const tag = '\\n<img src="' + data.url + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
                         const textarea = document.getElementById(elementId);
                         const start = textarea.selectionStart;
@@ -1042,15 +1045,15 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                         textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
                         textarea.focus();
                         alert("사진이 성공적으로 업로드되어 커서 위치에 삽입되었습니다!");
-                    }} else {{
+                    } else {
                         alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
-                    }}
-                }} catch (err) {{
+                    }
+                } catch (err) {
                     alert("사진 업로드 중 오류가 발생했습니다: " + err);
-                }}
+                }
                 input.value = "";
             }}
-        }}
+        }
         </script>
     </body>
     </html>
