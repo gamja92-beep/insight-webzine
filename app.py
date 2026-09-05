@@ -452,7 +452,6 @@ def index(request: Request, category: str = None, view: int = None):
         if not art:
             return RedirectResponse(url="/", status_code=303)
         
-        # 개별 기사 페이지 메타 태그(SEO & Open Graph) 추가
         art_title_clean = art['title'].replace('"', '')
         art_desc_clean = art['content'][:100].replace('<p>', '').replace('</p>', '').replace('"', '')
         art_img = art['image_url']
@@ -932,7 +931,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
-    if admin_auth !=="authenticated":
+    if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
 
     art = get_article_by_id(article_id)
@@ -1038,7 +1037,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                         alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
                     }}
                 }} catch (err) {{
-                    alert("사진 업로드 중 오류가겠습니다: " + err);
+                    alert("사진 업로드 중 오류가 발생했습니다: " + err);
                 }}
                 input.value = "";
             }}
