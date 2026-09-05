@@ -7,7 +7,7 @@ import requests
 import re
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,12 +16,6 @@ from supabase import create_client, Client
 app = FastAPI()
 
 os.makedirs("static", exist_ok=True)
-
-# 🌟 [진짜 robots.txt 파일을 static 폴더 안에 직접 물리적으로 생성]
-robots_file_path = os.path.join("static", "robots.txt")
-with open(robots_file_path, "w", encoding="utf-8") as f:
-    f.write("User-agent: *\nAllow: /\n\nSitemap: https://insight-webzine.onrender.com/sitemap.xml")
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
@@ -410,10 +404,11 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [물리적 robots.txt 파일을 직접 반환하는 전용 엔드포인트]
-@app.get("/robots.txt")
+# 🌟 [메모리에서 직접 무조건 robots.txt 내용을 뿜어내도록 완벽 고정]
+@app.get("/robots.txt", response_class=PlainResponse)
 def robots_txt():
-    return FileResponse("static/robots.txt", media_type="text/plain")
+    robots_text = "User-agent: *\nAllow: /\n\nSitemap: https://insight-webzine.onrender.com/sitemap.xml"
+    return PlainResponse(content=robots_text, media_type="text/plain")
 
 @app.get("/sitemap.xml", response_class=PlainResponse)
 def sitemap():
@@ -1067,8 +1062,3 @@ def update_article(article_id: int, category: str = Form(...), title: str = Form
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/delete/{article_id}")
-def delete_article(article_id: int, admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    delete_article_from_db(article_id)
-    return RedirectResponse(url="/admin/studio", status_code=303)
