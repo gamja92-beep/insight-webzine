@@ -191,12 +191,11 @@ def clean_and_format_content(text, category_name="종합"):
     if '<p' in text or '<img' in text:
         return text
 
-    # 🛠️ [수정] 본문 맨 마지막에 AI가 붙인 해시태그나 잡다한 줄(태그 기호로 시작하거나 짧은 줄)은 중복 출력을 막기 위해 미리 컷팅합니다.
+    # 🛠️ [수정] 본문 내부에 섞여 들어온 해시태그나 불필요한 잔여 줄들을 철저하게 걸러냅니다.
     lines_raw = text.split('\n')
     cleaned_lines_input = []
     for line in lines_raw:
         l_stripped = line.strip()
-        # 해시태그로 도배된 줄이나 `#`으로 시작하는 마지막 줄들 걸러내기
         if l_stripped.startswith('#') or ('#' in l_stripped and len(l_stripped.split()) <= 5):
             continue
         cleaned_lines_input.append(line)
@@ -220,7 +219,7 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    # 🛠️ [수정] 오직 시스템이 관리하는 깔끔한 해시태그 1세트만 하단에 예쁘게 붙도록 통일합니다.
+    # 🛠️ [수정] 막대 기호나 상자 없이, 가장 깔끔하고 단정한 일반 텍스트 형태의 해시태그 1세트만 하단에 출력합니다.
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
         "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략", "#종목분석", "#금융분석"],
@@ -234,7 +233,8 @@ def clean_and_format_content(text, category_name="종합"):
     chosen_tags = random.sample(unique_tags, min(5, len(unique_tags)))
 
     clean_tags_str = " ".join(chosen_tags)
-    tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.85em; word-spacing: 5px;'>{clean_tags_str}</div>"
+    # 어떤 테두리나 배경 박스도 없는 아주 순수한 텍스트 스타일로 고정
+    tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
     return final_html
@@ -484,16 +484,18 @@ def index(request: Request, category: str = None, view: int = None):
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
                 
-                /* 🛠️ [수정] 모바일 화면에서도 크지 않고 아담하게 보이도록 버튼 사이즈 대폭 슬림화 */
+                /* 🛠️ [수정] 모바일 화면에서 버튼이 가로로 꽉 차지 않고 아담하게 보이도록 패딩과 마진 대폭 슬림화 */
                 .back-btn {{ display: inline-block; padding: 6px 14px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 
-                /* 🛠️ [수정] 모바일 가독성을 위해 기사 상세 페이지 상단 카테고리 뱃지는 숨김처리 */
+                /* 🛠️ [수정] 상세 페이지 상단 카테고리 뱃지 숨김 유지 */
                 .badge {{ display: none; }}
                 
-                h1 {{ font-size: 1.6em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
+                /* 🛠️ [수정] 기사 제목 글자 크기를 줄여서(1.3em) 모바일에서 두 줄 이상 넘어가도 어지럽지 않게 개선 */
+                h1 {{ font-size: 1.3em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.4; word-break: keep-all; letter-spacing: -0.5px; }}
+                
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
