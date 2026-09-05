@@ -204,7 +204,9 @@ def clean_and_format_content(text, category_name="종합"):
         line_str = line.strip()
         if not line_str:
             continue
-        if line_str.startswith('###'):
+        if line_str.startswith('<img') or line_str.startswith('<div'):
+            processed_lines.append(line_str)
+        elif line_str.startswith('###'):
             title_text = line_str.replace('###', '').strip()
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
@@ -580,16 +582,18 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if not recent_logs_html:
         recent_logs_html = "<li style='color: #777;'>최근 방문 기록이 없습니다.</li>"
 
+    # 🌟 [수정/삭제 버튼 디자인 콤팩트하고 정갈하게 개선] 가로나 세로로 예쁘게 배치
     articles_list_html = ""
     for r in rows:
         articles_list_html += f"""
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 10px; font-size: 0.9em;">{r['category']}</td>
-            <td style="padding: 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
-            <td style="padding: 10px; font-size: 0.85em; color: #777;">{r['created_at']}</td>
-            <td style="padding: 10px; text-align: right;">
-            <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px; white-space: nowrap;">✏️ 수정</a>
-            <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 5px 10px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; white-space: nowrap;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
+            <td style="padding: 12px 10px; font-size: 0.9em; color: #555;">{r['category']}</td>
+            <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
+            <td style="padding: 12px 10px; font-size: 0.85em; color: #777; white-space: nowrap;">{r['created_at']}</td>
+            <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
+                <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; display: inline-block;">✏️ 수정</a>
+                <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
+            </td>
         </tr>
         """
 
@@ -620,6 +624,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
             .stat-card {{ display: inline-block; width: 45%; background: #ebf5fb; padding: 15px; border-radius: 6px; text-align: center; margin-right: 4%; }}
             .stat-num {{ font-size: 1.8em; font-weight: bold; color: #2980b9; margin-top: 5px; }}
+            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 12px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-block; }}
+            .img-btn:hover {{ background: #d35400; }}
         </style>
     </head>
     <body>
@@ -664,7 +670,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 
         <div class="box" style="border-top: 5px solid #2980b9;">
             <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
-            <form action="/admin/create-manual" method="post" id="manualForm">
+            <form action="/admin/create-manual" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="AI/테크">AI/테크</option>
@@ -677,29 +683,11 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 <label>기사 내용</label>
-                <textarea name="content" id="contentText" placeholder="내용을 직접 작성하세요..." required></textarea>
-                
-                <!-- 🌟 [마법의 이미지 태그 삽입 버튼 추가] -->
-                <button type="button" onclick="insertImageTag()" style="background: #e67e22; margin-bottom: 10px; font-size: 14px; padding: 8px;">📷 본문에 이미지 태그(주소) 넣기</button>
-
+                <button type="button" class="img-btn" onclick="insertImageTag('manualContent')">📷 커서 위치에 이미지 넣기</button>
+                <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
                 <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
             </form>
         </div>
-
-        <!-- 🌟 [이미지 태그 자동 삽입 자바스크립트] -->
-        <script>
-        function insertImageTag() {{
-            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {{
-                const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
-                const textarea = document.getElementById('contentText');
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                textarea.focus();
-            }}
-        }}
-        </script>
 
         <div class="box" style="border-top: 5px solid #8e44ad;">
             <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (신문 스타일 자동 적용)</h3>
@@ -716,10 +704,26 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
-                <textarea name="prompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
+                <button type="button" class="img-btn" onclick="insertImageTag('expandPrompt')">📷 커서 위치에 이미지 넣기</button>
+                <textarea name="prompt" id="expandPrompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
+
+        <!-- 🌟 [모든 텍스트area에 공통 적용되는 이미지 삽입 자바스크립트] -->
+        <script>
+        function insertImageTag(elementId) {{
+            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+            if (url) {{
+                const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
+                const textarea = document.getElementById(elementId);
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                textarea.focus();
+            }}
+        }}
+        </script>
 
         <div class="box" style="border-top: 5px solid #34495e;">
             <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
@@ -792,6 +796,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
+# 🌟 [기사 수정 페이지에도 이미지 삽입 버튼 추가]
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
@@ -821,6 +826,8 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
             .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
+            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 12px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-block; }}
+            .img-btn:hover {{ background: #d35400; }}
         </style>
     </head>
     <body>
@@ -847,11 +854,26 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <img src="{current_img}" class="preview-img" onerror="this.style.display='none'">
 
                 <label>기사 내용</label>
-                <textarea name="content" required>{art['content']}</textarea>
+                <button type="button" class="img-btn" onclick="insertImageTag('editContent')">📷 커서 위치에 이미지 넣기</button>
+                <textarea name="content" id="editContent" required>{art['content']}</textarea>
                 
                 <button type="submit">💾 수정 사항 저장하기</button>
             </form>
         </div>
+
+        <script>
+        function insertImageTag(elementId) {{
+            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+            if (url) {{
+                const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
+                const textarea = document.getElementById(elementId);
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                textarea.focus();
+            }}
+        }}
+        </script>
     </body>
     </html>
     """
