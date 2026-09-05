@@ -452,7 +452,6 @@ def index(request: Request, category: str = None, view: int = None):
         </div>
         """
 
-    # 🌟 [목록에서 카테고리 뱃지 제거] 네이버 뉴스처럼 제목과 날짜만 깔끔하게 일직선으로 정렬
     list_html = ""
     for art in list_articles:
         list_html += f"""
@@ -489,7 +488,6 @@ def index(request: Request, category: str = None, view: int = None):
             .featured-title a:hover {{ color: #2980b9; }}
             .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
 
-            /* 🌟 [네이버 뉴스 리스트 스타일] 뱃지를 없애고 제목과 날짜가 깔끔하게 정돈된 형태 */
             .news-list-box {{ background: white; border-radius: 10px; padding: 10px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 15px; }}
             .news-list-item {{ display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f1f2f6; }}
             .news-list-item:last-child {{ border-bottom: none; }}
@@ -666,7 +664,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 
         <div class="box" style="border-top: 5px solid #2980b9;">
             <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
-            <form action="/admin/create-manual" method="post">
+            <form action="/admin/create-manual" method="post" id="manualForm">
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="AI/테크">AI/테크</option>
@@ -679,10 +677,29 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 <label>기사 내용</label>
-                <textarea name="content" placeholder="내용을 직접 작성하세요..." required></textarea>
+                <textarea name="content" id="contentText" placeholder="내용을 직접 작성하세요..." required></textarea>
+                
+                <!-- 🌟 [마법의 이미지 태그 삽입 버튼 추가] -->
+                <button type="button" onclick="insertImageTag()" style="background: #e67e22; margin-bottom: 10px; font-size: 14px; padding: 8px;">📷 본문에 이미지 태그(주소) 넣기</button>
+
                 <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
             </form>
         </div>
+
+        <!-- 🌟 [이미지 태그 자동 삽입 자바스크립트] -->
+        <script>
+        function insertImageTag() {{
+            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+            if (url) {{
+                const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
+                const textarea = document.getElementById('contentText');
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                textarea.focus();
+            }}
+        }}
+        </script>
 
         <div class="box" style="border-top: 5px solid #8e44ad;">
             <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (신문 스타일 자동 적용)</h3>
@@ -740,7 +757,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;'>{p}</p>" for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;'>{p}</p>" if not p.strip().startswith('<img') else p for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
