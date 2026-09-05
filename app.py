@@ -6,7 +6,7 @@ import time
 import requests
 import re
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Form, Request, Response, Cookie
+from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -181,15 +181,12 @@ def fetch_bulletproof_image(category_name):
     chosen = random.choice(pool)
     return chosen[0], chosen[1]
 
-# 🌟 [강력한 단락 분할 포맷팅 함수] 엔터 줄바꿈을 완벽하게 인식해서 시원하게 쪼개줍니다!
 def clean_and_format_content(text, category_name="종합"):
     text = text.replace('**', '').replace('__', '')
     
-    # 이미 HTML <p> 태그나 이미지 태그가 포함되어 있다면 그대로 보존
     if '<p' in text or '<img' in text:
         return text
 
-    # 입력된 텍스트를 줄단위로 쪼개어 단락(Paragraph)으로 변환
     paragraphs = text.split('\n')
     processed_lines = []
     
@@ -209,7 +206,6 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    # 해시태그 처리
     text_for_tags = re.sub(r'###+', '', text)
     all_words = text_for_tags.split()
     hashtags = [w for w in all_words if w.startswith('#') and len(w) > 1 and not w.startswith('#2c')]
@@ -302,7 +298,6 @@ def get_article_by_id(article_id):
         }
 
 def update_article_in_db(article_id, category, title, content, image_url):
-    # 수정할 때도 엔터(줄바꿈)를 감지해서 단락으로 깔끔하게 재포맷팅합니다!
     formatted_content = clean_and_format_content(content, category)
     
     if supabase:
@@ -386,6 +381,30 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
+# 🌟 [이미지 파일 업로드 API 엔드포인트 추가] 기기에서 선택한 이미지를 임시 저장 후 URL 반환
+@app.post("/admin/upload-image")
+async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return {"error": "Unauthorized"}
+    try:
+        os.makedirs("static", exist_ok=True)
+        file_ext = file.filename.split(".")[-1]
+        unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
+        file_path = os.path.join("static", unique_filename)
+        
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+            
+        # 서버 주소를 기반으로 이미지 URL 생성
+        image_url = f"/static/{unique_filename}"
+        return {"url": image_url}
+    except Exception as e:
+        return {"error": str(e)}
+
+from fastapi.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
     log_visitor()
@@ -414,7 +433,6 @@ def index(request: Request, category: str = None, view: int = None):
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
-                
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
@@ -644,8 +662,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
             .stat-card {{ display: inline-block; width: 45%; background: #ebf5fb; padding: 15px; border-radius: 6px; text-align: center; margin-right: 4%; }}
             .stat-num {{ font-size: 1.8em; font-weight: bold; color: #2980b9; margin-top: 5px; }}
-            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 12px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-block; }}
+            .img-btn-group {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
+            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }}
             .img-btn:hover {{ background: #d35400; }}
+            .file-input {{ display: none; }}
         </style>
     </head>
     <body>
@@ -703,7 +723,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 <label>기사 내용</label>
-                <button type="button" class="img-btn" onclick="insertImageTag('manualContent')">📷 커서 위치에 이미지 넣기</button>
+                
+                <!-- 🌟 [이미지 입력 버튼 그룹: URL 입력 & 내 기기 파일 업로드] -->
+                <div class="img-btn-group">
+                    <button type="button" class="img-btn" onclick="insertImageByUrl('manualContent')">🌐 웹 주소(URL)로 이미지 넣기</button>
+                    <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('manualFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
+                    <input type="file" id="manualFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'manualContent')">
+                </div>
+
                 <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
                 <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
             </form>
@@ -724,14 +751,21 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 <label>AI 확장용 프롬프트 / 메모</label>
-                <button type="button" class="img-btn" onclick="insertImageTag('expandPrompt')">📷 커서 위치에 이미지 넣기</button>
+                
+                <div class="img-btn-group">
+                    <button type="button" class="img-btn" onclick="insertImageByUrl('expandPrompt')">🌐 웹 주소(URL)로 이미지 넣기</button>
+                    <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('expandFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
+                    <input type="file" id="expandFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'expandPrompt')">
+                </div>
+
                 <textarea name="prompt" id="expandPrompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
 
+        <!-- 🌟 [이미지 URL 및 파일 업로드 처리 자바스크립트] -->
         <script>
-        function insertImageTag(elementId) {{
+        function insertImageByUrl(elementId) {{
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
             if (url) {{
                 const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
@@ -740,6 +774,35 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 const end = textarea.selectionEnd;
                 textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
                 textarea.focus();
+            }}
+        }}
+
+        async function uploadImageFile(input, elementId) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                
+                try {{
+                    const response = await fetch("/admin/upload-image", {{
+                        method: "POST",
+                        body: formData
+                    }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        const tag = '\\n<img src="' + data.url + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
+                        const textarea = document.getElementById(elementId);
+                        const start = textarea.selectionStart;
+                        const end = textarea.selectionEnd;
+                        textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                        textarea.focus();
+                        alert("사진이 성공적으로 업로드되어 커서 위치에 삽입되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
+                    }}
+                }} catch (err) {{
+                    alert("사진 업로드 중 오류가 발생했습니다: " + err);
+                }}
+                input.value = "";
             }}
         }}
         </script>
@@ -844,8 +907,10 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
             .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
-            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 12px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px; display: inline-block; }}
+            .img-btn-group {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
+            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }}
             .img-btn:hover {{ background: #d35400; }}
+            .file-input {{ display: none; }}
         </style>
     </head>
     <body>
@@ -872,7 +937,14 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <img src="{current_img}" class="preview-img" onerror="this.style.display='none'">
 
                 <label>기사 내용</label>
-                <button type="button" class="img-btn" onclick="insertImageTag('editContent')">📷 커서 위치에 이미지 넣기</button>
+                
+                <!-- 🌟 [수정 페이지에도 파일 업로드 버튼 추가] -->
+                <div class="img-btn-group">
+                    <button type="button" class="img-btn" onclick="insertImageByUrl('editContent')">🌐 웹 주소(URL)로 이미지 넣기</button>
+                    <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('editFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
+                    <input type="file" id="editFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'editContent')">
+                </div>
+
                 <textarea name="content" id="editContent" required>{art['content']}</textarea>
                 
                 <button type="submit">💾 수정 사항 저장하기</button>
@@ -880,7 +952,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
-        function insertImageTag(elementId) {{
+        function insertImageByUrl(elementId) {{
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
             if (url) {{
                 const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
@@ -889,6 +961,35 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 const end = textarea.selectionEnd;
                 textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
                 textarea.focus();
+            }}
+        }}
+
+        async function uploadImageFile(input, elementId) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                
+                try {{
+                    const response = await fetch("/admin/upload-image", {{
+                        method: "POST",
+                        body: formData
+                    }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        const tag = '\\n<img src="' + data.url + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
+                        const textarea = document.getElementById(elementId);
+                        const start = textarea.selectionStart;
+                        const end = textarea.selectionEnd;
+                        textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                        textarea.focus();
+                        alert("사진이 성공적으로 업로드되어 커서 위치에 삽입되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
+                    }}
+                }} catch (err) {{
+                    alert("사진 업로드 중 오류가 발생했습니다: " + err);
+                }}
+                input.value = "";
             }}
         }}
         </script>
