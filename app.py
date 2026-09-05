@@ -404,7 +404,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [구글 로봇을 위한 공식 사이트맵(sitemap.xml) 자동 생성 엔드포인트 추가]
 @app.get("/sitemap.xml", response_class=PlainResponse)
 def sitemap():
     articles = get_all_articles()
@@ -412,19 +411,13 @@ def sitemap():
     
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    
-    # 메인 페이지 추가
     xml_content += f"  <url>\n    <loc>{base_url}/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n"
-    
-    # 모든 개별 기사 페이지 추가
     for art in articles:
         art_id = art['id']
         xml_content += f"  <url>\n    <loc>{base_url}/?view={art_id}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
-        
     xml_content += '</urlset>'
     return PlainResponse(content=xml_content, media_type="application/xml")
 
-# 🌟 [구글 로봇을 위한 RSS 피드 자동 생성 엔드포인트 추가]
 @app.get("/rss", response_class=PlainResponse)
 def rss_feed():
     articles = get_all_articles()
@@ -434,7 +427,7 @@ def rss_feed():
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>인사이트 종합 미디어</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
-    rss_content += '  <description>프리미엄 인사이트 웹진</description>\n'
+    rss_content += '  <description>프리미엄 인사이트 웹진 - AI와 경제, 시니어 트렌드 뉴스</description>\n'
     
     for art in articles:
         art_id = art['id']
@@ -459,13 +452,24 @@ def index(request: Request, category: str = None, view: int = None):
         if not art:
             return RedirectResponse(url="/", status_code=303)
         
+        # 개별 기사 페이지 메타 태그(SEO & Open Graph) 추가
+        art_title_clean = art['title'].replace('"', '')
+        art_desc_clean = art['content'][:100].replace('<p>', '').replace('</p>', '').replace('"', '')
+        art_img = art['image_url']
+        art_link = f"https://insight-webzine.onrender.com/?view={art['id']}"
+
         detail_html = f"""
         <!DOCTYPE html>
         <html lang="ko">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{art['title']} - 인사이트 종합 웹진</title>
+            <title>{art_title_clean} - 인사이트 종합 웹진</title>
+            <meta name="description" content="{art_desc_clean}">
+            <meta property="og:title" content="{art_title_clean}">
+            <meta property="og:description" content="{art_desc_clean}">
+            <meta property="og:image" content="{art_img}">
+            <meta property="og:url" content="{art_link}">
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }}
@@ -548,7 +552,12 @@ def index(request: Request, category: str = None, view: int = None):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>인사이트 종합 웹진 - 프리미엄 미디어</title>
+        <title>인사이트 종합 미디어 - 프리미엄 미디어</title>
+        <meta name="description" content="AI, 경제, 주식, 시니어 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
+        <meta property="og:title" content="인사이트 종합 미디어">
+        <meta property="og:description" content="AI, 경제, 주식, 시니어 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
+        <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
+        <meta property="og:url" content="https://insight-webzine.onrender.com/">
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
@@ -923,7 +932,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
+    if admin_auth !=="authenticated":
         return RedirectResponse(url="/admin", status_code=303)
 
     art = get_article_by_id(article_id)
@@ -1029,7 +1038,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                         alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
                     }}
                 }} catch (err) {{
-                    alert("사진 업로드 중 오류가 발생했습니다: " + err);
+                    alert("사진 업로드 중 오류가겠습니다: " + err);
                 }}
                 input.value = "";
             }}
@@ -1040,7 +1049,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     """
 
 @app.post("/admin/update/{article_id}")
-def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), image_url: str = Form(None), admin_auth: str = Cookie(None)) :
+def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), image_url: str = Form(None), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
