@@ -240,6 +240,40 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
+# 🌟 [티스토리 API 연동 전송 함수]
+def post_to_tistory(title, content, image_url, tistory_token, blog_name):
+    if not tistory_token or not blog_name:
+        return False, "토큰 또는 블로그 이름이 입력되지 않았습니다."
+    
+    url = f"https://www.tistory.com/apis/post/write"
+    
+    full_content = f"""
+    <p style="text-align: center;"><img src="{image_url}" style="width: 100%; border-radius: 8px; margin-bottom: 20px;"></p>
+    {content}
+    """
+    
+    payload = {
+        "access_token": tistory_token.strip(),
+        "output": "json",
+        "blogName": blog_name.strip(),
+        "title": title,
+        "content": full_content,
+        "visibility": "3",  # 3: 발행(공개)
+        "category": "0",    # 기본 카테고리
+        "tag": "인사이트,뉴스,웹진"
+    }
+    
+    try:
+        response = requests.post(url, data=payload, timeout=10)
+        res_data = response.json()
+        if response.status_code == 200 and str(res_data.get("tistory", {}).get("status")) == "200":
+            return True, "성공"
+        else:
+            err_msg = res_data.get("tistory", {}).get("error_message", "알 수 없는 오류")
+            return False, err_msg
+    except Exception as e:
+        return False, str(e)
+
 def save_article_to_db(category, title, content, image_url, image_author):
     kst = timezone(timedelta(hours=9))
     current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
@@ -335,7 +369,7 @@ def delete_article_from_db(article_id):
         conn.commit()
         conn.close()
 
-def generate_ai_article(category_name):
+def generate_ai_article(category_name, tistory_token=None, blog_name=None, sync_tistory=False):
     strict_insight_context = (
         "STRICT EDITORIAL RULE: Today is September 4, 2026. "
         "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
@@ -374,7 +408,11 @@ def generate_ai_article(category_name):
 
     img_url, author_name = fetch_bulletproof_image(category_name)
     formatted_content = clean_and_format_content(body_content, category_name)
+    
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
+    
+    if sync_tistory and tistory_token and blog_name:
+        post_to_tistory(art_title, formatted_content, img_url, tistory_token, blog_name)
 
 def scheduled_job():
     categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
@@ -435,8 +473,7 @@ def index(request: Request, category: str = None, view: int = None):
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
-                /* 🌟 [구독하기 버튼 컴팩트화] 절반 크기로 줄여서 부담 없이 예쁘게 배치 */
-                .article-footer {{ text-align: center; margin-top: 35px; padding-top: 20px; border-top: 1px solid #eaecee; }}
+                .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
                 .subscribe-btn-compact {{ display: inline-block; padding: 8px 22px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.92em; box-shadow: 0 2px 8px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
                 .subscribe-btn-compact:hover {{ background: #c0392b; transform: scale(1.03); }}
 
@@ -456,7 +493,6 @@ def index(request: Request, category: str = None, view: int = None):
                 <div class="img-source">📷 Photo by {art['image_author']}</div>
                 <div class="content">{art['content']}</div>
                 
-                <!-- 기사 맨 아래 아담하고 세련된 구독 버튼 -->
                 <div class="article-footer">
                     <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-compact">🔔 구독하기 (즐겨찾기)</a>
                 </div>
@@ -510,7 +546,6 @@ def index(request: Request, category: str = None, view: int = None):
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
             
-            /* 메인 화면 우측 상단 즐겨찾기 버튼 컴팩트화 */
             .main-subscribe-btn {{ padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             .main-subscribe-btn:hover {{ background: #c0392b; }}
 
@@ -668,6 +703,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }}
             .img-btn:hover {{ background: #d35400; }}
             .file-input {{ display: none; }}
+            .tistory-box {{ background: #fdfefe; border: 2px dashed #3498db; padding: 15px; border-radius: 6px; margin-bottom: 15px; }}
         </style>
     </head>
     <body>
@@ -706,6 +742,18 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
                 </select>
+                
+                <!-- 🌟 [티스토리 동시 발행 설정 영역] -->
+                <div class="tistory-box">
+                    <label style="color: #2980b9; margin-top: 0;">🌐 티스토리 블로그 연동 설정 (선택사항)</label>
+                    <input type="text" name="blog_name" placeholder="티스토리 블로그 이름 (예: myblog.tistory.com 에서 myblog)" style="margin-bottom: 8px;">
+                    <input type="text" name="tistory_token" placeholder="티스토리 오픈 API Access Token 입력" style="margin-bottom: 10px;">
+                    <label style="font-weight: normal; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" name="sync_tistory" value="true" style="width: 18px; height: 18px; margin: 0;"> 
+                        <strong>티스토리에도 이 기사를 동시에 자동 발행하기</strong>
+                    </label>
+                </div>
+
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
             </form>
         </div>
@@ -733,6 +781,17 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 </div>
 
                 <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
+
+                <div class="tistory-box">
+                    <label style="color: #2980b9; margin-top: 0;">🌐 티스토리 블로그 연동 설정 (선택사항)</label>
+                    <input type="text" name="blog_name" placeholder="티스토리 블로그 이름 (예: myblog)" style="margin-bottom: 8px;">
+                    <input type="text" name="tistory_token" placeholder="티스토리 오픈 API Access Token 입력" style="margin-bottom: 10px;">
+                    <label style="font-weight: normal; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" name="sync_tistory" value="true" style="width: 18px; height: 18px; margin: 0;"> 
+                        <strong>티스토리에도 이 기사를 동시에 자동 발행하기</strong>
+                    </label>
+                </div>
+
                 <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
             </form>
         </div>
@@ -760,6 +819,17 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 </div>
 
                 <textarea name="prompt" id="expandPrompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
+
+                <div class="tistory-box">
+                    <label style="color: #2980b9; margin-top: 0;">🌐 티스토리 블로그 연동 설정 (선택사항)</label>
+                    <input type="text" name="blog_name" placeholder="티스토리 블로그 이름 (예: myblog)" style="margin-bottom: 8px;">
+                    <input type="text" name="tistory_token" placeholder="티스토리 오픈 API Access Token 입력" style="margin-bottom: 10px;">
+                    <label style="font-weight: normal; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" name="sync_tistory" value="true" style="width: 18px; height: 18px; margin: 0;"> 
+                        <strong>티스토리에도 이 기사를 동시에 자동 발행하기</strong>
+                    </label>
+                </div>
+
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
@@ -830,14 +900,15 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     """
 
 @app.post("/admin/create-auto")
-def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
+def create_auto(category: str = Form(...), tistory_token: str = Form(None), blog_name: str = Form(None), sync_tistory: str = Form(None), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
-    generate_ai_article(category)
+    sync = True if sync_tistory == "true" else False
+    generate_ai_article(category, tistory_token, blog_name, sync)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-manual")
-def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...), admin_auth: str = Cookie(None)):
+def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...), tistory_token: str = Form(None), blog_name: str = Form(None), sync_tistory: str = Form(None), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
@@ -846,10 +917,14 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     formatted_content = clean_and_format_content(content, category)
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
+    
+    if sync_tistory == "true" and tistory_token and blog_name:
+        post_to_tistory(clean_title, formatted_content, img_url, tistory_token, blog_name)
+
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-ai-expand")
-def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
+def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), tistory_token: str = Form(None), blog_name: str = Form(None), sync_tistory: str = Form(None), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
@@ -876,6 +951,10 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     final_content = clean_and_format_content(final_content, category)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
+    
+    if sync_tistory == "true" and tistory_token and blog_name:
+        post_to_tistory(clean_title, final_content, img_url, tistory_token, blog_name)
+
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
