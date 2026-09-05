@@ -43,7 +43,6 @@ def init_db():
                 content TEXT,
                 image_url TEXT,
                 image_author TEXT,
-                likes INTEGER DEFAULT 0,
                 created_at TEXT
             )
         """)
@@ -254,14 +253,13 @@ def save_article_to_db(category, title, content, image_url, image_author):
             "content": content,
             "image_url": image_url,
             "image_author": image_author,
-            "likes": 0,
             "created_at": current_time_str
         }).execute()
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO articles (category, title, content, image_url, image_author, likes, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)", 
+            "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
             (category, title, content, image_url, image_author, current_time_str)
         )
         conn.commit()
@@ -278,14 +276,14 @@ def get_all_articles(category=None):
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
         if category and category != "전체":
-            cursor.execute("SELECT id, category, title, content, image_url, image_author, likes, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
+            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
         else:
-            cursor.execute("SELECT id, category, title, content, image_url, image_author, likes, created_at FROM articles ORDER BY id DESC")
+            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
         rows = cursor.fetchall()
         conn.close()
         return [{
             "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "likes": r[6] if len(r)>6 else 0, "created_at": r[7] if len(r)>7 else r[6]
+            "image_url": r[4], "image_author": r[5], "created_at": r[6]
         } for r in rows]
 
 def get_article_by_id(article_id):
@@ -295,39 +293,15 @@ def get_article_by_id(article_id):
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, category, title, content, image_url, image_author, likes, created_at FROM articles WHERE id = ?", (article_id,))
+        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (article_id,))
         r = cursor.fetchone()
         conn.close()
         if not r:
             return None
         return {
             "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "likes": r[6] if len(r)>6 else 0, "created_at": r[7] if len(r)>7 else r[6]
+            "image_url": r[4], "image_author": r[5], "created_at": r[6]
         }
-
-def add_like_to_article(article_id):
-    art = get_article_by_id(article_id)
-    if not art:
-        return
-    current_likes = art.get("likes", 0)
-    if current_likes is None:
-        current_likes = 0
-    new_likes = current_likes + 1
-    
-    if supabase:
-        try:
-            supabase.table("articles").update({"likes": new_likes}).eq("id", article_id).execute()
-        except Exception:
-            pass
-    else:
-        try:
-            conn = sqlite3.connect("database.db", check_same_thread=False)
-            cursor = conn.cursor()
-            cursor.execute("UPDATE articles SET likes = ? WHERE id = ?", (new_likes, article_id))
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass
 
 def update_article_in_db(article_id, category, title, content, image_url):
     if supabase:
@@ -412,22 +386,14 @@ scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, category: str = None, view: int = None, like: int = None):
+def index(request: Request, category: str = None, view: int = None):
     log_visitor()
-
-    if like:
-        add_like_to_article(like)
-        return RedirectResponse(url=f"/?view={like}", status_code=303)
 
     if view:
         art = get_article_by_id(view)
         if not art:
             return RedirectResponse(url="/", status_code=303)
         
-        current_likes = art.get('likes', 0)
-        if current_likes is None:
-            current_likes = 0
-
         detail_html = f"""
         <!DOCTYPE html>
         <html lang="ko">
@@ -450,13 +416,10 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
                 .content {{ font-size: 1em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.75; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; }}
                 
-                /* 🌟 [기사 하단 영역] 왼쪽엔 작은 좋아요, 오른쪽엔 구독(즐겨찾기) 버튼 */
-                .article-footer {{ display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; flex-wrap: wrap; gap: 15px; }}
-                .like-btn-small {{ display: inline-block; padding: 8px 16px; background: #fff; color: #ff4757; border: 2px solid #ff4757; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.9em; transition: 0.2s; }}
-                .like-btn-small:hover {{ background: #ff4757; color: white; }}
-                
-                .subscribe-btn-bottom {{ display: inline-block; padding: 9px 18px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-                .subscribe-btn-bottom:hover {{ background: #c0392b; }}
+                /* 🌟 [기사 끝났을 때 하단 구독하기 버튼] 유튜브 스타일 */
+                .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
+                .subscribe-btn-large {{ display: inline-block; padding: 12px 35px; background: #e74c3c; color: white; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 1.1em; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); transition: 0.2s; }}
+                .subscribe-btn-large:hover {{ background: #c0392b; transform: scale(1.05); }}
 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -474,10 +437,9 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
                 <div class="img-source">📷 Photo by {art['image_author']}</div>
                 <div class="content">{art['content']}</div>
                 
-                <!-- 기사 맨 아래 하단 영역 (왼쪽: 작은 좋아요 / 오른쪽: 구독하기) -->
+                <!-- 기사 맨 아래 중앙 구독(즐겨찾기) 버튼 -->
                 <div class="article-footer">
-                    <a href="/?like={art['id']}" class="like-btn-small">❤️ 좋아요 {current_likes}</a>
-                    <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-bottom">🔔 구독하기 (즐겨찾기)</a>
+                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-large">🔔 구독하기 (즐겨찾기 저장)</a>
                 </div>
             </div>
         </body>
@@ -495,19 +457,13 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
     for art in featured_articles:
         cat_name = art['category'] if art['category'] else '종합'
         img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-        art_likes = art.get('likes', 0)
-        if art_likes is None:
-            art_likes = 0
         featured_html += f"""
         <div class="featured-card">
             <div class="featured-img-wrap">
                 <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
             </div>
             <div class="featured-body">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span class="badge" style="margin-bottom: 0;">{cat_name}</span>
-                    <span style="font-size: 0.8em; color: #ff4757; font-weight: bold;">❤️ {art_likes}</span>
-                </div>
+                <span class="badge">{cat_name}</span>
                 <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
                 <div class="card-date">발행 | {art['created_at']}</div>
             </div>
@@ -516,13 +472,9 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
 
     list_html = ""
     for art in list_articles:
-        art_likes = art.get('likes', 0)
-        if art_likes is None:
-            art_likes = 0
         list_html += f"""
         <div class="news-list-item">
             <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
-            <span style="font-size: 0.8em; color: #ff4757; font-weight: bold; margin-right: 15px; white-space: nowrap;">❤️ {art_likes}</span>
             <span class="list-date">{art['created_at'].split()[0]}</span>
         </div>
         """
