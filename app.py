@@ -15,7 +15,6 @@ from supabase import create_client, Client
 
 app = FastAPI()
 
-# 🌟 [자동 폴더 생성 안전 장치] static 폴더가 없으면 서버가 켜질 때 자동으로 생성합니다.
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -436,9 +435,10 @@ def index(request: Request, category: str = None, view: int = None):
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
-                .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
-                .subscribe-btn-large {{ display: inline-block; padding: 12px 35px; background: #e74c3c; color: white; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 1.1em; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); transition: 0.2s; }}
-                .subscribe-btn-large:hover {{ background: #c0392b; transform: scale(1.05); }}
+                /* 🌟 [구독하기 버튼 컴팩트화] 절반 크기로 줄여서 부담 없이 예쁘게 배치 */
+                .article-footer {{ text-align: center; margin-top: 35px; padding-top: 20px; border-top: 1px solid #eaecee; }}
+                .subscribe-btn-compact {{ display: inline-block; padding: 8px 22px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.92em; box-shadow: 0 2px 8px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
+                .subscribe-btn-compact:hover {{ background: #c0392b; transform: scale(1.03); }}
 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -456,8 +456,9 @@ def index(request: Request, category: str = None, view: int = None):
                 <div class="img-source">📷 Photo by {art['image_author']}</div>
                 <div class="content">{art['content']}</div>
                 
+                <!-- 기사 맨 아래 아담하고 세련된 구독 버튼 -->
                 <div class="article-footer">
-                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-large">🔔 구독하기 (즐겨찾기 저장)</a>
+                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-compact">🔔 구독하기 (즐겨찾기)</a>
                 </div>
             </div>
         </body>
@@ -509,7 +510,8 @@ def index(request: Request, category: str = None, view: int = None):
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
             
-            .main-subscribe-btn {{ padding: 8px 16px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            /* 메인 화면 우측 상단 즐겨찾기 버튼 컴팩트화 */
+            .main-subscribe-btn {{ padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             .main-subscribe-btn:hover {{ background: #c0392b; }}
 
             .nav-tabs {{ display: flex; gap: 6px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
@@ -541,7 +543,7 @@ def index(request: Request, category: str = None, view: int = None):
     <body>
         <div class="header-flex">
             <h1>📰 인사이트 종합 미디어</h1>
-            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="main-subscribe-btn">⭐ 즐겨찾기 (구독)</a>
+            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="main-subscribe-btn">⭐ 즐겨찾기</a>
         </div>
         <div class="nav-tabs">
     """
