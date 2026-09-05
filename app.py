@@ -507,8 +507,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
-                .subscribe-btn-compact {{ display: inline-block; padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; }}
-                .subscribe-btn-compact:hover {{ background: #c0392b; }}
+                .footer-subscribe-btn {{ display: inline-block; padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; }}
+                .footer-subscribe-btn:hover {{ background: #c0392b; }}
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
@@ -525,7 +525,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div class="content">{art['content']}</div>
                 
                 <div class="article-footer">
-                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-compact">⭐ 즐겨찾기</a>
+                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기</a>
                 </div>
             </div>
         </body>
@@ -535,7 +535,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
 
     articles = get_all_articles(category)
     
-    # 🔍 검색어가 있는 경우 처리
     if q and q.strip():
         keyword = q.strip().lower()
         articles = [a for a in articles if keyword in a['title'].lower() or keyword in a['content'].lower()]
@@ -562,10 +561,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         </div>
         """
 
-    # 🛠️ [수정] 카테고리별 단락으로 나누어 각각 최신 5개씩 렌더링
     list_html = ""
     if category and category != "전체":
-        # 특정 카테고리를 선택한 경우 해당 기사들을 5개씩 묶거나 단락으로 표현
         cat_articles = articles if not (q and q.strip()) else articles
         chunked_list = [cat_articles[i:i+5] for i in range(0, len(cat_articles), 5)]
         for chunk in chunked_list:
@@ -580,7 +577,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 """
             list_html += '</div>'
     else:
-        # '전체' 또는 검색 결과인 경우 주요 카테고리별 혹은 전체 최신 5개씩 단락별 구성
         display_cats = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠", "정치", "생활정보"]
         for cat in display_cats:
             cat_arts = [a for a in articles if a.get('category') == cat][:5]
@@ -596,7 +592,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                     """
                 list_html += '</div>'
         
-        # 만약 카테고리에 속하지 않는 기타 기사가 있다면 남은 것들 추가
         other_arts = [a for a in articles if a.get('category') not in display_cats][:5]
         if other_arts and not category:
             list_html += f'<div class="news-section-box">'
@@ -643,7 +638,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .featured-title a:hover {{ color: #2980b9; }}
             .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
 
-            /* 🛠️ [수정] 카테고리별 단락 박스 및 헤더 스타일 */
             .news-section-box {{ background: white; border-radius: 10px; padding: 15px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-bottom: 15px; }}
             .section-header {{ font-size: 1.05em; font-weight: bold; color: #1b4f72; border-bottom: 2px solid #ebf5fb; padding-bottom: 8px; margin-bottom: 10px; }}
             
@@ -653,16 +647,16 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
             .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
 
-            /* 🛠️ [수정] 하단 구독 버튼과 검색창을 나란히 균형 있게 배치한 푸터 바 */
-            .footer-bar {{ display: flex; justify-content: center; align-items: center; gap: 10px; background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; flex-wrap: wrap; }}
-            .footer-subscribe-btn {{ padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; white-space: nowrap; }}
-            .footer-subscribe-btn:hover {{ background: #c0392b; }}
-            
-            .search-form {{ display: flex; gap: 5px; align-items: center; }}
-            .search-input {{ padding: 5px 10px; border: 1px solid #ccc; border-radius: 15px; font-size: 0.85em; outline: none; width: 150px; transition: 0.2s; }}
-            .search-input:focus {{ border-color: #1b4f72; width: 180px; }}
-            .search-btn {{ padding: 5px 12px; background: #1b4f72; color: white; border: none; border-radius: 15px; font-size: 0.85em; font-weight: bold; cursor: pointer; }}
+            /* 🛠️ [수정] 모바일 친화적 상하 2단 센터 정렬 푸터 바 (검색창 중앙 배치 + 그 아래 구독 버튼) */
+            .footer-bar {{ background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 15px; }}
+            .search-form {{ display: flex; gap: 6px; justify-content: center; width: 100%; max-width: 320px; }}
+            .search-input {{ padding: 8px 12px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.9em; outline: none; flex-grow: 1; transition: 0.2s; }}
+            .search-input:focus {{ border-color: #1b4f72; }}
+            .search-btn {{ padding: 8px 16px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.9em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
+            
+            .footer-subscribe-btn {{ display: inline-block; padding: 6px 16px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; }}
+            .footer-subscribe-btn:hover {{ background: #c0392b; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
         </style>
@@ -689,15 +683,15 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         if list_html:
             html += f'{list_html}'
         
-    # 🛠️ [수정] 맨 하단에 작고 예쁜 구독 버튼과 돋보기 검색창을 나란히 배치
+    # 🛠️ [수정] 상하 2단 구조 적용 (위쪽: 돋보기 검색창 센터 / 아래쪽: 아담한 즐겨찾기 버튼 센터)
     html += f"""
         <div class="footer-bar">
-            <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기</a>
             <form action="/" method="get" class="search-form">
                 {'<input type="hidden" name="category" value="' + category + '">' if category else ''}
                 <input type="text" name="q" class="search-input" placeholder="🔍 기사 검색..." value="{q if q else ''}">
                 <button type="submit" class="search-btn">검색</button>
             </form>
+            <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기</a>
         </div>
     """
 
