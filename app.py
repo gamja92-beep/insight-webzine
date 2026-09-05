@@ -43,6 +43,7 @@ def init_db():
                 content TEXT,
                 image_url TEXT,
                 image_author TEXT,
+                likes INTEGER DEFAULT 0,
                 created_at TEXT
             )
         """)
@@ -253,13 +254,14 @@ def save_article_to_db(category, title, content, image_url, image_author):
             "content": content,
             "image_url": image_url,
             "image_author": image_author,
+            "likes": 0,
             "created_at": current_time_str
         }).execute()
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
+            "INSERT INTO articles (category, title, content, image_url, image_author, likes, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)", 
             (category, title, content, image_url, image_author, current_time_str)
         )
         conn.commit()
@@ -276,14 +278,14 @@ def get_all_articles(category=None):
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
         if category and category != "전체":
-            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
+            cursor.execute("SELECT id, category, title, content, image_url, image_author, likes, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
         else:
-            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
+            cursor.execute("SELECT id, category, title, content, image_url, image_author, likes, created_at FROM articles ORDER BY id DESC")
         rows = cursor.fetchall()
         conn.close()
         return [{
             "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "created_at": r[6]
+            "image_url": r[4], "image_author": r[5], "likes": r[6] if len(r)>6 else 0, "created_at": r[7] if len(r)>7 else r[6]
         } for r in rows]
 
 def get_article_by_id(article_id):
@@ -293,15 +295,39 @@ def get_article_by_id(article_id):
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (article_id,))
+        cursor.execute("SELECT id, category, title, content, image_url, image_author, likes, created_at FROM articles WHERE id = ?", (article_id,))
         r = cursor.fetchone()
         conn.close()
         if not r:
             return None
         return {
             "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "created_at": r[6]
+            "image_url": r[4], "image_author": r[5], "likes": r[6] if len(r)>6 else 0, "created_at": r[7] if len(r)>7 else r[6]
         }
+
+def add_like_to_article(article_id):
+    art = get_article_by_id(article_id)
+    if not art:
+        return
+    current_likes = art.get("likes", 0)
+    if current_likes is None:
+        current_likes = 0
+    new_likes = current_likes + 1
+    
+    if supabase:
+        try:
+            supabase.table("articles").update({"likes": new_likes}).eq("id", article_id).execute()
+        except Exception:
+            pass
+    else:
+        try:
+            conn = sqlite3.connect("database.db", check_same_thread=False)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE articles SET likes = ? WHERE id = ?", (new_likes, article_id))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
 
 def update_article_in_db(article_id, category, title, content, image_url):
     if supabase:
@@ -386,14 +412,23 @@ scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, category: str = None, view: int = None):
+def index(request: Request, category: str = None, view: int = None, like: int = None):
     log_visitor()
+
+    # 좋아요 요청 처리
+    if like:
+        add_like_to_article(like)
+        return RedirectResponse(url=f"/?view={like}", status_code=303)
 
     if view:
         art = get_article_by_id(view)
         if not art:
             return RedirectResponse(url="/", status_code=303)
         
+        current_likes = art.get('likes', 0)
+        if current_likes is None:
+            current_likes = 0
+
         detail_html = f"""
         <!DOCTYPE html>
         <html lang="ko">
@@ -403,8 +438,14 @@ def index(request: Request, category: str = None, view: int = None):
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.75; box-sizing: border-box; }}
-                .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-bottom: 25px; transition: 0.2s; }}
+                .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 10px; }}
+                .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
+                
+                /* 🌟 [구독 버튼 스타일] 즐겨찾기 안내 배너 */
+                .subscribe-btn {{ display: inline-block; padding: 10px 18px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.95em; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+                .subscribe-btn:hover {{ background: #c0392b; }}
+
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
                 h1 {{ font-size: 1.6em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
@@ -413,11 +454,21 @@ def index(request: Request, category: str = None, view: int = None):
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 .content {{ font-size: 1em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.75; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; }}
+                
+                /* 🌟 [좋아요 하트 버튼 영역] */
+                .like-box {{ text-align: center; margin: 40px 0 20px 0; padding-top: 25px; border-top: 1px solid #eaecee; }}
+                .like-btn {{ display: inline-block; padding: 12px 30px; background: #ff4757; color: white; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 1.1em; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3); transition: 0.2s; }}
+                .like-btn:hover {{ background: #ff6b81; transform: scale(1.05); }}
+
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
         <body>
-            <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
+            <div class="top-bar">
+                <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
+                <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn">🔔 구독하기 (즐겨찾기)</a>
+            </div>
+
             <div class="article-container">
                 <span class="badge">{art['category']}</span>
                 <h1>{art['title']}</h1>
@@ -425,6 +476,11 @@ def index(request: Request, category: str = None, view: int = None):
                 <img src="{art['image_url']}" class="article-img">
                 <div class="img-source">📷 Photo by {art['image_author']}</div>
                 <div class="content">{art['content']}</div>
+                
+                <!-- 좋아요 버튼 -->
+                <div class="like-box">
+                    <a href="/?like={art['id']}" class="like-btn">❤️ 좋아요 {current_likes}</a>
+                </div>
             </div>
         </body>
         </html>
@@ -441,13 +497,19 @@ def index(request: Request, category: str = None, view: int = None):
     for art in featured_articles:
         cat_name = art['category'] if art['category'] else '종합'
         img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
+        art_likes = art.get('likes', 0)
+        if art_likes is None:
+            art_likes = 0
         featured_html += f"""
         <div class="featured-card">
             <div class="featured-img-wrap">
                 <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
             </div>
             <div class="featured-body">
-                <span class="badge">{cat_name}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span class="badge" style="margin-bottom: 0;">{cat_name}</span>
+                    <span style="font-size: 0.8em; color: #ff4757; font-weight: bold;">❤️ {art_likes}</span>
+                </div>
                 <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
                 <div class="card-date">발행 | {art['created_at']}</div>
             </div>
@@ -456,9 +518,13 @@ def index(request: Request, category: str = None, view: int = None):
 
     list_html = ""
     for art in list_articles:
+        art_likes = art.get('likes', 0)
+        if art_likes is None:
+            art_likes = 0
         list_html += f"""
         <div class="news-list-item">
             <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+            <span style="font-size: 0.8em; color: #ff4757; font-weight: bold; margin-right: 15px; white-space: nowrap;">❤️ {art_likes}</span>
             <span class="list-date">{art['created_at'].split()[0]}</span>
         </div>
         """
@@ -472,8 +538,13 @@ def index(request: Request, category: str = None, view: int = None):
         <title>인사이트 종합 웹진 - 프리미엄 미디어</title>
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; }}
+            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
+            
+            /* 메인 화면 구독 버튼 */
+            .main-subscribe-btn {{ padding: 8px 16px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            .main-subscribe-btn:hover {{ background: #c0392b; }}
+
             .nav-tabs {{ display: flex; gap: 6px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ padding: 6px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
@@ -484,7 +555,7 @@ def index(request: Request, category: str = None, view: int = None):
             .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
             .featured-card:hover .featured-img {{ transform: scale(1.03); }}
             .featured-body {{ padding: 15px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; margin-bottom: 8px; width: fit-content; }}
+            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; width: fit-content; }}
             .featured-title {{ font-size: 1.1em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; word-break: keep-all; }}
             .featured-title a {{ color: inherit; text-decoration: none; }}
             .featured-title a:hover {{ color: #2980b9; }}
@@ -503,6 +574,7 @@ def index(request: Request, category: str = None, view: int = None):
     <body>
         <div class="header-flex">
             <h1>📰 인사이트 종합 미디어</h1>
+            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="main-subscribe-btn">🔔 구독하기 (즐겨찾기)</a>
         </div>
         <div class="nav-tabs">
     """
@@ -582,7 +654,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if not recent_logs_html:
         recent_logs_html = "<li style='color: #777;'>최근 방문 기록이 없습니다.</li>"
 
-    # 🌟 [수정/삭제 버튼 디자인 콤팩트하고 정갈하게 개선] 가로나 세로로 예쁘게 배치
     articles_list_html = ""
     for r in rows:
         articles_list_html += f"""
@@ -710,7 +781,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             </form>
         </div>
 
-        <!-- 🌟 [모든 텍스트area에 공통 적용되는 이미지 삽입 자바스크립트] -->
         <script>
         function insertImageTag(elementId) {{
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
@@ -796,7 +866,6 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
-# 🌟 [기사 수정 페이지에도 이미지 삽입 버튼 추가]
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
