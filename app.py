@@ -404,17 +404,18 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [구글 봇 방화벽을 완전히 해제하는 초강력 스매싱 robots.txt 엔드포인트]
+# 🌟 [초강력 썬파워: 구글 봇 전용 방화벽 완전 해제형 robots.txt 및 표준 응답 헤더 장착]
 @app.get("/robots.txt", response_class=PlainResponse)
 def robots_txt():
     robots_text = (
-        "User-agent: *\n"
-        "Allow: /\n\n"
         "User-agent: Googlebot\n"
+        "Allow: /\n"
+        "Crawl-delay: 0\n\n"
+        "User-agent: *\n"
         "Allow: /\n\n"
         "Sitemap: https://insight-webzine.onrender.com/sitemap.xml"
     )
-    return PlainResponse(content=robots_text, media_type="text/plain")
+    return PlainResponse(content=robots_text, media_type="text/plain", headers={"X-Robots-Tag": "index, follow"})
 
 @app.get("/sitemap.xml", response_class=PlainResponse)
 def sitemap():
