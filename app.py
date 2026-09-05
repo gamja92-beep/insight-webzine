@@ -404,7 +404,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [메모리에서 직접 무조건 robots.txt 내용을 뿜어내도록 완벽 고정]
 @app.get("/robots.txt", response_class=PlainResponse)
 def robots_txt():
     robots_text = "User-agent: *\nAllow: /\n\nSitemap: https://insight-webzine.onrender.com/sitemap.xml"
@@ -1062,3 +1061,8 @@ def update_article(article_id: int, category: str = Form(...), title: str = Form
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/delete/{article_id}")
+def delete_article(article_id: int, admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
+    delete_article_from_db(article_id)
+    return RedirectResponse(url="/admin/studio", status_code=303)
