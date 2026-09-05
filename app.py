@@ -415,7 +415,6 @@ scheduler.start()
 def index(request: Request, category: str = None, view: int = None, like: int = None):
     log_visitor()
 
-    # 좋아요 요청 처리
     if like:
         add_like_to_article(like)
         return RedirectResponse(url=f"/?view={like}", status_code=303)
@@ -438,14 +437,10 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.75; box-sizing: border-box; }}
-                .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 10px; }}
+                .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
                 
-                /* 🌟 [구독 버튼 스타일] 즐겨찾기 안내 배너 */
-                .subscribe-btn {{ display: inline-block; padding: 10px 18px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.95em; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
-                .subscribe-btn:hover {{ background: #c0392b; }}
-
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
                 .badge {{ display: inline-block; padding: 5px 14px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-bottom: 12px; }}
                 h1 {{ font-size: 1.6em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.35; word-break: keep-all; letter-spacing: -0.5px; }}
@@ -455,10 +450,13 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
                 .content {{ font-size: 1em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.75; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; }}
                 
-                /* 🌟 [좋아요 하트 버튼 영역] */
-                .like-box {{ text-align: center; margin: 40px 0 20px 0; padding-top: 25px; border-top: 1px solid #eaecee; }}
-                .like-btn {{ display: inline-block; padding: 12px 30px; background: #ff4757; color: white; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 1.1em; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3); transition: 0.2s; }}
-                .like-btn:hover {{ background: #ff6b81; transform: scale(1.05); }}
+                /* 🌟 [기사 하단 영역] 왼쪽엔 작은 좋아요, 오른쪽엔 구독(즐겨찾기) 버튼 */
+                .article-footer {{ display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; flex-wrap: wrap; gap: 15px; }}
+                .like-btn-small {{ display: inline-block; padding: 8px 16px; background: #fff; color: #ff4757; border: 2px solid #ff4757; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.9em; transition: 0.2s; }}
+                .like-btn-small:hover {{ background: #ff4757; color: white; }}
+                
+                .subscribe-btn-bottom {{ display: inline-block; padding: 9px 18px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }}
+                .subscribe-btn-bottom:hover {{ background: #c0392b; }}
 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -466,7 +464,6 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
         <body>
             <div class="top-bar">
                 <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
-                <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn">🔔 구독하기 (즐겨찾기)</a>
             </div>
 
             <div class="article-container">
@@ -477,9 +474,10 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
                 <div class="img-source">📷 Photo by {art['image_author']}</div>
                 <div class="content">{art['content']}</div>
                 
-                <!-- 좋아요 버튼 -->
-                <div class="like-box">
-                    <a href="/?like={art['id']}" class="like-btn">❤️ 좋아요 {current_likes}</a>
+                <!-- 기사 맨 아래 하단 영역 (왼쪽: 작은 좋아요 / 오른쪽: 구독하기) -->
+                <div class="article-footer">
+                    <a href="/?like={art['id']}" class="like-btn-small">❤️ 좋아요 {current_likes}</a>
+                    <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-bottom">🔔 구독하기 (즐겨찾기)</a>
                 </div>
             </div>
         </body>
@@ -541,7 +539,7 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
             
-            /* 메인 화면 구독 버튼 */
+            /* 메인 화면 우측 상단 즐겨찾기 버튼 */
             .main-subscribe-btn {{ padding: 8px 16px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             .main-subscribe-btn:hover {{ background: #c0392b; }}
 
@@ -574,7 +572,7 @@ def index(request: Request, category: str = None, view: int = None, like: int = 
     <body>
         <div class="header-flex">
             <h1>📰 인사이트 종합 미디어</h1>
-            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="main-subscribe-btn">🔔 구독하기 (즐겨찾기)</a>
+            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="main-subscribe-btn">⭐ 즐겨찾기 (구독)</a>
         </div>
         <div class="nav-tabs">
     """
