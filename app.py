@@ -208,11 +208,12 @@ def clean_and_format_content(text, category_name="종합"):
             processed_lines.append(line_str)
         elif line_str.startswith('###'):
             title_text = line_str.replace('###', '').strip()
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
         elif len(line_str) < 42 and not line_str.endswith(('.', '?', '!')) and not line_str.startswith('<'):
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 30px; margin-bottom: 12px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
+            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{line_str}</h3>')
         else:
-            processed_lines.append(f'<p style="margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;">{line_str}</p>')
+            # 🌟 [단락 호흡 개선] 문장이 너무 길게 이어지지 않도록 적절히 끊어 읽기 좋은 간격(<p> 마진 22px) 부여
+            processed_lines.append(f'<p style="margin-bottom: 22px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{line_str}</p>')
             
     final_html = "".join(processed_lines)
     
@@ -237,7 +238,7 @@ def clean_and_format_content(text, category_name="종합"):
         cleaned_tags.append(t_clean)
 
     clean_tags_str = " ".join(cleaned_tags)
-    tag_html = f"<div style='margin-top: 30px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.85em; word-spacing: 5px;'>{clean_tags_str}</div>"
+    tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.85em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
     return final_html
@@ -402,7 +403,7 @@ def index(request: Request, category: str = None, view: int = None):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 인사이트 종합 웹진</title>
             <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.75; box-sizing: border-box; }}
+                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }}
                 .back-btn {{ display: inline-block; padding: 10px 20px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
@@ -413,10 +414,11 @@ def index(request: Request, category: str = None, view: int = None):
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
-                .content {{ font-size: 1em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.75; letter-spacing: -0.3px; }}
-                .content p {{ margin-bottom: 16px; text-align: left !important; word-break: normal; }}
                 
-                /* 🌟 [기사 끝났을 때 하단 구독하기 버튼] 유튜브 스타일 */
+                /* 🌟 [상세페이지 본문 단락 간격 및 호흡 최적화] */
+                .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
+                .content p {{ margin-bottom: 22px; text-align: left !important; word-break: normal; }}
+                
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
                 .subscribe-btn-large {{ display: inline-block; padding: 12px 35px; background: #e74c3c; color: white; text-decoration: none; border-radius: 30px; font-weight: bold; font-size: 1.1em; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); transition: 0.2s; }}
                 .subscribe-btn-large:hover {{ background: #c0392b; transform: scale(1.05); }}
@@ -437,7 +439,6 @@ def index(request: Request, category: str = None, view: int = None):
                 <div class="img-source">📷 Photo by {art['image_author']}</div>
                 <div class="content">{art['content']}</div>
                 
-                <!-- 기사 맨 아래 중앙 구독(즐겨찾기) 버튼 -->
                 <div class="article-footer">
                     <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-large">🔔 구독하기 (즐겨찾기 저장)</a>
                 </div>
@@ -491,7 +492,6 @@ def index(request: Request, category: str = None, view: int = None):
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
             
-            /* 메인 화면 우측 상단 즐겨찾기 버튼 */
             .main-subscribe-btn {{ padding: 8px 16px; background: #e74c3c; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.9em; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
             .main-subscribe-btn:hover {{ background: #c0392b; }}
 
@@ -505,7 +505,7 @@ def index(request: Request, category: str = None, view: int = None):
             .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
             .featured-card:hover .featured-img {{ transform: scale(1.03); }}
             .featured-body {{ padding: 15px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; width: fit-content; }}
+            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; margin-bottom: 8px; width: fit-content; }}
             .featured-title {{ font-size: 1.1em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; word-break: keep-all; }}
             .featured-title a {{ color: inherit; text-decoration: none; }}
             .featured-title a:hover {{ color: #2980b9; }}
@@ -781,7 +781,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = "".join([f"<p style='margin-bottom: 16px; text-align: left !important; word-break: normal; line-height: 1.75; color: #111111; font-size: 1em; letter-spacing: -0.3px;'>{p}</p>" if not p.strip().startswith('<img') else p for p in content.split('\n') if p.strip()])
+    formatted_content = "".join([f"<p style='margin-bottom: 22px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;'>{p}</p>" if not p.strip().startswith('<img') else p for p in content.split('\n') if p.strip()])
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
