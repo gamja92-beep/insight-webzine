@@ -152,6 +152,16 @@ def fetch_bulletproof_image(category_name):
             ("https://images.unsplash.com/photo-1517649763962-0c623066013b", "Unsplash"),
             ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash"),
             ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash")
+        ],
+        "정치": [
+            ("https://images.unsplash.com/photo-1541872703-74c5e44368f9", "Unsplash"),
+            ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620", "Unsplash"),
+            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash")
+        ],
+        "생활정보": [
+            ("https://images.unsplash.com/photo-1484807352052-23338990c6c8", "Unsplash"),
+            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
+            ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
         ]
     }
 
@@ -164,7 +174,9 @@ def fetch_bulletproof_image(category_name):
             "세상이야기": "beautiful nature landscape sceneries wide",
             "시니어/복지": "peaceful nature park scenery wide",
             "연예계뉴스": "empty concert stage lights background wide",
-            "스포츠": "empty stadium sports arena field wide"
+            "스포츠": "empty stadium sports arena field wide",
+            "정치": "government building architecture wide",
+            "생활정보": "lifestyle interior cozy modern wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
         params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 50)}
@@ -191,7 +203,6 @@ def clean_and_format_content(text, category_name="종합"):
     if '<p' in text or '<img' in text:
         return text
 
-    # 🛠️ [수정] 본문 내부에 섞여 들어온 해시태그나 불필요한 잔여 줄들을 철저하게 걸러냅니다.
     lines_raw = text.split('\n')
     cleaned_lines_input = []
     for line in lines_raw:
@@ -219,21 +230,21 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    # 🛠️ [수정] 막대 기호나 상자 없이, 가장 깔끔하고 단정한 일반 텍스트 형태의 해시태그 1세트만 하단에 출력합니다.
     fallback_tags = {
         "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술"],
         "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략", "#종목분석", "#금융분석"],
         "세상이야기": ["#세상이야기", "#라이프스타일", "#감동글", "#일상소통", "#휴식", "#생활상식"],
         "시니어/복지": ["#시니어복지", "#은퇴설계", "#건강관리", "#노후준비", "#행복한삶", "#건강상식"],
         "연예계뉴스": ["#연예계트렌드", "#방송가전망", "#문화예술", "#엔터인사이트", "#미디어분석", "#연예계인물포커스"],
-        "스포츠": ["#스포츠분석", "#기록전망", "#스포츠인사이트", "#전술연구", "#스포츠칼럼", "#스포츠역사", "#스포츠기록"]
+        "스포츠": ["#스포츠분석", "#기록전망", "#스포츠인사이트", "#전술연구", "#스포츠칼럼", "#스포츠역사", "#스포츠기록"],
+        "정치": ["#정치현안", "#국회소식", "#정책분석", "#시사토론", "#정치이슈"],
+        "생활정보": ["#생활꿀팁", "#알뜰정보", "#생활경제", "#유용한정보", "#살림노하우"]
     }
     
     unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
     chosen_tags = random.sample(unique_tags, min(5, len(unique_tags)))
 
     clean_tags_str = " ".join(chosen_tags)
-    # 어떤 테두리나 배경 박스도 없는 아주 순수한 텍스트 스타일로 고정
     tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
@@ -348,7 +359,9 @@ def generate_ai_article(category_name):
         "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
         "시니어/복지": ("시니어/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
         "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 절대 가짜 스캔들나 찌라시성 가십을 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 오보가 나지 않도록 꼼꼼하게 살펴서 작성해줘. 현재 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측, 스포츠 산업의 구조적 과제 등을 다루는 전문적이고 품격 있는 '스포츠 인사이트 칼럼'을 작성해 주세요. 절대 날짜와 경기 시간이 틀리지 않게 작성하고 기록을 꼼꼼하게 체크하고 가짜 경기 결과를 기사로 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요.")
+        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 오보가 나지 않도록 꼼꼼하게 살펴서 작성해줘. 현재 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측, 스포츠 산업의 구조적 과제 등을 다루는 전문적이고 품격 있는 '스포츠 인사이트 칼럼'을 작성해 주세요. 절대 날짜와 경기 시간이 틀리지 않게 작성하고 기록을 꼼꼼하게 체크하고 가짜 경기 결과를 기사로 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "정치": ("정치", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
+        "생활정보": ("생활정보", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 일상생활에 유용한 실속 정보와 생활 속 지혜를 다루는 알찬 뉴스 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요.")
     }
     
     cat_info = prompts.get(category_name, ("종합", f"{strict_insight_context} 최신 트렌드 뉴스 기사 작성"))
@@ -376,7 +389,7 @@ def generate_ai_article(category_name):
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
-    categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
+    categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠", "정치", "생활정보"]
     target_cat = random.choice(categories)
     generate_ai_article(target_cat)
 
@@ -455,7 +468,7 @@ def rss_feed():
     return PlainResponse(content=rss_content, media_type="application/rss+xml")
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, category: str = None, view: int = None):
+def index(request: Request, category: str = None, view: int = None, q: str = None):
     log_visitor()
 
     if view:
@@ -483,29 +496,19 @@ def index(request: Request, category: str = None, view: int = None):
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
-                
-                /* 🛠️ [수정] 모바일 화면에서 버튼이 가로로 꽉 차지 않고 아담하게 보이도록 패딩과 마진 대폭 슬림화 */
                 .back-btn {{ display: inline-block; padding: 6px 14px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; transition: 0.2s; }}
                 .back-btn:hover {{ background: #12334a; }}
-                
                 .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
-                
-                /* 🛠️ [수정] 상세 페이지 상단 카테고리 뱃지 숨김 유지 */
                 .badge {{ display: none; }}
-                
-                /* 🛠️ [수정] 기사 제목 글자 크기를 줄여서(1.3em) 모바일에서 두 줄 이상 넘어가도 어지럽지 않게 개선 */
                 h1 {{ font-size: 1.3em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.4; word-break: keep-all; letter-spacing: -0.5px; }}
-                
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
                 .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
-                
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
-                .subscribe-btn-compact {{ display: inline-block; padding: 8px 22px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.92em; box-shadow: 0 2px 8px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
-                .subscribe-btn-compact:hover {{ background: #c0392b; transform: scale(1.03); }}
-
+                .subscribe-btn-compact {{ display: inline-block; padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; }}
+                .subscribe-btn-compact:hover {{ background: #c0392b; }}
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
@@ -522,7 +525,7 @@ def index(request: Request, category: str = None, view: int = None):
                 <div class="content">{art['content']}</div>
                 
                 <div class="article-footer">
-                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-compact">🔔 구독하기 (즐겨찾기)</a>
+                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="subscribe-btn-compact">⭐ 즐겨찾기</a>
                 </div>
             </div>
         </body>
@@ -531,7 +534,13 @@ def index(request: Request, category: str = None, view: int = None):
         return detail_html
 
     articles = get_all_articles(category)
-    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
+    
+    # 🔍 검색어가 있는 경우 처리
+    if q and q.strip():
+        keyword = q.strip().lower()
+        articles = [a for a in articles if keyword in a['title'].lower() or keyword in a['content'].lower()]
+
+    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠", "정치", "생활정보"]
 
     featured_articles = articles[:2] if articles else []
     list_articles = articles[2:] if len(articles) > 2 else []
@@ -553,14 +562,53 @@ def index(request: Request, category: str = None, view: int = None):
         </div>
         """
 
+    # 🛠️ [수정] 카테고리별 단락으로 나누어 각각 최신 5개씩 렌더링
     list_html = ""
-    for art in list_articles:
-        list_html += f"""
-        <div class="news-list-item">
-            <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
-            <span class="list-date">{art['created_at'].split()[0]}</span>
-        </div>
-        """
+    if category and category != "전체":
+        # 특정 카테고리를 선택한 경우 해당 기사들을 5개씩 묶거나 단락으로 표현
+        cat_articles = articles if not (q and q.strip()) else articles
+        chunked_list = [cat_articles[i:i+5] for i in range(0, len(cat_articles), 5)]
+        for chunk in chunked_list:
+            list_html += f'<div class="news-section-box">'
+            list_html += f'<div class="section-header">📌 {category} 최신 리포트</div>'
+            for art in chunk:
+                list_html += f"""
+                <div class="news-list-item">
+                    <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                    <span class="list-date">{art['created_at'].split()[0]}</span>
+                </div>
+                """
+            list_html += '</div>'
+    else:
+        # '전체' 또는 검색 결과인 경우 주요 카테고리별 혹은 전체 최신 5개씩 단락별 구성
+        display_cats = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠", "정치", "생활정보"]
+        for cat in display_cats:
+            cat_arts = [a for a in articles if a.get('category') == cat][:5]
+            if cat_arts:
+                list_html += f'<div class="news-section-box">'
+                list_html += f'<div class="section-header">📂 {cat} 최신 소식</div>'
+                for art in cat_arts:
+                    list_html += f"""
+                    <div class="news-list-item">
+                        <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                        <span class="list-date">{art['created_at'].split()[0]}</span>
+                    </div>
+                    """
+                list_html += '</div>'
+        
+        # 만약 카테고리에 속하지 않는 기타 기사가 있다면 남은 것들 추가
+        other_arts = [a for a in articles if a.get('category') not in display_cats][:5]
+        if other_arts and not category:
+            list_html += f'<div class="news-section-box">'
+            list_html += f'<div class="section-header">📰 종합 최신 소식</div>'
+            for art in other_arts:
+                list_html += f"""
+                <div class="news-list-item">
+                    <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                    <span class="list-date">{art['created_at'].split()[0]}</span>
+                </div>
+                """
+            list_html += '</div>'
 
     html = f"""
     <!DOCTYPE html>
@@ -579,8 +627,8 @@ def index(request: Request, category: str = None, view: int = None):
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
             
-            .nav-tabs {{ display: flex; gap: 6px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
-            .tab-item {{ padding: 6px 12px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 13px; transition: 0.2s; white-space: nowrap; }}
+            .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
+            .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
             
             .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
@@ -595,12 +643,26 @@ def index(request: Request, category: str = None, view: int = None):
             .featured-title a:hover {{ color: #2980b9; }}
             .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
 
-            .news-list-box {{ background: white; border-radius: 10px; padding: 10px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 15px; }}
-            .news-list-item {{ display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f1f2f6; }}
+            /* 🛠️ [수정] 카테고리별 단락 박스 및 헤더 스타일 */
+            .news-section-box {{ background: white; border-radius: 10px; padding: 15px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-bottom: 15px; }}
+            .section-header {{ font-size: 1.05em; font-weight: bold; color: #1b4f72; border-bottom: 2px solid #ebf5fb; padding-bottom: 8px; margin-bottom: 10px; }}
+            
+            .news-list-item {{ display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f8f9fa; }}
             .news-list-item:last-child {{ border-bottom: none; }}
-            .list-title {{ flex-grow: 1; font-size: 0.98em; color: #2c3e50; text-decoration: none; font-weight: 600; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 15px; }}
+            .list-title {{ flex-grow: 1; font-size: 0.96em; color: #2c3e50; text-decoration: none; font-weight: 600; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 15px; }}
             .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
             .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
+
+            /* 🛠️ [수정] 하단 구독 버튼과 검색창을 나란히 균형 있게 배치한 푸터 바 */
+            .footer-bar {{ display: flex; justify-content: center; align-items: center; gap: 10px; background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; flex-wrap: wrap; }}
+            .footer-subscribe-btn {{ padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; white-space: nowrap; }}
+            .footer-subscribe-btn:hover {{ background: #c0392b; }}
+            
+            .search-form {{ display: flex; gap: 5px; align-items: center; }}
+            .search-input {{ padding: 5px 10px; border: 1px solid #ccc; border-radius: 15px; font-size: 0.85em; outline: none; width: 150px; transition: 0.2s; }}
+            .search-input:focus {{ border-color: #1b4f72; width: 180px; }}
+            .search-btn {{ padding: 5px 12px; background: #1b4f72; color: white; border: none; border-radius: 15px; font-size: 0.85em; font-weight: bold; cursor: pointer; }}
+            .search-btn:hover {{ background: #12334a; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
         </style>
@@ -625,8 +687,20 @@ def index(request: Request, category: str = None, view: int = None):
         if featured_html:
             html += f'<div class="featured-grid">{featured_html}</div>'
         if list_html:
-            html += f'<div class="news-list-box">{list_html}</div>'
+            html += f'{list_html}'
         
+    # 🛠️ [수정] 맨 하단에 작고 예쁜 구독 버튼과 돋보기 검색창을 나란히 배치
+    html += f"""
+        <div class="footer-bar">
+            <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기</a>
+            <form action="/" method="get" class="search-form">
+                {'<input type="hidden" name="category" value="' + category + '">' if category else ''}
+                <input type="text" name="q" class="search-input" placeholder="🔍 기사 검색..." value="{q if q else ''}">
+                <button type="submit" class="search-btn">검색</button>
+            </form>
+        </div>
+    """
+
     html += "</body></html>"
     return html
 
@@ -769,6 +843,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="시니어/복지">시니어/복지</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
+                    <option value="정치">정치</option>
+                    <option value="생활정보">생활정보</option>
                 </select>
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
             </form>
@@ -785,6 +861,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="시니어/복지">시니어/복지</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
+                    <option value="정치">정치</option>
+                    <option value="생활정보">생활정보</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
@@ -812,6 +890,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="시니어/복지">시니어/복지</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
+                    <option value="정치">정치</option>
+                    <option value="생활정보">생활정보</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
@@ -990,6 +1070,8 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     <option value="시니어/복지" {"selected" if art['category']=="시니어/복지" else ""}>시니어/복지</option>
                     <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
                     <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
+                    <option value="정치" {"selected" if art['category']=="정치" else ""}>정치</option>
+                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
                 </select>
                 
                 <label>기사 제목</label>
