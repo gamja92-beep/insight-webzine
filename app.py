@@ -7,7 +7,7 @@ import requests
 import re
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,6 +16,12 @@ from supabase import create_client, Client
 app = FastAPI()
 
 os.makedirs("static", exist_ok=True)
+
+# 🌟 [진짜 robots.txt 파일을 static 폴더 안에 직접 물리적으로 생성]
+robots_file_path = os.path.join("static", "robots.txt")
+with open(robots_file_path, "w", encoding="utf-8") as f:
+    f.write("User-agent: *\nAllow: /\n\nSitemap: https://insight-webzine.onrender.com/sitemap.xml")
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
@@ -404,11 +410,10 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🌟 [네이버 서치어드바이저 전용 명확한 robots.txt 엔드포인트]
+# 🌟 [물리적 robots.txt 파일을 직접 반환하는 전용 엔드포인트]
 @app.get("/robots.txt")
 def robots_txt():
-    content = "User-agent: *\nAllow: /\n\nSitemap: https://insight-webzine.onrender.com/sitemap.xml"
-    return Response(content=content, media_type="text/plain")
+    return FileResponse("static/robots.txt", media_type="text/plain")
 
 @app.get("/sitemap.xml", response_class=PlainResponse)
 def sitemap():
