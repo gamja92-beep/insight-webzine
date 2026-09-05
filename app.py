@@ -7,7 +7,7 @@ import requests
 import re
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -240,40 +240,6 @@ def clean_and_format_content(text, category_name="종합"):
 
     return final_html
 
-# 🌟 [티스토리 API 연동 전송 함수]
-def post_to_tistory(title, content, image_url, tistory_token, blog_name):
-    if not tistory_token or not blog_name:
-        return False, "토큰 또는 블로그 이름이 입력되지 않았습니다."
-    
-    url = f"https://www.tistory.com/apis/post/write"
-    
-    full_content = f"""
-    <p style="text-align: center;"><img src="{image_url}" style="width: 100%; border-radius: 8px; margin-bottom: 20px;"></p>
-    {content}
-    """
-    
-    payload = {
-        "access_token": tistory_token.strip(),
-        "output": "json",
-        "blogName": blog_name.strip(),
-        "title": title,
-        "content": full_content,
-        "visibility": "3",  # 3: 발행(공개)
-        "category": "0",    # 기본 카테고리
-        "tag": "인사이트,뉴스,웹진"
-    }
-    
-    try:
-        response = requests.post(url, data=payload, timeout=10)
-        res_data = response.json()
-        if response.status_code == 200 and str(res_data.get("tistory", {}).get("status")) == "200":
-            return True, "성공"
-        else:
-            err_msg = res_data.get("tistory", {}).get("error_message", "알 수 없는 오류")
-            return False, err_msg
-    except Exception as e:
-        return False, str(e)
-
 def save_article_to_db(category, title, content, image_url, image_author):
     kst = timezone(timedelta(hours=9))
     current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
@@ -369,7 +335,7 @@ def delete_article_from_db(article_id):
         conn.commit()
         conn.close()
 
-def generate_ai_article(category_name, tistory_token=None, blog_name=None, sync_tistory=False):
+def generate_ai_article(category_name):
     strict_insight_context = (
         "STRICT EDITORIAL RULE: Today is September 4, 2026. "
         "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
@@ -408,11 +374,7 @@ def generate_ai_article(category_name, tistory_token=None, blog_name=None, sync_
 
     img_url, author_name = fetch_bulletproof_image(category_name)
     formatted_content = clean_and_format_content(body_content, category_name)
-    
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
-    
-    if sync_tistory and tistory_token and blog_name:
-        post_to_tistory(art_title, formatted_content, img_url, tistory_token, blog_name)
 
 def scheduled_job():
     categories = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠"]
@@ -441,6 +403,52 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
         return {"url": image_url}
     except Exception as e:
         return {"error": str(e)}
+
+# 🌟 [구글 로봇을 위한 공식 사이트맵(sitemap.xml) 자동 생성 엔드포인트 추가]
+@app.get("/sitemap.xml", response_class=PlainResponse)
+def sitemap():
+    articles = get_all_articles()
+    base_url = "https://insight-webzine.onrender.com"
+    
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    
+    # 메인 페이지 추가
+    xml_content += f"  <url>\n    <loc>{base_url}/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n"
+    
+    # 모든 개별 기사 페이지 추가
+    for art in articles:
+        art_id = art['id']
+        xml_content += f"  <url>\n    <loc>{base_url}/?view={art_id}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
+        
+    xml_content += '</urlset>'
+    return PlainResponse(content=xml_content, media_type="application/xml")
+
+# 🌟 [구글 로봇을 위한 RSS 피드 자동 생성 엔드포인트 추가]
+@app.get("/rss", response_class=PlainResponse)
+def rss_feed():
+    articles = get_all_articles()
+    base_url = "https://insight-webzine.onrender.com"
+    
+    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
+    rss_content += '<rss version="2.0">\n<channel>\n'
+    rss_content += '  <title>인사이트 종합 미디어</title>\n'
+    rss_content += f'  <link>{base_url}/</link>\n'
+    rss_content += '  <description>프리미엄 인사이트 웹진</description>\n'
+    
+    for art in articles:
+        art_id = art['id']
+        title = art['title'].replace('&', '&amp;')
+        date_str = art['created_at']
+        rss_content += '  <item>\n'
+        rss_content += f'    <title>{title}</title>\n'
+        rss_content += f'    <link>{base_url}/?view={art_id}</link>\n'
+        rss_content += f'    <guid>{base_url}/?view={art_id}</guid>\n'
+        rss_content += f'    <pubDate>{date_str}</pubDate>\n'
+        rss_content += '  </item>\n'
+        
+    rss_content += '</channel>\n</rss>'
+    return PlainResponse(content=rss_content, media_type="application/rss+xml")
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None):
@@ -703,7 +711,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }}
             .img-btn:hover {{ background: #d35400; }}
             .file-input {{ display: none; }}
-            .tistory-box {{ background: #fdfefe; border: 2px dashed #3498db; padding: 15px; border-radius: 6px; margin-bottom: 15px; }}
         </style>
     </head>
     <body>
@@ -742,18 +749,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
                 </select>
-                
-                <!-- 🌟 [티스토리 동시 발행 설정 영역] -->
-                <div class="tistory-box">
-                    <label style="color: #2980b9; margin-top: 0;">🌐 티스토리 블로그 연동 설정 (선택사항)</label>
-                    <input type="text" name="blog_name" placeholder="티스토리 블로그 이름 (예: myblog.tistory.com 에서 myblog)" style="margin-bottom: 8px;">
-                    <input type="text" name="tistory_token" placeholder="티스토리 오픈 API Access Token 입력" style="margin-bottom: 10px;">
-                    <label style="font-weight: normal; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" name="sync_tistory" value="true" style="width: 18px; height: 18px; margin: 0;"> 
-                        <strong>티스토리에도 이 기사를 동시에 자동 발행하기</strong>
-                    </label>
-                </div>
-
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
             </form>
         </div>
@@ -781,17 +776,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 </div>
 
                 <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
-
-                <div class="tistory-box">
-                    <label style="color: #2980b9; margin-top: 0;">🌐 티스토리 블로그 연동 설정 (선택사항)</label>
-                    <input type="text" name="blog_name" placeholder="티스토리 블로그 이름 (예: myblog)" style="margin-bottom: 8px;">
-                    <input type="text" name="tistory_token" placeholder="티스토리 오픈 API Access Token 입력" style="margin-bottom: 10px;">
-                    <label style="font-weight: normal; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" name="sync_tistory" value="true" style="width: 18px; height: 18px; margin: 0;"> 
-                        <strong>티스토리에도 이 기사를 동시에 자동 발행하기</strong>
-                    </label>
-                </div>
-
                 <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
             </form>
         </div>
@@ -819,17 +803,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 </div>
 
                 <textarea name="prompt" id="expandPrompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
-
-                <div class="tistory-box">
-                    <label style="color: #2980b9; margin-top: 0;">🌐 티스토리 블로그 연동 설정 (선택사항)</label>
-                    <input type="text" name="blog_name" placeholder="티스토리 블로그 이름 (예: myblog)" style="margin-bottom: 8px;">
-                    <input type="text" name="tistory_token" placeholder="티스토리 오픈 API Access Token 입력" style="margin-bottom: 10px;">
-                    <label style="font-weight: normal; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                        <input type="checkbox" name="sync_tistory" value="true" style="width: 18px; height: 18px; margin: 0;"> 
-                        <strong>티스토리에도 이 기사를 동시에 자동 발행하기</strong>
-                    </label>
-                </div>
-
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
@@ -900,15 +873,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     """
 
 @app.post("/admin/create-auto")
-def create_auto(category: str = Form(...), tistory_token: str = Form(None), blog_name: str = Form(None), sync_tistory: str = Form(None), admin_auth: str = Cookie(None)):
+def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
-    sync = True if sync_tistory == "true" else False
-    generate_ai_article(category, tistory_token, blog_name, sync)
+    generate_ai_article(category)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-manual")
-def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...), tistory_token: str = Form(None), blog_name: str = Form(None), sync_tistory: str = Form(None), admin_auth: str = Cookie(None)):
+def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
@@ -917,14 +889,10 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     formatted_content = clean_and_format_content(content, category)
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
-    
-    if sync_tistory == "true" and tistory_token and blog_name:
-        post_to_tistory(clean_title, formatted_content, img_url, tistory_token, blog_name)
-
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-ai-expand")
-def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), tistory_token: str = Form(None), blog_name: str = Form(None), sync_tistory: str = Form(None), admin_auth: str = Cookie(None)):
+def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
@@ -951,10 +919,6 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     final_content = clean_and_format_content(final_content, category)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
-    
-    if sync_tistory == "true" and tistory_token and blog_name:
-        post_to_tistory(clean_title, final_content, img_url, tistory_token, blog_name)
-
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
@@ -1076,7 +1040,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     """
 
 @app.post("/admin/update/{article_id}")
-def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), image_url: str = Form(None), admin_auth: str = Cookie(None)):
+def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), image_url: str = Form(None), admin_auth: str = Cookie(None)) :
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
