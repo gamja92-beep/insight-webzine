@@ -493,7 +493,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:description" content="{art_desc_clean}">
             <meta property="og:image" content="{art_img}">
             <meta property="og:url" content="{art_link}">
-            <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
@@ -626,8 +625,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             
-            /* 🪟 [대문 타이틀 스타일] '시사투데이'에도 묵직한 서예체(고운바탕)를 적용하여 일체감 부여 */
-            .logo-title {{ font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.6em; font-weight: 700; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 14px; }}
+            /* 🪟 [대문 타이틀 스타일] '시사투데이'와 '창' 사이의 간격을 왼쪽으로 조금 더 당겨서 밀착 밸런스 조정 */
+            .logo-title {{ font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.6em; font-weight: 700; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }}
             .logo-chang {{ display: inline-block; background: #ffffff; color: #111111; border: 2.5px solid #111111; padding: 4px 16px; border-radius: 6px; font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.1em; font-weight: 700; transform: rotate(5deg); box-shadow: 3px 3px 6px rgba(0,0,0,0.12); }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
@@ -674,7 +673,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <body>
         <div class="header-flex">
             <div class="logo-title">
-                시사투데이&nbsp;&nbsp;<span class="logo-chang">창</span>
+                시사투데이&nbsp;<span class="logo-chang">창</span>
             </div>
         </div>
         <div class="nav-tabs">
