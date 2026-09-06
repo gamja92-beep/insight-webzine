@@ -539,7 +539,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         keyword = q.strip().lower()
         articles = [a for a in articles if keyword in a['title'].lower() or keyword in a['content'].lower()]
 
-    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠", "정치", "생활정보"]
+    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보"]
 
     featured_articles = articles[:2] if articles else []
     list_articles = articles[2:] if len(articles) > 2 else []
@@ -577,7 +577,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 """
             list_html += '</div>'
     else:
-        display_cats = ["AI/테크", "경제/주식", "세상이야기", "시니어/복지", "연예계뉴스", "스포츠", "정치", "생활정보"]
+        display_cats = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보"]
         for cat in display_cats:
             cat_arts = [a for a in articles if a.get('category') == cat][:5]
             if cat_arts:
@@ -612,9 +612,9 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>인사이트 종합 미디어 - 프리미엄 미디어</title>
-        <meta name="description" content="AI, 경제, 주식, 시니어 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
+        <meta name="description" content="AI, 경제, 주식, 건강 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
         <meta property="og:title" content="인사이트 종합 미디어">
-        <meta property="og:description" content="AI, 경제, 주식, 시니어 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
+        <meta property="og:description" content="AI, 경제, 주식, 건강 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
         <style>
@@ -837,7 +837,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="건강/복지">건강/복지</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
-                    <option value="정치시사">정치/시사</option>
+                    <option value="정치/시사">정치/시사</option>
                     <option value="생활정보">생활정보</option>
                 </select>
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
@@ -855,7 +855,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="건강/복지">건강/복지</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
-                    <option value="정치시사">정치/시사</option>
+                    <option value="정치/시사">정치/시사</option>
                     <option value="생활정보">생활정보</option>
                 </select>
                 <label>기사 제목</label>
