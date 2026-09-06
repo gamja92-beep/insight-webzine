@@ -493,6 +493,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:description" content="{art_desc_clean}">
             <meta property="og:image" content="{art_img}">
             <meta property="og:url" content="{art_link}">
+            <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
@@ -508,10 +509,9 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
                 
-                /* 독립된 즐겨찾기 박스 스타일 */
-                .footer-subscribe-box {{ background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 15px; text-align: center; }}
-                .footer-subscribe-btn {{ display: inline-block; padding: 10px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.9em; box-shadow: 0 3px 6px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
-                .footer-subscribe-btn:hover {{ background: #c0392b; }}
+                /* 아담한 즐겨찾기 링크 스타일 */
+                .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 5px 10px; transition: 0.2s; }}
+                .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
@@ -529,7 +529,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div class="content">{art['content']}</div>
                 
                 <div class="article-footer">
-                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기 추가하기</a>
+                    <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-bookmark-link">⭐ 즐겨찾기</a>
                 </div>
             </div>
         </body>
@@ -621,12 +621,16 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
+        <!-- 구글 붓글씨체(고운바탕체) 불러오기 -->
+        <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             
-            /* 🪟 [명품 제호 스타일] '인사이트 창' 묵직한 명조체 제호 적용 */
-            h1 {{ color: #1a252f; margin: 0; font-family: 'Batang', 'Georgia', serif; font-size: 1.8em; font-weight: 800; letter-spacing: -0.5px; word-break: keep-all; }}
+            /* 🪟 [대문 타이틀 스타일] '인사이트'는 깔끔하게, '창'은 굵고 멋진 붓글씨체로 강조 */
+            .logo-title {{ font-size: 1.6em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }}
+            .logo-icon {{ display: inline-block; width: 14px; height: 18px; background: #2980b9; border-radius: 3px; }}
+            .logo-chang {{ font-family: 'Gowun Batang', serif; font-size: 1.35em; color: #1b4f72; font-weight: 700; }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
@@ -661,17 +665,19 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            /* ⭐ [즐겨찾기/구독 버튼 전용 독립 박스 (아래에 큼직하게 분리)] */
-            .footer-subscribe-box {{ background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 12px; text-align: center; }}
-            .footer-subscribe-btn {{ display: inline-block; padding: 10px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.9em; box-shadow: 0 3px 6px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
-            .footer-subscribe-btn:hover {{ background: #c0392b; }}
+            /* ⭐ [아담한 즐겨찾기 텍스트 링크 박스] */
+            .footer-bookmark-box {{ background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-top: 10px; text-align: center; }}
+            .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 4px 10px; transition: 0.2s; }}
+            .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
         </style>
     </head>
     <body>
         <div class="header-flex">
-            <h1>🪟 인사이트 창</h1>    
+            <div class="logo-title">
+                <span class="logo-icon"></span>인사이트 <span class="logo-chang">창</span>
+            </div>
         </div>
         <div class="nav-tabs">
     """
@@ -691,7 +697,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         if list_html:
             html += f'{list_html}'
         
-    # 🛠️ [모바일 최적화 분리형 푸터] 위쪽은 검색창 박스 / 아래쪽은 독립된 즐겨찾기 박스
+    # 🛠️ [최종 수정된 푸터] 상단은 검색창, 하단은 예전처럼 아담한 '즐겨찾기' 링크
     html += f"""
         <div class="footer-search-box">
             <form action="/" method="get" class="search-form">
@@ -701,8 +707,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             </form>
         </div>
         
-        <div class="footer-subscribe-box">
-            <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 북마크(즐겨찾기) 추가하기</a>
+        <div class="footer-bookmark-box">
+            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-bookmark-link">⭐ 즐겨찾기</a>
         </div>
     """
 
