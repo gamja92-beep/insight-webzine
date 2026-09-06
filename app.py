@@ -625,9 +625,9 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             
-            /* 🪟 [대문 타이틀 스타일] '시사투데이' 뒤에 흰색 배경+검은색 테두리 박스 안에서 오른쪽으로 5도 기울어진 서예체 '창' */
-            .logo-title {{ font-size: 1.6em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 12px; }}
-            .logo-chang {{ display: inline-block; background: #ffffff; color: #111111; border: 2px solid #111111; padding: 1px 12px; border-radius: 4px; font-family: 'Gowun Batang', 'Batang', serif; font-weight: 700; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.1); }}
+            /* 🪟 [대문 타이틀 스타일] 박스 크기를 키우고 안의 서예체 글씨를 더 굵고 큼직하게 업그레이드 (오전 5도 기울기 유지) */
+            .logo-title {{ font-size: 1.75em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 14px; }}
+            .logo-chang {{ display: inline-block; background: #ffffff; color: #111111; border: 2.5px solid #111111; padding: 4px 16px; border-radius: 6px; font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.1em; font-weight: 700; transform: rotate(5deg); box-shadow: 3px 3px 6px rgba(0,0,0,0.12); }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
