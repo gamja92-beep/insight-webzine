@@ -619,16 +619,13 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
-        <!-- 웹 서예 흘림체(고운바탕/궁서풍) 불러오기 -->
-        <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             
-            /* 🪟 [대문 타이틀 스타일] '인사이트' 뒤에 붙는 '창'을 일필휘지 서예 흘림체 느낌으로 오른쪽으로 10도 회전 */
-            .logo-title {{ font-size: 1.6em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }}
-            .logo-icon {{ display: inline-block; width: 6px; height: 22px; background: #1b4f72; border-radius: 2px; }}
-            .logo-chang {{ font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.4em; color: #c0392b; font-weight: 700; display: inline-block; transform: rotate(10deg); margin-left: 3px; text-shadow: 1px 1px 2px rgba(0,0,0,0.15); }}
+            /* 🪟 [대문 타이틀 스타일] 왼쪽 파란색 창 아이콘 삭제 및 '창' 글자를 검은색 상자 안의 흰색 글씨로 개성 있게 독립 배치 */
+            .logo-title {{ font-size: 1.6em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 12px; }}
+            .logo-chang {{ display: inline-block; background: #111111; color: #ffffff; padding: 2px 10px; border-radius: 4px; font-weight: 900; letter-spacing: 1px; }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
@@ -674,7 +671,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <body>
         <div class="header-flex">
             <div class="logo-title">
-                <span class="logo-icon"></span>인사이트 <span class="logo-chang">창</span>
+                인사이트&nbsp;&nbsp;<span class="logo-chang">창</span>
             </div>
         </div>
         <div class="nav-tabs">
