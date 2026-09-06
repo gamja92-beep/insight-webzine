@@ -117,11 +117,10 @@ def get_visitor_stats():
 
 def fetch_bulletproof_image(category_name):
     direct_pools = {
-        "AI/테크": [
-            ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
-            ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
-            ("https://images.unsplash.com/photo-1531482615713-2afd69097998", "Unsplash"),
-            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash")
+        "정치/시사": [
+            ("https://images.unsplash.com/photo-1541872703-74c5e44368f9", "Unsplash"),
+            ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620", "Unsplash"),
+            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash")
         ],
         "경제/주식": [
             ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
@@ -135,11 +134,22 @@ def fetch_bulletproof_image(category_name):
             ("https://images.unsplash.com/photo-1469571486292-0ba58a3f068b", "Unsplash"),
             ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash")
         ],
+        "AI/테크": [
+            ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
+            ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
+            ("https://images.unsplash.com/photo-1531482615713-2afd69097998", "Unsplash"),
+            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash")
+        ],
         "건강/복지": [
             ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
             ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash"),
             ("https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
             ("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05", "Unsplash")
+        ],
+        "생활정보": [
+            ("https://images.unsplash.com/photo-1484807352052-23338990c6c8", "Unsplash"),
+            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
+            ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
         ],
         "연예계뉴스": [
             ("https://images.unsplash.com/photo-1492684223066-81342ee5ff30", "Unsplash"),
@@ -153,16 +163,6 @@ def fetch_bulletproof_image(category_name):
             ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash"),
             ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash")
         ],
-        "정치/시사": [
-            ("https://images.unsplash.com/photo-1541872703-74c5e44368f9", "Unsplash"),
-            ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620", "Unsplash"),
-            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash")
-        ],
-        "생활정보": [
-            ("https://images.unsplash.com/photo-1484807352052-23338990c6c8", "Unsplash"),
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
-        ],
         "지역창": [
             ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
             ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
@@ -174,14 +174,14 @@ def fetch_bulletproof_image(category_name):
     
     try:
         search_queries = {
-            "AI/테크": "futuristic technology abstract background wide",
+            "정치/시사": "government building architecture wide",
             "경제/주식": "modern city skyscraper architecture wide",
             "세상이야기": "beautiful nature landscape sceneries wide",
+            "AI/테크": "futuristic technology abstract background wide",
             "건강/복지": "peaceful nature park scenery wide",
+            "생활정보": "lifestyle interior cozy modern wide",
             "연예계뉴스": "empty concert stage lights background wide",
             "스포츠": "empty stadium sports arena field wide",
-            "정치/시사": "government building architecture wide",
-            "생활정보": "lifestyle interior cozy modern wide",
             "지역창": "local community scenery landscape wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
@@ -366,14 +366,14 @@ def generate_ai_article(category_name):
     )
 
     prompts = {
-        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "정치/시사": ("정치/시사", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
         "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
         "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
         "건강/복지": ("건강/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
-        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 방송가와 대중문화계의 구조적 트렌드, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
-        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측 등을 다루는 전문적인 '스포츠 인사이트 칼럼'을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
-        "정치/시사": ("정치/시사", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
         "생활정보": ("생활정보", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 일상생활에 유용한 실속 정보와 생활 속 지혜를 다루는 알찬 뉴스 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측 등을 다루는 전문적인 '스포츠 인사이트 칼럼'을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
         "지역창": ("지역창", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 강원도 속초 및 지역 사회의 생생한 현안, 지역 소상공인 소식, 로컬 문화, 지역 복지 및 생활 밀착형 지역 소식 기사를 전문적으로 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘.")
     }
     
@@ -402,7 +402,7 @@ def generate_ai_article(category_name):
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
-    categories = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
+    categories = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
     target_cat = random.choice(categories)
     generate_ai_article(target_cat)
 
@@ -464,7 +464,7 @@ def rss_feed():
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
-    rss_content += '  <description>프리미엄 시사투데이 창 - AI와 경제, 건강 및 지역 소식 트렌드 뉴스</description>\n'
+    rss_content += '  <description>프리미엄 시사투데이 창 - 정치, 경제, 건강 및 지역 소식 트렌드 뉴스</description>\n'
     
     for art in articles:
         art_id = art['id']
@@ -559,7 +559,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         keyword = q.strip().lower()
         articles = [a for a in articles if keyword in a['title'].lower() or keyword in a['content'].lower()]
 
-    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
+    categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
     featured_articles = articles[:2] if articles else []
     list_articles = articles[2:] if len(articles) > 2 else []
@@ -597,7 +597,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 """
             list_html += '</div>'
     else:
-        display_cats = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
+        display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
             cat_arts = [a for a in articles if a.get('category') == cat][:5]
             if cat_arts:
@@ -859,14 +859,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
-                    <option value="AI/테크">AI/테크</option>
+                    <option value="정치/시사">정치/시사</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
+                    <option value="AI/테크">AI/테크</option>
                     <option value="건강/복지">건강/복지</option>
+                    <option value="생활정보">생활정보</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="생활정보">생활정보</option>
                     <option value="지역창">지역창</option>
                 </select>
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
@@ -878,14 +878,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <form action="/admin/create-manual" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
-                    <option value="AI/테크">AI/테크</option>
+                    <option value="정치/시사">정치/시사</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
+                    <option value="AI/테크">AI/테크</option>
                     <option value="건강/복지">건강/복지</option>
+                    <option value="생활정보">생활정보</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="생활정보">생활정보</option>
                     <option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
@@ -908,14 +908,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
-                    <option value="AI/테크">AI/테크</option>
+                    <option value="정치/시사">정치/시사</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
+                    <option value="AI/테크">AI/테크</option>
                     <option value="건강/복지">건강/복지</option>
+                    <option value="생활정보">생활정보</option>
                     <option value="연예계뉴스">연예계뉴스</option>
                     <option value="스포츠">스포츠</option>
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="생활정보">생활정보</option>
                     <option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
@@ -1089,14 +1089,14 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             <form action="/admin/update/{art['id']}" method="post">
                 <label>카테고리</label>
                 <select name="category">
-                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
+                    <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
                     <option value="경제/주식" {"selected" if art['category']=="경제/주식" else ""}>경제/주식</option>
                     <option value="세상이야기" {"selected" if art['category']=="세상이야기" else ""}>세상이야기</option>
+                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
                     <option value="건강/복지" {"selected" if art['category']=="건강/복지" else ""}>건강/복지</option>
+                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
                     <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
                     <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
-                    <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
-                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
                     <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
                 </select>
                 
