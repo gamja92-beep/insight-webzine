@@ -162,6 +162,11 @@ def fetch_bulletproof_image(category_name):
             ("https://images.unsplash.com/photo-1484807352052-23338990c6c8", "Unsplash"),
             ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
             ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
+        ],
+        "지역창": [
+            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
+            ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
+            ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash")
         ]
     }
 
@@ -176,7 +181,8 @@ def fetch_bulletproof_image(category_name):
             "연예계뉴스": "empty concert stage lights background wide",
             "스포츠": "empty stadium sports arena field wide",
             "정치/시사": "government building architecture wide",
-            "생활정보": "lifestyle interior cozy modern wide"
+            "생활정보": "lifestyle interior cozy modern wide",
+            "지역창": "local community scenery landscape wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
         params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 50)}
@@ -197,7 +203,28 @@ def fetch_bulletproof_image(category_name):
     chosen = random.choice(pool)
     return chosen[0], chosen[1]
 
-def clean_and_format_content(text, category_name="종합"):
+def generate_smart_tags(text, title=""):
+    # 🛠️ [기사 내용 분석 및 맞춤형 해시태그 5~7개 자동 추출]
+    try:
+        prompt = (
+            f"다음 기사 제목과 본문을 분석하여, 이 기사의 핵심 키워드를 나타내는 해시태그를 정확히 6개 생성해 주세요. "
+            f"반드시 '#키워드' 형식으로 띄어쓰기로 구분하여 한 줄로 출력해 주세요. 다른 설명은 절대 쓰지 마세요.\n\n"
+            f"제목: {title}\n본문: {text[:800]}"
+        )
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+        )
+        tags_text = response.text.strip()
+        tags = re.findall(r'#[\w가-힣]+', tags_text)
+        if len(tags) >= 5:
+            return " ".join(tags[:7])
+    except Exception:
+        pass
+    
+    return "#시사투데이 #지역뉴스 #이슈분석 #트렌드 #인사이트 #사회동향"
+
+def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
     
     if '<p' in text or '<img' in text:
@@ -230,21 +257,8 @@ def clean_and_format_content(text, category_name="종합"):
             
     final_html = "".join(processed_lines)
     
-    fallback_tags = {
-        "AI/테크": ["#인공지능", "#테크트렌드", "#AI반도체", "#디지털혁신", "#미래기술", "#엔비디아소식"],
-        "경제/주식": ["#주식투자", "#경제동향", "#시장분석", "#자산관리", "#투자전략", "#종목분석", "#금융분석"],
-        "세상이야기": ["#세상이야기", "#라이프스타일", "#감동글", "#일상소통", "#휴식", "#생활상식", "#명언글"],
-        "건강/복지": ["#시니어복지", "#은퇴설계", "#건강관리", "#노후준비", "#행복한삶", "#건강상식", "#복지정책"],
-        "연예계뉴스": ["#연예계트렌드", "#방송가전망", "#문화예술", "#엔터인사이트", "#미디어분석", "#연예계인물포커스", "#연예인이력"],
-        "스포츠": ["#스포츠분석", "#기록전망", "#스포츠인사이트", "#전술연구", "#스포츠칼럼", "#스포츠역사", "#스포츠기록", "#스포츠스타"],
-        "정치/시사": ["#정치현안", "#국회소식", "#정책분석", "#시사토론", "#정치이슈", "#정치쟁점", "#이슈인물"],
-        "생활정보": ["#생활꿀팁", "#알뜰정보", "#생활경제", "#유용한정보", "#살림노하우", "#토막상식", "#핫한제품"]
-    }
-    
-    unique_tags = fallback_tags.get(category_name, ["#종합뉴스", "#트렌드", "#인사이트", "#정보", "#공유"])
-    chosen_tags = random.sample(unique_tags, min(5, len(unique_tags)))
-
-    clean_tags_str = " ".join(chosen_tags)
+    # 🛠️ 내용 최적화된 맞춤형 해시태그 부착
+    clean_tags_str = generate_smart_tags(text, title)
     tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
 
@@ -312,7 +326,7 @@ def get_article_by_id(article_id):
         }
 
 def update_article_in_db(article_id, category, title, content, image_url):
-    formatted_content = clean_and_format_content(content, category)
+    formatted_content = clean_and_format_content(content, category, title)
     
     if supabase:
         update_data = {
@@ -347,21 +361,22 @@ def delete_article_from_db(article_id):
 
 def generate_ai_article(category_name):
     strict_insight_context = (
-        "STRICT EDITORIAL RULE: Today is September 6, 2026. "
+        "STRICT EDITORIAL RULE: Today is September 7, 2026. "
         "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
         "Instead, write professional, analytical insight columns focusing on sports/entertainment industry trends, tactical evolution, player milestone predictions, structural issues, or future outlooks. "
         "Never fabricate past game scores or fake match results."
     )
 
     prompts = {
-        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "건강/복지": ("건강/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 절대 가짜 스캔들나 찌라시성 가십을 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 오보가 나지 않도록 꼼꼼하게 살펴서 작성해줘. 현재 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측, 스포츠 산업의 구조적 과제 등을 다루는 전문적이고 품격 있는 '스포츠 인사이트 칼럼'을 작성해 주세요. 절대 날짜와 경기 시간이 틀리지 않게 작성하고 기록을 꼼꼼하게 체크하고 가짜 경기 결과를 기사로 쓰지 마세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "정치/시사": ("정치/시사", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 현재 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요."),
-        "생활정보": ("생활정보", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시간은 항상 기사작성 시간을 기준으로 일상생활에 유용한 실속 정보와 생활 속 지혜를 다루는 알찬 뉴스 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘. 마지막 줄에 해시태그를 따로 적지 마세요.")
+        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "건강/복지": ("건강/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 방송가와 대중문화계의 구조적 트렌드, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측 등을 다루는 전문적인 '스포츠 인사이트 칼럼'을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "정치/시사": ("정치/시사", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "생활정보": ("생활정보", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 일상생활에 유용한 실속 정보와 생활 속 지혜를 다루는 알찬 뉴스 기사를 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘."),
+        "지역창": ("지역창", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 강원도 속초 및 지역 사회의 생생한 현안, 지역 소상공인 소식, 로컬 문화, 지역 복지 및 생활 밀착형 지역 소식 기사를 전문적으로 작성해 주세요. 소제목 앞에는 반드시 '### ' 기호를 붙여 줘.")
     }
     
     cat_info = prompts.get(category_name, ("종합", f"{strict_insight_context} 최신 트렌드 뉴스 기사 작성"))
@@ -385,11 +400,11 @@ def generate_ai_article(category_name):
         body_content = raw_content
 
     img_url, author_name = fetch_bulletproof_image(category_name)
-    formatted_content = clean_and_format_content(body_content, category_name)
+    formatted_content = clean_and_format_content(body_content, category_name, art_title)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
-    categories = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보"]
+    categories = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
     target_cat = random.choice(categories)
     generate_ai_article(target_cat)
 
@@ -451,7 +466,7 @@ def rss_feed():
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
-    rss_content += '  <description>프리미엄 시사투데이 창 - AI와 경제, 건강 및 시사 트렌드 뉴스</description>\n'
+    rss_content += '  <description>프리미엄 시사투데이 창 - AI와 경제, 건강 및 지역 소식 트렌드 뉴스</description>\n'
     
     for art in articles:
         art_id = art['id']
@@ -546,7 +561,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         keyword = q.strip().lower()
         articles = [a for a in articles if keyword in a['title'].lower() or keyword in a['content'].lower()]
 
-    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보"]
+    categories = ["전체", "AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
 
     featured_articles = articles[:2] if articles else []
     list_articles = articles[2:] if len(articles) > 2 else []
@@ -584,9 +599,9 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 """
             list_html += '</div>'
     else:
-        display_cats = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보"]
+        display_cats = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
         for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category') == cat][:5]
+            cat_arts = [a for a in articles if a.get('category'] == cat][:5]
             if cat_arts:
                 list_html += f'<div class="news-section-box">'
                 list_html += f'<div class="section-header">📂 {cat} 최신 소식</div>'
@@ -619,9 +634,9 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>시사투데이 창 - 프리미엄 미디어</title>
-        <meta name="description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 시사투데이 창 미디어">
+        <meta name="description" content="AI, 경제, 주식, 건강 및 지역 소식을 전하는 프리미엄 시사투데이 창 미디어">
         <meta property="og:title" content="시사투데이 창">
-        <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 시사투데이 창 미디어">
+        <meta property="og:description" content="AI, 경제, 주식, 건강 및 지역 소식을 전하는 프리미엄 시사투데이 창 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
         <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
@@ -722,7 +737,7 @@ def admin_login_page(request: Request, error: str = None):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>관리자 로그인</title>
+        <title>시사투데이 창 관리자 스튜디오</title>
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; background: #f0f3f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; box-sizing: border-box; padding: 15px; }}
             .login-box {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 320px; text-align: center; }}
@@ -854,6 +869,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="스포츠">스포츠</option>
                     <option value="정치/시사">정치/시사</option>
                     <option value="생활정보">생활정보</option>
+                    <option value="지역창">지역창</option>
                 </select>
                 <button type="submit">🚀 즉시 자동 기사 발행하기</button>
             </form>
@@ -872,6 +888,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="스포츠">스포츠</option>
                     <option value="정치/시사">정치/시사</option>
                     <option value="생활정보">생활정보</option>
+                    <option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
@@ -901,6 +918,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="스포츠">스포츠</option>
                     <option value="정치/시사">정치/시사</option>
                     <option value="생활정보">생활정보</option>
+                    <option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
@@ -912,7 +930,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <input type="file" id="expandFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'expandPrompt')">
                 </div>
 
-                <textarea name="prompt" id="expandPrompt" placeholder="예: AI 거품론과 인프라 투자 포인트에 대해 전문적인 분석 기사로 상세히 작성해줘." required></textarea>
+                <textarea name="prompt" id="expandPrompt" placeholder="예: 속초 지역의 가을 축제와 지역 경제 활성화 방안에 대해 전문적인 기사로 상세히 작성해줘." required></textarea>
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
@@ -996,7 +1014,7 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     clean_title = title.replace('**', '').replace('*', '').strip()
     img_url, author_name = fetch_bulletproof_image(category)
     
-    formatted_content = clean_and_format_content(content, category)
+    formatted_content = clean_and_format_content(content, category, clean_title)
 
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
@@ -1026,7 +1044,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
         final_content = prompt
 
     img_url, author_name = fetch_bulletproof_image(category)
-    final_content = clean_and_format_content(final_content, category)
+    final_content = clean_and_format_content(final_content, category, clean_title)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
@@ -1081,6 +1099,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
                     <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
                     <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
+                    <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
                 </select>
                 
                 <label>기사 제목</label>
