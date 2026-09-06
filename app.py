@@ -207,7 +207,7 @@ def clean_and_format_content(text, category_name="종합"):
     cleaned_lines_input = []
     for line in lines_raw:
         l_stripped = line.strip()
-        if l_stripped.startswith('#') or ('#' in l_stripped and len(l_stripped.split()) <= 5):
+        if l_stripped.startswith('#') and not l_stripped.startswith('###'):
             continue
         cleaned_lines_input.append(line)
     
@@ -493,7 +493,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:description" content="{art_desc_clean}">
             <meta property="og:image" content="{art_img}">
             <meta property="og:url" content="{art_link}">
-            <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
@@ -509,7 +508,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
                 
-                /* 아담한 즐겨찾기 링크 스타일 */
                 .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 5px 10px; transition: 0.2s; }}
                 .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
                 
@@ -621,16 +619,16 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
-        <!-- 구글 붓글씨체(고운바탕체) 불러오기 -->
+        <!-- 웹 서예 흘림체(고운바탕/궁서풍) 불러오기 -->
         <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             
-            /* 🪟 [대문 타이틀 스타일] '인사이트'는 깔끔하게, '창'은 굵고 멋진 붓글씨체로 강조 */
+            /* 🪟 [대문 타이틀 스타일] '인사이트' 뒤에 붙는 '창'을 일필휘지 서예 흘림체 느낌으로 오른쪽으로 10도 회전 */
             .logo-title {{ font-size: 1.6em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }}
-            .logo-icon {{ display: inline-block; width: 14px; height: 18px; background: #2980b9; border-radius: 3px; }}
-            .logo-chang {{ font-family: 'Gowun Batang', serif; font-size: 1.35em; color: #1b4f72; font-weight: 700; }}
+            .logo-icon {{ display: inline-block; width: 6px; height: 22px; background: #1b4f72; border-radius: 2px; }}
+            .logo-chang {{ font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.4em; color: #c0392b; font-weight: 700; display: inline-block; transform: rotate(10deg); margin-left: 3px; text-shadow: 1px 1px 2px rgba(0,0,0,0.15); }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
@@ -665,7 +663,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            /* ⭐ [아담한 즐겨찾기 텍스트 링크 박스] */
+            /* ⭐ [아담한 즐겨찾기 링크 박스] */
             .footer-bookmark-box {{ background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-top: 10px; text-align: center; }}
             .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 4px 10px; transition: 0.2s; }}
             .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
@@ -697,7 +695,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         if list_html:
             html += f'{list_html}'
         
-    # 🛠️ [최종 수정된 푸터] 상단은 검색창, 하단은 예전처럼 아담한 '즐겨찾기' 링크
     html += f"""
         <div class="footer-search-box">
             <form action="/" method="get" class="search-form">
