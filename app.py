@@ -449,9 +449,9 @@ def rss_feed():
     
     rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
     rss_content += '<rss version="2.0">\n<channel>\n'
-    rss_content += '  <title>인사이트 종합 미디어</title>\n'
+    rss_content += '  <title>인사이트 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
-    rss_content += '  <description>프리미엄 인사이트 웹진 - AI와 경제, 시니어 트렌드 뉴스</description>\n'
+    rss_content += '  <description>프리미엄 인사이트 창 - AI와 경제, 건강 및 시사 트렌드 뉴스</description>\n'
     
     for art in articles:
         art_id = art['id']
@@ -487,7 +487,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{art_title_clean} - 인사이트 종합 웹진</title>
+            <title>{art_title_clean} - 인사이트 창</title>
             <meta name="description" content="{art_desc_clean}">
             <meta property="og:title" content="{art_title_clean}">
             <meta property="og:description" content="{art_desc_clean}">
@@ -507,8 +507,12 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
-                .footer-subscribe-btn {{ display: inline-block; padding: 6px 14px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; }}
+                
+                /* 독립된 즐겨찾기 박스 스타일 */
+                .footer-subscribe-box {{ background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 15px; text-align: center; }}
+                .footer-subscribe-btn {{ display: inline-block; padding: 10px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.9em; box-shadow: 0 3px 6px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
                 .footer-subscribe-btn:hover {{ background: #c0392b; }}
+                
                 img {{ max-width: 100% !important; height: auto !important; }}
             </style>
         </head>
@@ -525,7 +529,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div class="content">{art['content']}</div>
                 
                 <div class="article-footer">
-                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기</a>
+                    <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기 추가하기</a>
                 </div>
             </div>
         </body>
@@ -611,16 +615,18 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>인사이트 종합 미디어 - 프리미엄 미디어</title>
-        <meta name="description" content="AI, 경제, 주식, 건강 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
-        <meta property="og:title" content="인사이트 종합 미디어">
-        <meta property="og:description" content="AI, 경제, 주식, 건강 복지 및 세상 이야기를 전하는 프리미엄 인사이트 종합 미디어">
+        <title>인사이트 창 - 프리미엄 미디어</title>
+        <meta name="description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
+        <meta property="og:title" content="인사이트 창">
+        <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
-            h1 {{ color: #1a252f; margin: 0; font-size: 1.5em; letter-spacing: -0.5px; word-break: keep-all; }}
+            
+            /* 🪟 [명품 제호 스타일] '인사이트 창' 묵직한 명조체 제호 적용 */
+            h1 {{ color: #1a252f; margin: 0; font-family: 'Batang', 'Georgia', serif; font-size: 1.8em; font-weight: 800; letter-spacing: -0.5px; word-break: keep-all; }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
@@ -647,15 +653,17 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
             .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
 
-            /* 🛠️ [수정] 모바일 친화적 상하 2단 센터 정렬 푸터 바 (검색창 중앙 배치 + 그 아래 구독 버튼) */
-            .footer-bar {{ background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 15px; }}
-            .search-form {{ display: flex; gap: 6px; justify-content: center; width: 100%; max-width: 320px; }}
-            .search-input {{ padding: 8px 12px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.9em; outline: none; flex-grow: 1; transition: 0.2s; }}
+            /* 🔍 [검색창 전용 독립 박스] */
+            .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
+            .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
+            .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
             .search-input:focus {{ border-color: #1b4f72; }}
-            .search-btn {{ padding: 8px 16px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.9em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
+            .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            .footer-subscribe-btn {{ display: inline-block; padding: 6px 16px; background: #e74c3c; color: white; text-decoration: none; border-radius: 15px; font-weight: bold; font-size: 0.8em; box-shadow: 0 2px 5px rgba(231, 76, 60, 0.2); transition: 0.2s; }}
+            /* ⭐ [즐겨찾기/구독 버튼 전용 독립 박스 (아래에 큼직하게 분리)] */
+            .footer-subscribe-box {{ background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 12px; text-align: center; }}
+            .footer-subscribe-btn {{ display: inline-block; padding: 10px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 0.9em; box-shadow: 0 3px 6px rgba(231, 76, 60, 0.25); transition: 0.2s; }}
             .footer-subscribe-btn:hover {{ background: #c0392b; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
@@ -663,7 +671,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     </head>
     <body>
         <div class="header-flex">
-            <h1>📰 인사이트 종합 미디어</h1>    
+            <h1>🪟 인사이트 창</h1>    
         </div>
         <div class="nav-tabs">
     """
@@ -683,15 +691,18 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         if list_html:
             html += f'{list_html}'
         
-    # 🛠️ [수정] 상하 2단 구조 적용 (위쪽: 돋보기 검색창 센터 / 아래쪽: 아담한 즐겨찾기 버튼 센터)
+    # 🛠️ [모바일 최적화 분리형 푸터] 위쪽은 검색창 박스 / 아래쪽은 독립된 즐겨찾기 박스
     html += f"""
-        <div class="footer-bar">
+        <div class="footer-search-box">
             <form action="/" method="get" class="search-form">
                 {'<input type="hidden" name="category" value="' + category + '">' if category else ''}
-                <input type="text" name="q" class="search-input" placeholder="🔍 기사 검색..." value="{q if q else ''}">
+                <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색..." value="{q if q else ''}">
                 <button type="submit" class="search-btn">검색</button>
             </form>
-            <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 즐겨찾기</a>
+        </div>
+        
+        <div class="footer-subscribe-box">
+            <a href="javascript:alert('⭐ [구독(즐겨찾기) 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-subscribe-btn">⭐ 북마크(즐겨찾기) 추가하기</a>
         </div>
     """
 
@@ -778,7 +789,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>인사이트 웹진 관리자 스튜디오</title>
+        <title>인사이트 창 관리자 스튜디오</title>
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
             h1 {{ color: #2c3e50; font-size: 1.5em; }}
@@ -804,7 +815,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>🛡️ 웹진 관리자 스튜디오 (클라우드 연동됨)</h1>
+        <h1>🛡️ 인사이트 창 관리자 스튜디오 (클라우드 연동됨)</h1>
         
         <div class="box" style="border-top: 5px solid #e67e22;">
             <h3>📊 실시간 방문자 현황</h3>
