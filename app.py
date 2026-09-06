@@ -204,7 +204,6 @@ def fetch_bulletproof_image(category_name):
     return chosen[0], chosen[1]
 
 def generate_smart_tags(text, title=""):
-    # 🛠️ [기사 내용 분석 및 맞춤형 해시태그 5~7개 자동 추출]
     try:
         prompt = (
             f"다음 기사 제목과 본문을 분석하여, 이 기사의 핵심 키워드를 나타내는 해시태그를 정확히 6개 생성해 주세요. "
@@ -257,7 +256,6 @@ def clean_and_format_content(text, category_name="종합", title=""):
             
     final_html = "".join(processed_lines)
     
-    # 🛠️ 내용 최적화된 맞춤형 해시태그 부착
     clean_tags_str = generate_smart_tags(text, title)
     tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
     final_html += tag_html
@@ -601,7 +599,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     else:
         display_cats = ["AI/테크", "경제/주식", "세상이야기", "건강/복지", "연예계뉴스", "스포츠", "정치/시사", "생활정보", "지역창"]
         for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category'] == cat][:5]
+            cat_arts = [a for a in articles if a.get('category') == cat][:5]
             if cat_arts:
                 list_html += f'<div class="news-section-box">'
                 list_html += f'<div class="section-header">📂 {cat} 최신 소식</div>'
@@ -737,7 +735,7 @@ def admin_login_page(request: Request, error: str = None):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>시사투데이 창 관리자 스튜디오</title>
+        <title>관리자 로그인</title>
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; background: #f0f3f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; box-sizing: border-box; padding: 15px; }}
             .login-box {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 320px; text-align: center; }}
