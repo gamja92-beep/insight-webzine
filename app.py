@@ -449,9 +449,9 @@ def rss_feed():
     
     rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
     rss_content += '<rss version="2.0">\n<channel>\n'
-    rss_content += '  <title>인사이트 창</title>\n'
+    rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
-    rss_content += '  <description>프리미엄 인사이트 창 - AI와 경제, 건강 및 시사 트렌드 뉴스</description>\n'
+    rss_content += '  <description>프리미엄 시사투데이 창 - AI와 경제, 건강 및 시사 트렌드 뉴스</description>\n'
     
     for art in articles:
         art_id = art['id']
@@ -487,7 +487,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{art_title_clean} - 인사이트 창</title>
+            <title>{art_title_clean} - 시사투데이 창</title>
             <meta name="description" content="{art_desc_clean}">
             <meta property="og:title" content="{art_title_clean}">
             <meta property="og:description" content="{art_desc_clean}">
@@ -613,19 +613,21 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>인사이트 창 - 프리미엄 미디어</title>
-        <meta name="description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
-        <meta property="og:title" content="인사이트 창">
-        <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 인사이트 창 미디어">
+        <title>시사투데이 창 - 프리미엄 미디어</title>
+        <meta name="description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 시사투데이 창 미디어">
+        <meta property="og:title" content="시사투데이 창">
+        <meta property="og:description" content="AI, 경제, 주식, 건강 및 시사 이야기를 전하는 프리미엄 시사투데이 창 미디어">
         <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
+        <!-- 구글 붓글씨체(고운바탕체) 불러오기 -->
+        <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
             
-            /* 🪟 [대문 타이틀 스타일] 왼쪽 파란색 창 아이콘 삭제 및 '창' 글자를 검은색 상자 안의 흰색 글씨로 개성 있게 독립 배치 */
+            /* 🪟 [대문 타이틀 스타일] '시사투데이' 뒤에 흰색 배경+검은색 테두리 박스 안에서 오른쪽으로 5도 기울어진 서예체 '창' */
             .logo-title {{ font-size: 1.6em; font-weight: 800; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 12px; }}
-            .logo-chang {{ display: inline-block; background: #111111; color: #ffffff; padding: 2px 10px; border-radius: 4px; font-weight: 900; letter-spacing: 1px; }}
+            .logo-chang {{ display: inline-block; background: #ffffff; color: #111111; border: 2px solid #111111; padding: 1px 12px; border-radius: 4px; font-family: 'Gowun Batang', 'Batang', serif; font-weight: 700; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.1); }}
             
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
@@ -671,7 +673,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <body>
         <div class="header-flex">
             <div class="logo-title">
-                인사이트&nbsp;&nbsp;<span class="logo-chang">창</span>
+                시사투데이&nbsp;&nbsp;<span class="logo-chang">창</span>
             </div>
         </div>
         <div class="nav-tabs">
@@ -789,7 +791,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>인사이트 창 관리자 스튜디오</title>
+        <title>시사투데이 창 관리자 스튜디오</title>
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
             h1 {{ color: #2c3e50; font-size: 1.5em; }}
@@ -815,7 +817,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>🛡️ 인사이트 창 관리자 스튜디오 (클라우드 연동됨)</h1>
+        <h1>🛡️ 시사투데이 창 관리자 스튜디오 (클라우드 연동됨)</h1>
         
         <div class="box" style="border-top: 5px solid #e67e22;">
             <h3>📊 실시간 방문자 현황</h3>
