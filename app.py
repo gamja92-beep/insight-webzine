@@ -225,29 +225,17 @@ def generate_smart_tags(text, title=""):
 
 def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
-    
-    # 순수 HTML 완제품(p 태그와 figure 태그가 이미 잘 잡혀있는 경우) 그대로 보존
-    if '<p' in text and ('<figure' in text or '<img' in text):
-        return text
 
     lines_raw = text.split('\n')
-    cleaned_lines_input = []
-    for line in lines_raw:
-        l_stripped = line.strip()
-        if l_stripped.startswith('#') and not l_stripped.startswith('###'):
-            continue
-        cleaned_lines_input.append(line)
-    
-    paragraphs = "\n".join(cleaned_lines_input).split('\n')
     processed_lines = []
-    
-    for p in paragraphs:
-        p_str = p.strip()
+
+    for line in lines_raw:
+        p_str = line.strip()
         if not p_str:
             continue
         
-        # figure, figcaption, img, div 태그는 p 태그로 감싸지 않고 원형 그대로 보존
-        if p_str.startswith(('<figure', '</figure>', '<figcaption', '</figcaption>', '<img', '<div')):
+        # 이미지 컨테이너 박스, 기존 p 태그, div 태그는 손대지 않고 온전히 보존
+        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
             title_text = p_str.replace('###', '').strip()
@@ -256,12 +244,14 @@ def clean_and_format_content(text, category_name="종합", title=""):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{p_str}</h3>')
         else:
             processed_lines.append(f'<p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{p_str}</p>')
-            
+
     final_html = "".join(processed_lines)
     
-    clean_tags_str = generate_smart_tags(text, title)
-    tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
-    final_html += tag_html
+    # 해시태그 중복 방지
+    if '#시사투데이' not in final_html and '#이슈분석' not in final_html:
+        clean_tags_str = generate_smart_tags(text, title)
+        tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
+        final_html += tag_html
 
     return final_html
 
@@ -541,8 +531,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
-                figure {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
-                figcaption {{ font-size: 13px !important; color: #7f8c8d !important; margin-top: 8px !important; text-align: center !important; font-style: normal !important; display: block !important; font-weight: 500 !important; }}
+                .article-img-box {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
             </style>
         </head>
         <body>
@@ -695,8 +684,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
-            figure {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
-            figcaption {{ font-size: 13px !important; color: #7f8c8d !important; margin-top: 8px !important; text-align: center !important; font-style: normal !important; display: block !important; font-weight: 500 !important; }}
+            .article-img-box {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
         </style>
     </head>
     <body>
@@ -965,13 +953,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
-                captionHtml = '<figcaption style="font-size: 13px; color: #7f8c8d; text-align: center; margin-top: 8px; font-style: normal; display: block; font-weight: 500;">[출처: ' + sourceText.trim() + ']</figcaption>';
+                captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
             }}
-            // figure와 figcaption을 한 덩어리로 묶어 안전하게 본문에 삽입
-            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%; display: block;">' +
-                        '<img src="' + imgUrl.trim() + '" style="width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' +
-                        captionHtml +
-                        '</figure>\\n';
+            // div.article-img-box 컨테이너로 묶어 온전히 주입
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
@@ -1066,7 +1051,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
         "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(반드시 ### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
-        "만약 사용자의 메모 안에 <figure>나 <img, <figcaption 등 HTML 태그가 포함되어 있다면 절대 수정하거나 삭제하지 말고 원본 그대로 적절한 위치에 포함시켜 주세요. "
+        "만약 사용자의 메모 안에 <div class=\"article-img-box\"나 <img 등 HTML 태그가 포함되어 있다면 절대 수정하거나 삭제하지 말고 원본 그대로 적절한 위치에 포함시켜 주세요. "
         "마크다운 특수기호(-, *, _)는 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
         "본문 맨 마지막에 해시태그를 직접 작성하지 마세요."
     )
@@ -1230,12 +1215,10 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
-                captionHtml = '<figcaption style="font-size: 13px; color: #7f8c8d; text-align: center; margin-top: 8px; font-style: normal; display: block; font-weight: 500;">[출처: ' + sourceText.trim() + ']</figcaption>';
+                captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
             }}
-            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%; display: block;">' +
-                        '<img src="' + imgUrl.trim() + '" style="width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' +
-                        captionHtml +
-                        '</figure>\\n';
+            // div.article-img-box로 묶어 본문 파싱 시 분리/삭제 방지
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
