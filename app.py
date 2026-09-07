@@ -454,7 +454,7 @@ def rss_feed():
     articles = get_all_articles()
     base_url = "https://insight-webzine.onrender.com"
     
-    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
+    rss_content = '<?xml version="2.0" encoding="UTF-8" ?>\n'
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
@@ -482,17 +482,26 @@ def ads_txt():
 def index(request: Request, category: str = None, view: int = None, q: str = None):
     log_visitor()
 
-    # 원형 아이콘과 '글' 문구를 없애고 '시사투데이 창 ›'만 남긴 구독 바 HTML
+    # 아이콘 및 '글' 텍스트를 제거하고 '시사투데이 창 ›'만 남긴 구독 바
     subscribe_card_html = """
     <div class="author-subscribe-card">
         <div class="author-name">
             시사투데이 창 <span class="author-arrow">›</span>
         </div>
-        <button type="button" class="btn-subscribe" onclick="alert('⭐ [구독 및 바로가기 안내]\\n\\n\'시사투데이 창\'을 구독해 주셔서 감사합니다!\\n\\n아이폰: 하단 공유(📤) → [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [현재 페이지 추가] → [홈 화면]\\n\\n스마트폰 바탕화면에서 매일 새로운 프리미엄 시사 칼럼을 바로 만나보실 수 있습니다.');">
+        <button type="button" class="btn-subscribe" onclick="subscribeNotice();">
             <svg class="sub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7.5" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
             구독하기
         </button>
     </div>
+    """
+
+    # 자바스크립트 안내 팝업 함수 (따옴표 에러 원천 차단)
+    subscribe_js = """
+    <script>
+    function subscribeNotice() {
+        alert("⭐ [구독 및 바로가기 안내]\\n\\n'시사투데이 창'을 구독해 주셔서 감사합니다!\\n\\n아이폰: 하단 공유(📤) → [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [현재 페이지 추가] → [홈 화면]\\n\\n스마트폰 바탕화면에서 매일 새로운 프리미엄 시사 칼럼을 바로 만나보실 수 있습니다.");
+    }
+    </script>
     """
 
     if view:
@@ -539,7 +548,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
-                /* 독립된 하단 검색창 스타일 */
+                /* 독립된 하단 검색창 카드 */
                 .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
                 .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
                 .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
@@ -547,7 +556,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
                 .search-btn:hover {{ background: #12334a; }}
                 
-                /* '시사투데이 창 ›' 깔끔한 텍스트 및 구독하기 바 */
+                /* 정돈된 '시사투데이 창 ›' 구독 바 */
                 .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
                 .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
                 .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
@@ -580,8 +589,10 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 </form>
             </div>
             
-            <!-- 2. 깔끔해진 '시사투데이 창 ›' 구독하기 바 -->
+            <!-- 2. '시사투데이 창 ›' 구독 바 -->
             {subscribe_card_html}
+
+            {subscribe_js}
         </body>
         </html>
         """
@@ -712,7 +723,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            /* '시사투데이 창 ›' 깔끔한 텍스트 및 구독하기 바 */
+            /* '시사투데이 창 ›' 구독 바 */
             .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
             .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
             .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
@@ -758,6 +769,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         </div>
         
         {subscribe_card_html}
+        {subscribe_js}
     """
 
     html += "</body></html>"
