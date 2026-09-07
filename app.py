@@ -234,7 +234,7 @@ def clean_and_format_content(text, category_name="종합", title=""):
         if not p_str:
             continue
         
-        # 이미지 박스 및 HTML 태그는 그대로 보존
+        # 이미지 컨테이너 박스, 기존 p 태그, div 태그는 손대지 않고 온전히 보존
         if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
@@ -482,6 +482,23 @@ def ads_txt():
 def index(request: Request, category: str = None, view: int = None, q: str = None):
     log_visitor()
 
+    # 공통: 프로필 및 은은한 라인형 구독하기 컴포넌트 HTML
+    subscribe_card_html = """
+    <div class="author-subscribe-card">
+        <div class="author-left">
+            <div class="author-avatar">창</div>
+            <div class="author-info">
+                <span class="author-label">글</span>
+                <span class="author-name">시사투데이 창 <span class="author-arrow">›</span></span>
+            </div>
+        </div>
+        <button type="button" class="btn-subscribe" onclick="alert('⭐ [구독 및 바로가기 안내]\\n\\n\'시사투데이 창\'을 구독해 주셔서 감사합니다!\\n\\n아이폰: 하단 공유(📤) → [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [현재 페이지 추가] → [홈 화면]\\n\\n스마트폰 바탕화면에서 매일 새로운 프리미엄 시사 칼럼을 바로 만나보실 수 있습니다.');">
+            <svg class="sub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7.5" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+            구독하기
+        </button>
+    </div>
+    """
+
     if view:
         art = get_article_by_id(view)
         if not art:
@@ -526,7 +543,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
-                /* 독립된 하단 검색창 및 북마크 바 (메인 화면 규격과 100% 일치) */
+                /* 독립된 하단 검색창 스타일 */
                 .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
                 .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
                 .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
@@ -534,10 +551,18 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
                 .search-btn:hover {{ background: #12334a; }}
                 
-                .footer-bookmark-box {{ background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-top: 10px; text-align: center; }}
-                .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 4px 10px; transition: 0.2s; }}
-                .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
-                
+                /* 첨부 이미지 스타일: 프로필 & 은은한 라인형 구독하기 바 */
+                .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 12px 18px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
+                .author-left {{ display: flex; align-items: center; gap: 12px; }}
+                .author-avatar {{ width: 38px; height: 38px; border-radius: 50%; background: #ebf5fb; color: #1b4f72; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 1px solid #d4e6f1; }}
+                .author-info {{ display: flex; flex-direction: column; text-align: left; }}
+                .author-label {{ font-size: 11px; color: #888; line-height: 1.2; }}
+                .author-name {{ font-size: 14px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 4px; line-height: 1.3; }}
+                .author-arrow {{ color: #bbb; font-size: 13px; font-weight: normal; }}
+                .btn-subscribe {{ display: inline-flex; align-items: center; gap: 5px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 6px 13px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
+                .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
+                .sub-icon {{ width: 14px; height: 14px; color: #555; }}
+
                 img {{ max-width: 100% !important; height: auto !important; }}
                 .article-img-box {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
             </style>
@@ -547,7 +572,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
             </div>
 
-            <!-- 기사 본문 박스 (닫힌 후 하단 도구들과 완벽 분리) -->
+            <!-- 기사 본문 박스 -->
             <div class="article-container">
                 <h1>{art['title']}</h1>
                 <div class="date">발행일시: {art['created_at']}</div>
@@ -555,7 +580,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div class="content">{art['content']}</div>
             </div>
 
-            <!-- 메인 화면과 동일한 형태의 단독 검색창 카드 -->
+            <!-- 1. 단독 검색창 카드 -->
             <div class="footer-search-box">
                 <form action="/" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색...">
@@ -563,10 +588,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 </form>
             </div>
             
-            <!-- 단독 즐겨찾기 바 -->
-            <div class="footer-bookmark-box">
-                <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-bookmark-link">⭐ 즐겨찾기</a>
-            </div>
+            <!-- 2. 은은한 프로필 및 구독하기 바 -->
+            {subscribe_card_html}
         </body>
         </html>
         """
@@ -697,9 +720,17 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            .footer-bookmark-box {{ background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-top: 10px; text-align: center; }}
-            .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 4px 10px; transition: 0.2s; }}
-            .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
+            /* 프로필 & 은은한 라인형 구독하기 바 */
+            .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 12px 18px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
+            .author-left {{ display: flex; align-items: center; gap: 12px; }}
+            .author-avatar {{ width: 38px; height: 38px; border-radius: 50%; background: #ebf5fb; color: #1b4f72; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 1px solid #d4e6f1; }}
+            .author-info {{ display: flex; flex-direction: column; text-align: left; }}
+            .author-label {{ font-size: 11px; color: #888; line-height: 1.2; }}
+            .author-name {{ font-size: 14px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 4px; line-height: 1.3; }}
+            .author-arrow {{ color: #bbb; font-size: 13px; font-weight: normal; }}
+            .btn-subscribe {{ display: inline-flex; align-items: center; gap: 5px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 6px 13px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
+            .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
+            .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
             .article-img-box {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
@@ -738,9 +769,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             </form>
         </div>
         
-        <div class="footer-bookmark-box">
-            <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-bookmark-link">⭐ 즐겨찾기</a>
-        </div>
+        {subscribe_card_html}
     """
 
     html += "</body></html>"
@@ -1234,7 +1263,6 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             if (sourceText && sourceText.trim() !== "") {{
                 captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
             }}
-            // div.article-img-box로 묶어 본문 파싱 시 분리/삭제 방지
             const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
