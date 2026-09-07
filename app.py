@@ -454,7 +454,7 @@ def rss_feed():
     articles = get_all_articles()
     base_url = "https://insight-webzine.onrender.com"
     
-    rss_content = '<?xml version="2.0" encoding="UTF-8" ?>\n'
+    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
@@ -482,15 +482,11 @@ def ads_txt():
 def index(request: Request, category: str = None, view: int = None, q: str = None):
     log_visitor()
 
-    # 공통: 프로필 및 은은한 라인형 구독하기 컴포넌트 HTML
+    # 원형 아이콘과 '글' 문구를 없애고 '시사투데이 창 ›'만 남긴 구독 바 HTML
     subscribe_card_html = """
     <div class="author-subscribe-card">
-        <div class="author-left">
-            <div class="author-avatar">창</div>
-            <div class="author-info">
-                <span class="author-label">글</span>
-                <span class="author-name">시사투데이 창 <span class="author-arrow">›</span></span>
-            </div>
+        <div class="author-name">
+            시사투데이 창 <span class="author-arrow">›</span>
         </div>
         <button type="button" class="btn-subscribe" onclick="alert('⭐ [구독 및 바로가기 안내]\\n\\n\'시사투데이 창\'을 구독해 주셔서 감사합니다!\\n\\n아이폰: 하단 공유(📤) → [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [현재 페이지 추가] → [홈 화면]\\n\\n스마트폰 바탕화면에서 매일 새로운 프리미엄 시사 칼럼을 바로 만나보실 수 있습니다.');">
             <svg class="sub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7.5" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
@@ -551,15 +547,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
                 .search-btn:hover {{ background: #12334a; }}
                 
-                /* 첨부 이미지 스타일: 프로필 & 은은한 라인형 구독하기 바 */
-                .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 12px 18px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
-                .author-left {{ display: flex; align-items: center; gap: 12px; }}
-                .author-avatar {{ width: 38px; height: 38px; border-radius: 50%; background: #ebf5fb; color: #1b4f72; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 1px solid #d4e6f1; }}
-                .author-info {{ display: flex; flex-direction: column; text-align: left; }}
-                .author-label {{ font-size: 11px; color: #888; line-height: 1.2; }}
-                .author-name {{ font-size: 14px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 4px; line-height: 1.3; }}
-                .author-arrow {{ color: #bbb; font-size: 13px; font-weight: normal; }}
-                .btn-subscribe {{ display: inline-flex; align-items: center; gap: 5px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 6px 13px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
+                /* '시사투데이 창 ›' 깔끔한 텍스트 및 구독하기 바 */
+                .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
+                .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
+                .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
+                .btn-subscribe {{ display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
                 .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
                 .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
@@ -588,7 +580,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 </form>
             </div>
             
-            <!-- 2. 은은한 프로필 및 구독하기 바 -->
+            <!-- 2. 깔끔해진 '시사투데이 창 ›' 구독하기 바 -->
             {subscribe_card_html}
         </body>
         </html>
@@ -720,15 +712,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            /* 프로필 & 은은한 라인형 구독하기 바 */
-            .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 12px 18px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
-            .author-left {{ display: flex; align-items: center; gap: 12px; }}
-            .author-avatar {{ width: 38px; height: 38px; border-radius: 50%; background: #ebf5fb; color: #1b4f72; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; border: 1px solid #d4e6f1; }}
-            .author-info {{ display: flex; flex-direction: column; text-align: left; }}
-            .author-label {{ font-size: 11px; color: #888; line-height: 1.2; }}
-            .author-name {{ font-size: 14px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 4px; line-height: 1.3; }}
-            .author-arrow {{ color: #bbb; font-size: 13px; font-weight: normal; }}
-            .btn-subscribe {{ display: inline-flex; align-items: center; gap: 5px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 6px 13px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
+            /* '시사투데이 창 ›' 깔끔한 텍스트 및 구독하기 바 */
+            .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
+            .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
+            .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
+            .btn-subscribe {{ display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
             .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
             .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
