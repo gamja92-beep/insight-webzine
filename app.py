@@ -454,7 +454,7 @@ def rss_feed():
     articles = get_all_articles()
     base_url = "https://insight-webzine.onrender.com"
     
-    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
+    rss_content = '<?xml version="2.0" encoding="UTF-8" ?>\n'
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
@@ -971,6 +971,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             if (sourceText && sourceText.trim() !== "") {{
                 captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
             }}
+            // div.article-img-box 컨테이너로 묶어 온전히 주입
             const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
@@ -1232,6 +1233,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             if (sourceText && sourceText.trim() !== "") {{
                 captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
             }}
+            // div.article-img-box로 묶어 본문 파싱 시 분리/삭제 방지
             const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
