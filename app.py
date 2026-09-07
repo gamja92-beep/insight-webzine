@@ -362,7 +362,7 @@ def delete_article_from_db(article_id):
 
 def generate_ai_article(category_name):
     strict_insight_context = (
-        "STRICT EDITORIAL RULE: Today is September 7, 2026. "
+        "STRICT EDITORIAL RULE: Today is September 8, 2026. "
         "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
         "Instead, write professional, analytical insight columns focusing on sports/entertainment industry trends, tactical evolution, player milestone predictions, structural issues, or future outlooks. "
         "Never fabricate past game scores or fake match results."
@@ -511,7 +511,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     </script>
     """
 
-    # 1. 상세 페이지 (view가 있을 때)
+    # 1. 상세 페이지
     if view:
         art = get_article_by_id(view)
         if not art:
@@ -880,6 +880,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
             .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
             .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
+            
+            .custom-head-box {{ background: #fcf3cf; border: 1.5px solid #f39c12; border-radius: 6px; padding: 14px; margin-top: 10px; margin-bottom: 15px; }}
+            .checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #7d6608; cursor: pointer; margin-top: 0; }}
+            .preview-box-img {{ max-width: 180px; max-height: 100px; border-radius: 4px; margin-top: 8px; display: none; }}
         </style>
     </head>
     <body>
@@ -942,6 +946,24 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 
+                <!-- 대표 이미지 선택 및 언스플래시 체크박스 영역 -->
+                <div class="custom-head-box">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
+                        <span>🖼️ 언스플래시(Unsplash) 자동 대표 이미지 사용하기 (체크 해제 시 내가 직접 지정한 이미지 적용)</span>
+                    </label>
+                    <div id="manual_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
+                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정] 아래에 이미지 URL 또는 내 기기 사진을 올려주세요.</small>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" name="custom_image_url" id="manual_head_url" placeholder="직접 넣을 대표 이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
+                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('manual_head_file').click()">📁 내 기기 파일</button>
+                            <input type="file" id="manual_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'manual_head_url', 'manual_head_preview')">
+                        </div>
+                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공 등)" style="margin-bottom: 4px;">
+                        <img id="manual_head_preview" class="preview-box-img">
+                    </div>
+                </div>
+
                 <label>기사 본문 및 이미지 삽입</label>
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
@@ -978,9 +1000,27 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 
-                <label>AI 확장용 프롬프트 / 메모 및 이미지</label>
+                <!-- AI 확장 발행 시 대표 이미지 선택 및 언스플래시 체크박스 영역 -->
+                <div class="custom-head-box">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
+                        <span>🖼️ 언스플래시(Unsplash) 자동 대표 이미지 사용하기 (체크 해제 시 내가 직접 지정한 이미지 적용)</span>
+                    </label>
+                    <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
+                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정] 아래에 이미지 URL 또는 내 기기 사진을 올려주세요.</small>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" name="custom_image_url" id="expand_head_url" placeholder="직접 넣을 대표 이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
+                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
+                            <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
+                        </div>
+                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공 등)" style="margin-bottom: 4px;">
+                        <img id="expand_head_preview" class="preview-box-img">
+                    </div>
+                </div>
+
+                <label>AI 확장용 프롬프트 / 메모 및 본문 추가 이미지</label>
                 <div class="img-tool-box">
-                    <div class="img-tool-title">📷 프롬프트 이미지 삽입 및 출처(Credit) 입력</div>
+                    <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
                         <input type="text" id="expand_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이 등)" style="flex: 1;">
                     </div>
@@ -997,6 +1037,42 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
+        function toggleHeadImgSection(type) {{
+            const chk = document.getElementById(type + '_use_unsplash');
+            const wrap = document.getElementById(type + '_custom_head_wrap');
+            if (!chk.checked) {{
+                wrap.style.display = 'block';
+            }} else {{
+                wrap.style.display = 'none';
+            }}
+        }}
+
+        async function uploadDirectHeadImage(input, urlInputId, previewImgId) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                try {{
+                    const response = await fetch("/admin/upload-image", {{
+                        method: "POST",
+                        body: formData
+                    }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        document.getElementById(urlInputId).value = data.url;
+                        const preview = document.getElementById(previewImgId);
+                        preview.src = data.url;
+                        preview.style.display = 'block';
+                        alert("대표 이미지가 성공적으로 등록되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "오류"));
+                    }}
+                }} catch (err) {{
+                    alert("업로드 오류: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
@@ -1077,11 +1153,25 @@ def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-manual")
-def create_manual(category: str = Form(...), title: str = Form(...), content: str = Form(...), admin_auth: str = Cookie(None)):
+def create_manual(
+    category: str = Form(...), 
+    title: str = Form(...), 
+    content: str = Form(...), 
+    use_unsplash: str = Form(None),
+    custom_image_url: str = Form(None),
+    custom_image_author: str = Form(None),
+    admin_auth: str = Cookie(None)
+):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
-    img_url, author_name = fetch_bulletproof_image(category)
+    
+    # 체크박스가 해제되었고 직접 등록한 이미지가 있을 때 우선 반영
+    if not use_unsplash and custom_image_url and custom_image_url.strip():
+        img_url = custom_image_url.strip()
+        author_name = custom_image_author.strip() if custom_image_author else ""
+    else:
+        img_url, author_name = fetch_bulletproof_image(category)
     
     formatted_content = clean_and_format_content(content, category, clean_title)
 
@@ -1089,7 +1179,15 @@ def create_manual(category: str = Form(...), title: str = Form(...), content: st
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-ai-expand")
-def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: str = Form(...), admin_auth: str = Cookie(None)):
+def create_ai_expand(
+    category: str = Form(...), 
+    title: str = Form(...), 
+    prompt: str = Form(...), 
+    use_unsplash: str = Form(None),
+    custom_image_url: str = Form(None),
+    custom_image_author: str = Form(None),
+    admin_auth: str = Cookie(None)
+):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
@@ -1113,7 +1211,13 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
     except Exception as e:
         final_content = prompt
 
-    img_url, author_name = fetch_bulletproof_image(category)
+    # 체크박스가 해제되었고 직접 등록한 이미지가 있을 때 우선 반영
+    if not use_unsplash and custom_image_url and custom_image_url.strip():
+        img_url = custom_image_url.strip()
+        author_name = custom_image_author.strip() if custom_image_author else ""
+    else:
+        img_url, author_name = fetch_bulletproof_image(category)
+
     final_content = clean_and_format_content(final_content, category, clean_title)
 
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
