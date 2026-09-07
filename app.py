@@ -511,7 +511,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     </script>
     """
 
-    # 1. 상세 페이지
     if view:
         art = get_article_by_id(view)
         if not art:
@@ -600,7 +599,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         """
         return detail_html
 
-    # 2. 메인 페이지
     articles = get_all_articles(category)
     
     if q and q.strip():
@@ -946,7 +944,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 
-                <!-- 대표 이미지 선택 및 언스플래시 체크박스 영역 -->
                 <div class="custom-head-box">
                     <label class="checkbox-label">
                         <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
@@ -1000,7 +997,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 
-                <!-- AI 확장 발행 시 대표 이미지 선택 및 언스플래시 체크박스 영역 -->
                 <div class="custom-head-box">
                     <label class="checkbox-label">
                         <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
@@ -1166,7 +1162,6 @@ def create_manual(
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
     
-    # 체크박스가 해제되었고 직접 등록한 이미지가 있을 때 우선 반영
     if not use_unsplash and custom_image_url and custom_image_url.strip():
         img_url = custom_image_url.strip()
         author_name = custom_image_author.strip() if custom_image_author else ""
@@ -1174,7 +1169,6 @@ def create_manual(
         img_url, author_name = fetch_bulletproof_image(category)
     
     formatted_content = clean_and_format_content(content, category, clean_title)
-
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
@@ -1192,15 +1186,16 @@ def create_ai_expand(
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
     system_directive = (
-        "당신은 전문 수석 뉴스 기자입니다. "
-        "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
-        "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(반드시 ### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
-        "만약 사용자의 메모 안에 <div class=\"article-img-box\"나 <img 등 HTML 태그가 포함되어 있다면 절대 수정하거나 삭제하지 말고 원본 그대로 적절한 위치에 포함시켜 주세요. "
-        "마크다운 특수기호(-, *, _)는 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
-        "본문 맨 마지막에 해시태그를 직접 작성하지 마세요."
+        "당신은 전문 수석 언론사 기자입니다. "
+        "사용자가 제공한 [기사 제목]과 [핵심 취재 메모]를 바탕으로 완성도 높은 정식 뉴스 기사 본문을 작성하세요.\n"
+        "1. 서론-본론-결론 구조를 갖춘 풍성한 분량(최소 4개 이상의 문단)으로 작성하세요.\n"
+        "2. 각 핵심 단락 앞에는 '### 소제목' 형태로 소제목을 반드시 붙이세요.\n"
+        "3. 만약 사용자의 취재 메모 안에 <div class=\"article-img-box\"나 <img 등 HTML 태그가 있다면 삭제하지 말고 본문 흐름에 맞게 그대로 포함하세요.\n"
+        "4. 마크다운 특수기호(-, *, _)는 쓰지 말고 표준적인 한국어 보도체(~다)로 명확하게 서술하세요.\n"
+        "5. 본문 끝에 해시태그는 직접 작성하지 마세요."
     )
     
-    full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[작성 요청사항/메모]: {prompt}"
+    full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[핵심 취재 메모]: {prompt}"
 
     try:
         response = client.models.generate_content(
@@ -1209,9 +1204,9 @@ def create_ai_expand(
         )
         final_content = response.text.strip()
     except Exception as e:
-        final_content = prompt
+        print(f"🚨 [Gemini 기사 확장 생성 에러]: {e}")
+        final_content = f"기사 본문 생성 중 API 오류가 발생했습니다: {e}\n\n취재 메모:\n{prompt}"
 
-    # 체크박스가 해제되었고 직접 등록한 이미지가 있을 때 우선 반영
     if not use_unsplash and custom_image_url and custom_image_url.strip():
         img_url = custom_image_url.strip()
         author_name = custom_image_author.strip() if custom_image_author else ""
@@ -1219,7 +1214,6 @@ def create_ai_expand(
         img_url, author_name = fetch_bulletproof_image(category)
 
     final_content = clean_and_format_content(final_content, category, clean_title)
-
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
