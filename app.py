@@ -19,7 +19,7 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-3.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 ADMIN_PASSWORD = "1234"
@@ -32,6 +32,20 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ==========================================================
+# 네이버 애널리틱스 추적 스크립트
+# ==========================================================
+NAVER_ANALYTICS_SCRIPT = """
+<script type="text/javascript" src="//wcs.pstatic.net/wcslog.js"></script>
+<script type="text/javascript">
+if(!wcs_add) var wcs_add = {};
+wcs_add["wa"] = "25f06e1fad42a20";
+if(window.wcs) {
+wcs_do();
+}
+</script>
+"""
 
 def init_db():
     if supabase:
@@ -67,8 +81,8 @@ def log_visitor():
     if supabase:
         try:
             supabase.table("visitors").insert({"visited_at": current_time_str}).execute()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"🚨 [Supabase 방문자 기록 에러]: {e}")
     else:
         try:
             conn = sqlite3.connect("database.db", check_same_thread=False)
@@ -76,18 +90,18 @@ def log_visitor():
             cursor.execute("INSERT INTO visitors (visited_at) VALUES (?)", (current_time_str,))
             conn.commit()
             conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"🚨 [SQLite 방문자 기록 에러]: {e}")
 
 def get_visitor_stats():
+    kst = timezone(timedelta(hours=9))
+    today_prefix = datetime.now(kst).strftime("%Y-%m-%d")
     if supabase:
         try:
             res = supabase.table("visitors").select("*", count="exact").execute()
             total_count = res.count if res.count is not None else len(res.data or [])
             
-            kst = timezone(timedelta(hours=9))
-            today_str = datetime.now(kst).strftime("%Y-%m-%d")
-            res_today = supabase.table("visitors").select("*", count="exact").gte("visited_at", f"{today_str} 00:00:00").execute()
+            res_today = supabase.table("visitors").select("*", count="exact").gte("visited_at", f"{today_prefix} 00:00:00").execute()
             today_count = res_today.count if res_today.count is not None else len(res_today.data or [])
             
             recent_res = supabase.table("visitors").select("*").order("id", desc=True).limit(5).execute()
@@ -102,9 +116,7 @@ def get_visitor_stats():
             cursor.execute("SELECT COUNT(*) FROM visitors")
             total_count = cursor.fetchone()[0]
             
-            kst = timezone(timedelta(hours=9))
-            today_str = datetime.now(kst).strftime("%Y-%m-%d")
-            cursor.execute("SELECT COUNT(*) FROM visitors WHERE visited_at >= ?", (f"{today_str} 00:00:00",))
+            cursor.execute("SELECT COUNT(*) FROM visitors WHERE visited_at >= ?", (f"{today_prefix} 00:00:00",))
             today_count = cursor.fetchone()[0]
             
             cursor.execute("SELECT id, visited_at FROM visitors ORDER BY id DESC LIMIT 5")
@@ -234,7 +246,6 @@ def clean_and_format_content(text, category_name="종합", title=""):
         if not p_str:
             continue
         
-        # 이미지 컨테이너 박스, 기존 p 태그, div 태그는 손대지 않고 온전히 보존
         if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
@@ -247,7 +258,6 @@ def clean_and_format_content(text, category_name="종합", title=""):
 
     final_html = "".join(processed_lines)
     
-    # 해시태그 중복 방지 (기존에 해시태그 박스가 없을 때만 1회 생성)
     if '#시사투데이' not in final_html and '#이슈분석' not in final_html and 'word-spacing: 5px;' not in final_html:
         clean_tags_str = generate_smart_tags(text, title)
         tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
@@ -318,7 +328,6 @@ def get_article_by_id(article_id):
 
 def update_article_in_db(article_id, category, title, content, image_url, image_author):
     formatted_content = clean_and_format_content(content, category, title)
-    
     clean_url = image_url.strip() if image_url and image_url.strip() else ""
     clean_author = image_author.strip() if image_author and image_author.strip() else ""
     
@@ -482,7 +491,6 @@ def ads_txt():
 def index(request: Request, category: str = None, view: int = None, q: str = None):
     log_visitor()
 
-    # 아이콘 및 '글' 텍스트를 제거하고 '시사투데이 창 ›'만 남긴 구독 바
     subscribe_card_html = """
     <div class="author-subscribe-card">
         <div class="author-name">
@@ -495,7 +503,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     </div>
     """
 
-    # 자바스크립트 안내 팝업 함수 (따옴표 에러 원천 차단)
     subscribe_js = """
     <script>
     function subscribeNotice() {
@@ -504,6 +511,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     </script>
     """
 
+    # 1. 상세 페이지 (view가 있을 때)
     if view:
         art = get_article_by_id(view)
         if not art:
@@ -515,7 +523,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art_author = art.get('image_author', '')
         art_link = f"https://insight-webzine.onrender.com/?view={art['id']}"
 
-        # 대표 이미지 표시
         img_block = ""
         if art_img and art_img.strip():
             author_html = f'<div class="img-source">📷 Photo by {art_author}</div>' if art_author else ""
@@ -534,6 +541,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:image" content="{art_img}">
             <meta property="og:url" content="{art_link}">
             <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
+            {NAVER_ANALYTICS_SCRIPT}
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
@@ -548,7 +556,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
-                /* 독립된 하단 검색창 카드 */
                 .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
                 .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
                 .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
@@ -556,7 +563,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
                 .search-btn:hover {{ background: #12334a; }}
                 
-                /* 정돈된 '시사투데이 창 ›' 구독 바 */
                 .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
                 .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
                 .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
@@ -573,7 +579,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
             </div>
 
-            <!-- 기사 본문 박스 -->
             <div class="article-container">
                 <h1>{art['title']}</h1>
                 <div class="date">발행일시: {art['created_at']}</div>
@@ -581,7 +586,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div class="content">{art['content']}</div>
             </div>
 
-            <!-- 1. 단독 검색창 카드 -->
             <div class="footer-search-box">
                 <form action="/" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색...">
@@ -589,15 +593,14 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 </form>
             </div>
             
-            <!-- 2. '시사투데이 창 ›' 구독 바 -->
             {subscribe_card_html}
-
             {subscribe_js}
         </body>
         </html>
         """
         return detail_html
 
+    # 2. 메인 페이지
     articles = get_all_articles(category)
     
     if q and q.strip():
@@ -607,8 +610,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
     featured_articles = articles[:2] if articles else []
-    list_articles = articles[2:] if len(articles) > 2 else []
-
     featured_html = ""
     for art in featured_articles:
         cat_name = art['category'] if art['category'] else '종합'
@@ -684,6 +685,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <meta property="og:url" content="https://insight-webzine.onrender.com/">
         <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
+        {NAVER_ANALYTICS_SCRIPT}
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
@@ -723,7 +725,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
             .search-btn:hover {{ background: #12334a; }}
             
-            /* '시사투데이 창 ›' 구독 바 */
             .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
             .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
             .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
@@ -883,25 +884,24 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     </head>
     <body>
         <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>🛡️ 시사투데이 창 관리자 스튜디오 (클라우드 연동됨)</h1>
+        <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
         
-        <div class="box" style="border-top: 5px solid #e67e22;">
-            <h3>📊 실시간 방문자 현황</h3>
+        <div class="box" style="border-top: 5px solid #2ecc71;">
+            <h3>📊 방문자 통계 안내</h3>
+            <p style="color: #555; line-height: 1.6; margin-top: 8px;">
+                현재 <strong>네이버 애널리틱스</strong>가 연동되어 실시간 유입 분석이 정상 진행 중입니다.<br>
+                정밀한 일간/월간 방문자 수 및 네이버 검색 유입 키워드는 
+                <a href="https://analytics.naver.com/" target="_blank" style="color: #27ae60; font-weight: bold; text-decoration: underline;">[네이버 애널리틱스 대시보드 바로가기]</a>에서 바로 확인하실 수 있습니다.
+            </p>
             <div style="margin-top: 15px; display: flex; justify-content: space-between;">
                 <div class="stat-card" style="width: 48%;">
-                    <div style="color: #555; font-weight: bold;">오늘 방문 수</div>
+                    <div style="color: #555; font-weight: bold;">자체 집계 오늘 방문</div>
                     <div class="stat-num">{today_v} 명</div>
                 </div>
                 <div class="stat-card" style="width: 48%; margin-right: 0; background: #e8f8f5;">
-                    <div style="color: #555; font-weight: bold;">누적 총 방문 수</div>
+                    <div style="color: #555; font-weight: bold;">자체 집계 누적 방문</div>
                     <div class="stat-num" style="color: #16a085;">{total_v} 명</div>
                 </div>
-            </div>
-            <div style="margin-top: 20px;">
-                <h4 style="margin-bottom: 8px; color: #333;">최근 방문 로그 (최신 5건)</h4>
-                <ul style="padding-left: 20px; font-size: 0.9em; margin: 0;">
-                    {recent_logs_html}
-                </ul>
             </div>
         </div>
 
@@ -961,7 +961,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행 (신문 스타일 자동 적용)</h3>
+            <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -1180,7 +1180,6 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art['title']}" required>
                 
-                <!-- 대표 이미지 및 출처 관리 영역 -->
                 <div class="header-img-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <span style="font-weight: bold; color: #2c3e50; font-size: 14px;">🖼️ 기사 상단 대표 이미지 및 출처 설정</span>
@@ -1202,8 +1201,6 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 </div>
 
                 <label>기사 내용 및 본문 추가 이미지</label>
-                
-                <!-- 본문 삽입용 도구 -->
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
