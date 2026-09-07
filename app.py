@@ -226,7 +226,8 @@ def generate_smart_tags(text, title=""):
 def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
     
-    if '<p' in text or '<img' in text:
+    # 이미 HTML 구조(p, img, figure)가 잡혀있는 경우 통과
+    if '<p' in text or '<img' in text or '<figure' in text:
         return text
 
     lines_raw = text.split('\n')
@@ -244,7 +245,7 @@ def clean_and_format_content(text, category_name="종합", title=""):
         p_str = p.strip()
         if not p_str:
             continue
-        if p_str.startswith('<img') or p_str.startswith('<div'):
+        if p_str.startswith('<img') or p_str.startswith('<div') or p_str.startswith('<figure'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
             title_text = p_str.replace('###', '').strip()
@@ -530,6 +531,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
+                figure {{ margin: 25px 0 !important; }}
+                figcaption {{ font-size: 0.85em; color: #7f8c8d; margin-top: 6px; text-align: center; }}
             </style>
         </head>
         <body>
@@ -683,6 +686,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
+            figure {{ margin: 25px 0 !important; }}
+            figcaption {{ font-size: 0.85em; color: #7f8c8d; margin-top: 6px; text-align: center; }}
         </style>
     </head>
     <body>
@@ -824,10 +829,13 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
             .stat-card {{ display: inline-block; width: 45%; background: #ebf5fb; padding: 15px; border-radius: 6px; text-align: center; margin-right: 4%; }}
             .stat-num {{ font-size: 1.8em; font-weight: bold; color: #2980b9; margin-top: 5px; }}
-            .img-btn-group {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
-            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }}
-            .img-btn:hover {{ background: #d35400; }}
-            .file-input {{ display: none; }}
+            
+            /* 이미지 출처 툴바 컴포넌트 */
+            .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
+            .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
+            .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
+            .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
+            .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
         </style>
     </head>
     <body>
@@ -890,12 +898,19 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
-                <label>기사 내용</label>
                 
-                <div class="img-btn-group">
-                    <button type="button" class="img-btn" onclick="insertImageByUrl('manualContent')">🌐 웹 주소(URL)로 이미지 넣기</button>
-                    <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('manualFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
-                    <input type="file" id="manualFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'manualContent')">
+                <label>기사 본문 및 이미지 삽입</label>
+                <!-- 이미지 + 출처 삽입 도구 -->
+                <div class="img-tool-box">
+                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
+                    <div class="img-tool-row">
+                        <input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이, OO블로그 등)" style="flex: 1;">
+                    </div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
+                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('manual_file_input').click()">📁 내 기기 파일 올리기</button>
+                        <input type="file" id="manual_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'manualContent', 'manual_source')">
+                    </div>
                 </div>
 
                 <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
@@ -920,12 +935,19 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
-                <label>AI 확장용 프롬프트 / 메모</label>
                 
-                <div class="img-btn-group">
-                    <button type="button" class="img-btn" onclick="insertImageByUrl('expandPrompt')">🌐 웹 주소(URL)로 이미지 넣기</button>
-                    <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('expandFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
-                    <input type="file" id="expandFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'expandPrompt')">
+                <label>AI 확장용 프롬프트 / 메모 및 이미지</label>
+                <!-- 이미지 + 출처 삽입 도구 -->
+                <div class="img-tool-box">
+                    <div class="img-tool-title">📷 프롬프트 이미지 삽입 및 출처(Credit) 입력</div>
+                    <div class="img-tool-row">
+                        <input type="text" id="expand_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이 등)" style="flex: 1;">
+                    </div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
+                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('expand_file_input').click()">📁 내 기기 파일 올리기</button>
+                        <input type="file" id="expand_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'expandPrompt', 'expand_source')">
+                    </div>
                 </div>
 
                 <textarea name="prompt" id="expandPrompt" placeholder="예: 속초 지역의 가을 축제와 지역 경제 활성화 방안에 대해 전문적인 기사로 상세히 작성해줘." required></textarea>
@@ -934,19 +956,34 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
-        function insertImageByUrl(elementId) {{
+        // 본문에 figure + figcaption(출처) 형태로 주입하는 공통 함수
+        function injectHtmlTag(elementId, imgUrl, sourceText) {{
+            let captionHtml = "";
+            if (sourceText && sourceText.trim() !== "") {{
+                captionHtml = '<figcaption style="font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 6px;">[출처: ' + sourceText.trim() + ']</figcaption>';
+            }}
+            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%;">' +
+                        '<img src="' + imgUrl.trim() + '" style="width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' +
+                        captionHtml +
+                        '</figure>\\n';
+            
+            const textarea = document.getElementById(elementId);
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+            textarea.focus();
+        }}
+
+        function insertImageWithSource(elementId, sourceInputId) {{
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
             if (url) {{
-                const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
-                const textarea = document.getElementById(elementId);
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                textarea.focus();
+                const source = document.getElementById(sourceInputId).value;
+                injectHtmlTag(elementId, url, source);
+                document.getElementById(sourceInputId).value = "";
             }}
         }}
 
-        async function uploadImageFile(input, elementId) {{
+        async function uploadImageWithSource(input, elementId, sourceInputId) {{
             if (input.files && input.files[0]) {{
                 const formData = new FormData();
                 formData.append("file", input.files[0]);
@@ -958,18 +995,15 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     }});
                     const data = await response.json();
                     if (data.url) {{
-                        const tag = '\\n<img src="' + data.url + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
-                        const textarea = document.getElementById(elementId);
-                        const start = textarea.selectionStart;
-                        const end = textarea.selectionEnd;
-                        textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                        textarea.focus();
-                        alert("사진이 성공적으로 업로드되어 커서 위치에 삽입되었습니다!");
+                        const source = document.getElementById(sourceInputId).value;
+                        injectHtmlTag(elementId, data.url, source);
+                        document.getElementById(sourceInputId).value = "";
+                        alert("사진과 출처가 성공적으로 본문에 삽입되었습니다!");
                     }} else {{
                         alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
                     }}
                 }} catch (err) {{
-                    alert("사진 업로드 중 오류가 발생했습니다: " + err);
+                    alert("사진 업로드 중 오류 발생: " + err);
                 }}
                 input.value = "";
             }}
@@ -1026,6 +1060,7 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
         "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(반드시 ### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
+        "만약 사용자의 메모 안에 <figure>나 <img 등 HTML 이미지 코드가 있다면 해당 태그를 본문의 적절한 위치에 원본 그대로 유지해 주세요. "
         "마크다운 특수기호(-, *, _)는 절대 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
         "본문 맨 마지막에 해시태그를 직접 작성하지 마세요."
     )
@@ -1076,10 +1111,13 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
             .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
-            .img-btn-group {{ display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }}
-            .img-btn {{ background: #e67e22; color: white; border: none; padding: 8px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; }}
-            .img-btn:hover {{ background: #d35400; }}
-            .file-input {{ display: none; }}
+            
+            /* 이미지 출처 툴바 컴포넌트 */
+            .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
+            .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
+            .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
+            .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
+            .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
         </style>
     </head>
     <body>
@@ -1103,17 +1141,24 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art['title']}" required>
                 
-                <label>이미지 주소 (URL)</label>
+                <label>대표 이미지 주소 (URL)</label>
                 <input type="text" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소(URL)를 입력하세요">
-                <small style="color: #7f8c8d; display: block; margin-top: -10px; margin-bottom: 15px;">현재 등록된 이미지 미리보기:</small>
+                <small style="color: #7f8c8d; display: block; margin-top: -10px; margin-bottom: 15px;">현재 등록된 대표 이미지 미리보기:</small>
                 <img src="{current_img}" class="preview-img" onerror="this.style.display='none'">
 
-                <label>기사 내용</label>
+                <label>기사 내용 및 본문 추가 이미지</label>
                 
-                <div class="img-btn-group">
-                    <button type="button" class="img-btn" onclick="insertImageByUrl('editContent')">🌐 웹 주소(URL)로 이미지 넣기</button>
-                    <button type="button" class="img-btn" style="background: #16a085;" onclick="document.getElementById('editFile').click()">📁 내 기기 파일(JPEG/PNG) 바로 올리기</button>
-                    <input type="file" id="editFile" class="file-input" accept="image/*" onchange="uploadImageFile(this, 'editContent')">
+                <!-- 수정창용 이미지 + 출처 삽입 도구 -->
+                <div class="img-tool-box">
+                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
+                    <div class="img-tool-row">
+                        <input type="text" id="edit_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이, OO블로그 등)" style="flex: 1;">
+                    </div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
+                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일 올리기</button>
+                        <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
+                    </div>
                 </div>
 
                 <textarea name="content" id="editContent" required>{art['content']}</textarea>
@@ -1123,19 +1168,33 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
-        function insertImageByUrl(elementId) {{
+        function injectHtmlTag(elementId, imgUrl, sourceText) {{
+            let captionHtml = "";
+            if (sourceText && sourceText.trim() !== "") {{
+                captionHtml = '<figcaption style="font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 6px;">[출처: ' + sourceText.trim() + ']</figcaption>';
+            }}
+            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%;">' +
+                        '<img src="' + imgUrl.trim() + '" style="width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' +
+                        captionHtml +
+                        '</figure>\\n';
+            
+            const textarea = document.getElementById(elementId);
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+            textarea.focus();
+        }}
+
+        function insertImageWithSource(elementId, sourceInputId) {{
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
             if (url) {{
-                const tag = '\\n<img src="' + url.trim() + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
-                const textarea = document.getElementById(elementId);
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                textarea.focus();
+                const source = document.getElementById(sourceInputId).value;
+                injectHtmlTag(elementId, url, source);
+                document.getElementById(sourceInputId).value = "";
             }}
         }}
 
-        async function uploadImageFile(input, elementId) {{
+        async function uploadImageWithSource(input, elementId, sourceInputId) {{
             if (input.files && input.files[0]) {{
                 const formData = new FormData();
                 formData.append("file", input.files[0]);
@@ -1147,18 +1206,15 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     }});
                     const data = await response.json();
                     if (data.url) {{
-                        const tag = '\\n<img src="' + data.url + '" style="width: 100%; border-radius: 8px; margin: 20px 0;">\\n';
-                        const textarea = document.getElementById(elementId);
-                        const start = textarea.selectionStart;
-                        const end = textarea.selectionEnd;
-                        textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                        textarea.focus();
-                        alert("사진이 성공적으로 업로드되어 커서 위치에 삽입되었습니다!");
+                        const source = document.getElementById(sourceInputId).value;
+                        injectHtmlTag(elementId, data.url, source);
+                        document.getElementById(sourceInputId).value = "";
+                        alert("사진과 출처가 성공적으로 본문에 삽입되었습니다!");
                     }} else {{
                         alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
                     }}
                 }} catch (err) {{
-                    alert("사진 업로드 중 오류가 발생했습니다: " + err);
+                    alert("사진 업로드 중 오류 발생: " + err);
                 }}
                 input.value = "";
             }}
