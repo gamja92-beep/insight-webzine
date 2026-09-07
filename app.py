@@ -226,7 +226,8 @@ def generate_smart_tags(text, title=""):
 def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
     
-    if '<p' in text or '<img' in text or '<figure' in text:
+    # 순수 HTML 완제품(p 태그와 figure 태그가 이미 잘 잡혀있는 경우) 그대로 보존
+    if '<p' in text and ('<figure' in text or '<img' in text):
         return text
 
     lines_raw = text.split('\n')
@@ -244,7 +245,9 @@ def clean_and_format_content(text, category_name="종합", title=""):
         p_str = p.strip()
         if not p_str:
             continue
-        if p_str.startswith('<img') or p_str.startswith('<div') or p_str.startswith('<figure'):
+        
+        # figure, figcaption, img, div 태그는 p 태그로 감싸지 않고 원형 그대로 보존
+        if p_str.startswith(('<figure', '</figure>', '<figcaption', '</figcaption>', '<img', '<div')):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
             title_text = p_str.replace('###', '').strip()
@@ -500,7 +503,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art_author = art.get('image_author', '')
         art_link = f"https://insight-webzine.onrender.com/?view={art['id']}"
 
-        # 대표 이미지 영역 렌더링 (이미지가 있을 때만 노출)
+        # 대표 이미지가 있을 때만 상단에 표시
         img_block = ""
         if art_img and art_img.strip():
             author_html = f'<div class="img-source">📷 Photo by {art_author}</div>' if art_author else ""
@@ -538,8 +541,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
-                figure {{ margin: 25px 0 !important; }}
-                figcaption {{ font-size: 0.85em; color: #7f8c8d; margin-top: 6px; text-align: center; }}
+                figure {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
+                figcaption {{ font-size: 13px !important; color: #7f8c8d !important; margin-top: 8px !important; text-align: center !important; font-style: normal !important; display: block !important; font-weight: 500 !important; }}
             </style>
         </head>
         <body>
@@ -692,8 +695,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
-            figure {{ margin: 25px 0 !important; }}
-            figcaption {{ font-size: 0.85em; color: #7f8c8d; margin-top: 6px; text-align: center; }}
+            figure {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
+            figcaption {{ font-size: 13px !important; color: #7f8c8d !important; margin-top: 8px !important; text-align: center !important; font-style: normal !important; display: block !important; font-weight: 500 !important; }}
         </style>
     </head>
     <body>
@@ -908,7 +911,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
-                        <input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이, OO블로그 등)" style="flex: 1;">
+                        <input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스, 국회방송 캡처, OO블로그 등)" style="flex: 1;">
                     </div>
                     <div class="img-tool-row">
                         <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
@@ -962,9 +965,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
-                captionHtml = '<figcaption style="font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 6px;">[출처: ' + sourceText.trim() + ']</figcaption>';
+                captionHtml = '<figcaption style="font-size: 13px; color: #7f8c8d; text-align: center; margin-top: 8px; font-style: normal; display: block; font-weight: 500;">[출처: ' + sourceText.trim() + ']</figcaption>';
             }}
-            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%;">' +
+            // figure와 figcaption을 한 덩어리로 묶어 안전하게 본문에 삽입
+            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%; display: block;">' +
                         '<img src="' + imgUrl.trim() + '" style="width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' +
                         captionHtml +
                         '</figure>\\n';
@@ -1062,8 +1066,8 @@ def create_ai_expand(category: str = Form(...), title: str = Form(...), prompt: 
         "당신은 전문 수석 뉴스 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [작성 요청사항/메모]를 바탕으로, "
         "독자들이 읽기 편하도록 여러 개의 명확한 단락과 깔끔한 소제목(반드시 ### 소제목 형태)을 포함하여 풍성하고 상세한 SEO 최적화 뉴스 기사 본문을 작성해 주세요. "
-        "만약 사용자의 메모 안에 <figure>나 <img 등 HTML 이미지 코드가 있다면 해당 태그를 본문의 적절한 위치에 원본 그대로 유지해 주세요. "
-        "마크다운 특수기호(-, *, _)는 절대 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
+        "만약 사용자의 메모 안에 <figure>나 <img, <figcaption 등 HTML 태그가 포함되어 있다면 절대 수정하거나 삭제하지 말고 원본 그대로 적절한 위치에 포함시켜 주세요. "
+        "마크다운 특수기호(-, *, _)는 사용하지 말고 오직 자연스러운 문장과 ### 소제목만 사용해 주세요. "
         "본문 맨 마지막에 해시태그를 직접 작성하지 마세요."
     )
     
@@ -1172,7 +1176,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
-                        <input type="text" id="edit_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이, OO블로그 등)" style="flex: 1;">
+                        <input type="text" id="edit_source" placeholder="출처 표기 (예: 연합뉴스, 국회방송 캡처, OO블로그 등)" style="flex: 1;">
                     </div>
                     <div class="img-tool-row">
                         <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
@@ -1188,7 +1192,6 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
-        // 대표 이미지 완전 삭제
         function clearMainImage() {{
             document.getElementById('main_img_url').value = '';
             document.getElementById('main_img_author').value = '';
@@ -1198,7 +1201,6 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             alert("대표 이미지와 출처가 삭제되었습니다. 하단의 [수정 사항 저장하기]를 누르면 완전히 반영됩니다.");
         }}
 
-        // 대표 이미지 직접 업로드
         async function uploadMainImageFile(input) {{
             if (input.files && input.files[0]) {{
                 const formData = new FormData();
@@ -1225,13 +1227,12 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             }}
         }}
 
-        // 본문 이미지 figure/figcaption 주입
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
-                captionHtml = '<figcaption style="font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 6px;">[출처: ' + sourceText.trim() + ']</figcaption>';
+                captionHtml = '<figcaption style="font-size: 13px; color: #7f8c8d; text-align: center; margin-top: 8px; font-style: normal; display: block; font-weight: 500;">[출처: ' + sourceText.trim() + ']</figcaption>';
             }}
-            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%;">' +
+            const tag = '\\n<figure style="margin: 25px auto; text-align: center; max-width: 100%; display: block;">' +
                         '<img src="' + imgUrl.trim() + '" style="width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' +
                         captionHtml +
                         '</figure>\\n';
