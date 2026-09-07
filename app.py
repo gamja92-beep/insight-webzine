@@ -234,7 +234,7 @@ def clean_and_format_content(text, category_name="종합", title=""):
         if not p_str:
             continue
         
-        # 이미지 컨테이너 박스, 기존 p 태그, div 태그는 손대지 않고 온전히 보존
+        # 이미지 박스 및 HTML 태그는 그대로 보존
         if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
@@ -247,7 +247,7 @@ def clean_and_format_content(text, category_name="종합", title=""):
 
     final_html = "".join(processed_lines)
     
-    # 해시태그 중복 방지 (본문에 해시태그 태그가 이미 있다면 재부착하지 않음)
+    # 해시태그 중복 방지 (기존에 해시태그 박스가 없을 때만 1회 생성)
     if '#시사투데이' not in final_html and '#이슈분석' not in final_html and 'word-spacing: 5px;' not in final_html:
         clean_tags_str = generate_smart_tags(text, title)
         tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
@@ -493,7 +493,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art_author = art.get('image_author', '')
         art_link = f"https://insight-webzine.onrender.com/?view={art['id']}"
 
-        # 대표 이미지가 있을 때만 상단에 표시
+        # 대표 이미지 표시
         img_block = ""
         if art_img and art_img.strip():
             author_html = f'<div class="img-source">📷 Photo by {art_author}</div>' if art_author else ""
@@ -526,16 +526,16 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 
-                /* 검색창 및 푸터 스타일 */
-                .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 30px; text-align: center; }}
+                /* 독립된 하단 검색창 및 북마크 바 (메인 화면 규격과 100% 일치) */
+                .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
                 .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
                 .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
                 .search-input:focus {{ border-color: #1b4f72; }}
                 .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
                 .search-btn:hover {{ background: #12334a; }}
                 
-                .article-footer {{ text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid #eaecee; }}
-                .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 5px 10px; transition: 0.2s; }}
+                .footer-bookmark-box {{ background: white; padding: 12px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-top: 10px; text-align: center; }}
+                .footer-bookmark-link {{ display: inline-block; font-size: 0.9em; color: #e74c3c; text-decoration: none; font-weight: bold; padding: 4px 10px; transition: 0.2s; }}
                 .footer-bookmark-link:hover {{ text-decoration: underline; color: #c0392b; }}
                 
                 img {{ max-width: 100% !important; height: auto !important; }}
@@ -547,23 +547,25 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
             </div>
 
+            <!-- 기사 본문 박스 (닫힌 후 하단 도구들과 완벽 분리) -->
             <div class="article-container">
                 <h1>{art['title']}</h1>
                 <div class="date">발행일시: {art['created_at']}</div>
                 {img_block}
                 <div class="content">{art['content']}</div>
-                
-                <!-- 기사 상세 보기 하단 검색창 복구 -->
-                <div class="footer-search-box">
-                    <form action="/" method="get" class="search-form">
-                        <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색...">
-                        <button type="submit" class="search-btn">검색</button>
-                    </form>
-                </div>
+            </div>
 
-                <div class="article-footer">
-                    <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-bookmark-link">⭐ 즐겨찾기</a>
-                </div>
+            <!-- 메인 화면과 동일한 형태의 단독 검색창 카드 -->
+            <div class="footer-search-box">
+                <form action="/" method="get" class="search-form">
+                    <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색...">
+                    <button type="submit" class="search-btn">검색</button>
+                </form>
+            </div>
+            
+            <!-- 단독 즐겨찾기 바 -->
+            <div class="footer-bookmark-box">
+                <a href="javascript:alert('⭐ [즐겨찾기 안내]\\n\\n아이폰: 하단 공유(📤) 버튼 → [책갈피 추가] 또는 [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [⭐ 북마크 추가]\\n\\n언제든 쉽고 빠르게 다시 찾아오실 수 있습니다!');" class="footer-bookmark-link">⭐ 즐겨찾기</a>
             </div>
         </body>
         </html>
@@ -971,7 +973,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             if (sourceText && sourceText.trim() !== "") {{
                 captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
             }}
-            // div.article-img-box 컨테이너로 묶어 온전히 주입
             const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
