@@ -226,7 +226,6 @@ def generate_smart_tags(text, title=""):
 def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
     
-    # 이미 HTML 구조(p, img, figure)가 잡혀있는 경우 통과
     if '<p' in text or '<img' in text or '<figure' in text:
         return text
 
@@ -324,27 +323,28 @@ def get_article_by_id(article_id):
             "image_url": r[4], "image_author": r[5], "created_at": r[6]
         }
 
-def update_article_in_db(article_id, category, title, content, image_url):
+def update_article_in_db(article_id, category, title, content, image_url, image_author):
     formatted_content = clean_and_format_content(content, category, title)
+    
+    clean_url = image_url.strip() if image_url and image_url.strip() else ""
+    clean_author = image_author.strip() if image_author and image_author.strip() else ""
     
     if supabase:
         update_data = {
             "category": category,
             "title": title,
-            "content": formatted_content
+            "content": formatted_content,
+            "image_url": clean_url,
+            "image_author": clean_author
         }
-        if image_url and image_url.strip():
-            update_data["image_url"] = image_url.strip()
-            update_data["image_author"] = "User Custom"
-            
         supabase.table("articles").update(update_data).eq("id", article_id).execute()
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
-        if image_url and image_url.strip():
-            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", (category, title, formatted_content, image_url.strip(), "User Custom", article_id))
-        else:
-            cursor.execute("UPDATE articles SET category = ?, title = ?, content = ? WHERE id = ?", (category, title, formatted_content, article_id))
+        cursor.execute(
+            "UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", 
+            (category, title, formatted_content, clean_url, clean_author, article_id)
+        )
         conn.commit()
         conn.close()
 
@@ -497,7 +497,14 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art_title_clean = art['title'].replace('"', '')
         art_desc_clean = art['content'][:100].replace('<p>', '').replace('</p>', '').replace('"', '')
         art_img = art['image_url']
+        art_author = art.get('image_author', '')
         art_link = f"https://insight-webzine.onrender.com/?view={art['id']}"
+
+        # 대표 이미지 영역 렌더링 (이미지가 있을 때만 노출)
+        img_block = ""
+        if art_img and art_img.strip():
+            author_html = f'<div class="img-source">📷 Photo by {art_author}</div>' if art_author else ""
+            img_block = f'<img src="{art_img}" class="article-img">{author_html}'
 
         detail_html = f"""
         <!DOCTYPE html>
@@ -521,8 +528,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .badge {{ display: none; }}
                 h1 {{ font-size: 1.3em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.4; word-break: keep-all; letter-spacing: -0.5px; }}
                 .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
-                .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }}
-                .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
+                .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; display: block; }}
+                .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; text-align: left; }}
                 .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
                 .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
                 .article-footer {{ text-align: center; margin-top: 40px; padding-top: 25px; border-top: 1px solid #eaecee; }}
@@ -543,8 +550,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <div class="article-container">
                 <h1>{art['title']}</h1>
                 <div class="date">발행일시: {art['created_at']}</div>
-                <img src="{art['image_url']}" class="article-img">
-                <div class="img-source">📷 Photo by {art['image_author']}</div>
+                {img_block}
                 <div class="content">{art['content']}</div>
                 
                 <div class="article-footer">
@@ -830,7 +836,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .stat-card {{ display: inline-block; width: 45%; background: #ebf5fb; padding: 15px; border-radius: 6px; text-align: center; margin-right: 4%; }}
             .stat-num {{ font-size: 1.8em; font-weight: bold; color: #2980b9; margin-top: 5px; }}
             
-            /* 이미지 출처 툴바 컴포넌트 */
             .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
             .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
             .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
@@ -900,7 +905,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 
                 <label>기사 본문 및 이미지 삽입</label>
-                <!-- 이미지 + 출처 삽입 도구 -->
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
@@ -937,7 +941,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 
                 <label>AI 확장용 프롬프트 / 메모 및 이미지</label>
-                <!-- 이미지 + 출처 삽입 도구 -->
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 프롬프트 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
@@ -956,7 +959,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
-        // 본문에 figure + figcaption(출처) 형태로 주입하는 공통 함수
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
@@ -1091,7 +1093,8 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     if not art:
         return RedirectResponse(url="/admin/studio", status_code=303)
 
-    current_img = art.get('image_url', '')
+    current_img = art.get('image_url', '') or ''
+    current_author = art.get('image_author', '') or ''
 
     return f"""
     <!DOCTYPE html>
@@ -1112,18 +1115,19 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
             .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
             
-            /* 이미지 출처 툴바 컴포넌트 */
             .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
             .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
             .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
             .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
             .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
+            
+            .header-img-box {{ background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
         </style>
     </head>
     <body>
         <a href="/admin/studio" class="back-link">← 관리자 스튜디오로 돌아가기</a>
         <div class="box">
-            <h1>✏️ 기사 및 이미지 수정하기</h1>
+            <h1>✏️ 기사 및 대표 이미지 수정하기</h1>
             <form action="/admin/update/{art['id']}" method="post">
                 <label>카테고리</label>
                 <select name="category">
@@ -1141,14 +1145,30 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art['title']}" required>
                 
-                <label>대표 이미지 주소 (URL)</label>
-                <input type="text" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소(URL)를 입력하세요">
-                <small style="color: #7f8c8d; display: block; margin-top: -10px; margin-bottom: 15px;">현재 등록된 대표 이미지 미리보기:</small>
-                <img src="{current_img}" class="preview-img" onerror="this.style.display='none'">
+                <!-- 대표 이미지 및 출처 관리 영역 -->
+                <div class="header-img-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-weight: bold; color: #2c3e50; font-size: 14px;">🖼️ 기사 상단 대표 이미지 및 출처 설정</span>
+                        <button type="button" onclick="clearMainImage()" style="width: auto; background: #e74c3c; padding: 5px 12px; font-size: 12px; border-radius: 4px;">🗑️ 대표 이미지 완전 삭제</button>
+                    </div>
+
+                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 주소(URL)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="main_img_url" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소를 입력하세요" style="flex: 1; margin-bottom: 8px;">
+                        <button type="button" onclick="document.getElementById('main_img_file').click()" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;">📁 내 파일 올리기</button>
+                        <input type="file" id="main_img_file" style="display: none;" accept="image/*" onchange="uploadMainImageFile(this)">
+                    </div>
+
+                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 출처 표기</label>
+                    <input type="text" id="main_img_author" name="image_author" value="{current_author}" placeholder="출처를 입력하세요 (예: 연합뉴스, 기본소득당 제공, 픽사베이 등)" style="margin-bottom: 8px;">
+                    
+                    <small style="color: #7f8c8d; display: block; margin-top: 4px;">현재 등록된 대표 이미지 미리보기:</small>
+                    <img id="main_img_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
+                </div>
 
                 <label>기사 내용 및 본문 추가 이미지</label>
                 
-                <!-- 수정창용 이미지 + 출처 삽입 도구 -->
+                <!-- 본문 삽입용 도구 -->
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
@@ -1168,6 +1188,44 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
+        // 대표 이미지 완전 삭제
+        function clearMainImage() {{
+            document.getElementById('main_img_url').value = '';
+            document.getElementById('main_img_author').value = '';
+            const preview = document.getElementById('main_img_preview');
+            preview.src = '';
+            preview.style.display = 'none';
+            alert("대표 이미지와 출처가 삭제되었습니다. 하단의 [수정 사항 저장하기]를 누르면 완전히 반영됩니다.");
+        }}
+
+        // 대표 이미지 직접 업로드
+        async function uploadMainImageFile(input) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                try {{
+                    const response = await fetch("/admin/upload-image", {{
+                        method: "POST",
+                        body: formData
+                    }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        document.getElementById('main_img_url').value = data.url;
+                        const preview = document.getElementById('main_img_preview');
+                        preview.src = data.url;
+                        preview.style.display = 'block';
+                        alert("대표 이미지가 업로드되었습니다. 아래 출처 입력란에 출처를 적어주세요.");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
+                    }}
+                }} catch (err) {{
+                    alert("사진 업로드 중 오류 발생: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+
+        // 본문 이미지 figure/figcaption 주입
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             if (sourceText && sourceText.trim() !== "") {{
@@ -1225,11 +1283,19 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     """
 
 @app.post("/admin/update/{article_id}")
-def update_article(article_id: int, category: str = Form(...), title: str = Form(...), content: str = Form(...), image_url: str = Form(None), admin_auth: str = Cookie(None)):
+def update_article(
+    article_id: int, 
+    category: str = Form(...), 
+    title: str = Form(...), 
+    content: str = Form(...), 
+    image_url: str = Form(None), 
+    image_author: str = Form(None), 
+    admin_auth: str = Cookie(None)
+):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     clean_title = title.replace('**', '').replace('*', '').strip()
-    update_article_in_db(article_id, category, clean_title, content, image_url)
+    update_article_in_db(article_id, category, clean_title, content, image_url, image_author)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/delete/{article_id}")
