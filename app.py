@@ -244,6 +244,7 @@ def generate_smart_tags(text, title=""):
 
 def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
+    clean_title_str = title.replace('**', '').replace('*', '').strip()
 
     lines_raw = text.split('\n')
     processed_lines = []
@@ -253,7 +254,13 @@ def clean_and_format_content(text, category_name="종합", title=""):
         if not p_str:
             continue
         
-        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div'):
+        # 1. 제목 중복 방지: 본문 첫 부분 또는 소제목으로 타이틀과 똑같은 문장이 들어오는 경우 제외
+        p_text_pure = re.sub(r'^[#|\s]+', '', p_str).replace('제목:', '').strip()
+        if clean_title_str and p_text_pure == clean_title_str:
+            continue
+
+        # 2. 이미지 컨테이너 및 HTML 태그 보존
+        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
             title_text = p_str.replace('###', '').strip()
@@ -577,7 +584,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
                 img {{ max-width: 100% !important; height: auto !important; }}
-                .article-img-box {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
+                .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
             </style>
         </head>
         <body>
@@ -738,7 +745,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
             img {{ max-width: 100% !important; height: auto !important; }}
-            .article-img-box {{ margin: 25px auto !important; text-align: center !important; display: block !important; }}
+            .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
         </style>
     </head>
     <body>
@@ -963,7 +970,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                             <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('manual_head_file').click()">📁 내 기기 파일</button>
                             <input type="file" id="manual_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'manual_head_url', 'manual_head_preview')">
                         </div>
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공 등)" style="margin-bottom: 4px;">
+                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공, pexels 등)" style="margin-bottom: 4px;">
                         <img id="manual_head_preview" class="preview-box-img">
                     </div>
                 </div>
@@ -972,7 +979,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
-                        <input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스, 국회방송 캡처, OO블로그 등)" style="flex: 1;">
+                        <input type="text" id="manual_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 국회방송 캡처 등)" style="flex: 1;">
                     </div>
                     <div class="img-tool-row">
                         <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
@@ -1016,7 +1023,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                             <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
                             <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
                         </div>
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공 등)" style="margin-bottom: 4px;">
+                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공, pexels 등)" style="margin-bottom: 4px;">
                         <img id="expand_head_preview" class="preview-box-img">
                     </div>
                 </div>
@@ -1025,7 +1032,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
-                        <input type="text" id="expand_source" placeholder="출처 표기 (예: 연합뉴스, 픽사베이 등)" style="flex: 1;">
+                        <input type="text" id="expand_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 픽사베이 등)" style="flex: 1;">
                     </div>
                     <div class="img-tool-row">
                         <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
@@ -1037,6 +1044,25 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <textarea name="prompt" id="expandPrompt" placeholder="예: 속초 지역의 가을 축제와 지역 경제 활성화 방안에 대해 전문적인 기사로 상세히 작성해줘." required></textarea>
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
+        </div>
+
+        <div class="box" style="border-top: 5px solid #34495e;">
+            <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr style="border-bottom: 2px solid #ccc; text-align: left;">
+                            <th style="padding: 10px;">카테고리</th>
+                            <th style="padding: 10px;">기사 제목</th>
+                            <th style="padding: 10px;">발행일시</th>
+                            <th style="padding: 10px; text-align: right;">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {articles_list_html}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <script>
@@ -1078,10 +1104,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
-            if (sourceText && sourceText.trim() !== "") {{
-                captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
+            let cleanSource = sourceText ? sourceText.trim() : "";
+            if (cleanSource !== "") {{
+                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
+                    cleanSource = "Photo by " + cleanSource;
+                }}
+                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
             }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
@@ -1125,25 +1155,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             }}
         }}
         </script>
-
-        <div class="box" style="border-top: 5px solid #34495e;">
-            <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
-            <div style="overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr style="border-bottom: 2px solid #ccc; text-align: left;">
-                            <th style="padding: 10px;">카테고리</th>
-                            <th style="padding: 10px;">기사 제목</th>
-                            <th style="padding: 10px;">발행일시</th>
-                            <th style="padding: 10px; text-align: right;">관리</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {articles_list_html}
-                    </tbody>
-                </table>
-            </div>
-        </div>
     </body>
     </html>
     """
@@ -1198,8 +1209,9 @@ def create_ai_expand(
         "1. 서론-본론-결론 구조를 갖춘 풍성한 분량(최소 4개 이상의 문단)으로 작성하세요.\n"
         "2. 각 핵심 단락 앞에는 '### 소제목' 형태로 소제목을 반드시 붙이세요.\n"
         "3. 만약 사용자의 취재 메모 안에 <div class=\"article-img-box\"나 <img 등 HTML 태그가 있다면 삭제하지 말고 본문 흐름에 맞게 그대로 포함하세요.\n"
-        "4. 마크다운 특수기호(-, *, _)는 쓰지 말고 표준적인 한국어 보도체(~다)로 명확하게 서술하세요.\n"
-        "5. 본문 끝에 해시태그는 직접 작성하지 마세요."
+        "4. 본문 시작 부분에 기사 제목을 다시 적지 마세요. 바로 첫 단락의 내용으로 시작하세요.\n"
+        "5. 마크다운 특수기호(-, *, _)는 쓰지 말고 표준적인 한국어 보도체(~다)로 명확하게 서술하세요.\n"
+        "6. 본문 끝에 해시태그는 직접 작성하지 마세요."
     )
     
     full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[핵심 취재 메모]: {prompt}"
@@ -1299,7 +1311,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     </div>
 
                     <label style="margin-top: 5px; font-size: 13px;">대표 이미지 출처 표기</label>
-                    <input type="text" id="main_img_author" name="image_author" value="{current_author}" placeholder="출처를 입력하세요 (예: 연합뉴스, 기본소득당 제공, 픽사베이 등)" style="margin-bottom: 8px;">
+                    <input type="text" id="main_img_author" name="image_author" value="{current_author}" placeholder="출처를 입력하세요 (예: pexels, 연합뉴스, 기본소득당 제공 등)" style="margin-bottom: 8px;">
                     
                     <small style="color: #7f8c8d; display: block; margin-top: 4px;">현재 등록된 대표 이미지 미리보기:</small>
                     <img id="main_img_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
@@ -1309,7 +1321,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
                     <div class="img-tool-row">
-                        <input type="text" id="edit_source" placeholder="출처 표기 (예: 연합뉴스, 국회방송 캡처, OO블로그 등)" style="flex: 1;">
+                        <input type="text" id="edit_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 국회방송 캡처 등)" style="flex: 1;">
                     </div>
                     <div class="img-tool-row">
                         <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
@@ -1362,10 +1374,14 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
 
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
-            if (sourceText && sourceText.trim() !== "") {{
-                captionHtml = '<p style="margin-top: 8px !important; margin-bottom: 0px !important; font-size: 13px !important; color: #7f8c8d !important; text-align: center !important; font-weight: normal !important; display: block !important;">[출처: ' + sourceText.trim() + ']</p>';
+            let cleanSource = sourceText ? sourceText.trim() : "";
+            if (cleanSource !== "") {{
+                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
+                    cleanSource = "Photo by " + cleanSource;
+                }}
+                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
             }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto; text-align: center; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block; margin: 0 auto;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
