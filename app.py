@@ -132,16 +132,23 @@ def fetch_bulletproof_image(category_name):
         "정치/시사": [
             ("https://images.unsplash.com/photo-1541872703-74c5e44368f9", "Unsplash"),
             ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620", "Unsplash"),
+            ("https://images.pexels.com/photos/6077326/pexels-photo-6077326.jpeg", "pexels"),
+            ("https://images.pexels.com/photos/1550337/pexels-photo-1550337.jpeg", "pexels"),
+            ("https://images.pexels.com/photos/696627/pexels-photo-696627.jpeg", "pexels"),
             ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash")
         ],
         "경제/주식": [
             ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
+            ("https://images.pexels.com/photos/38375328/pexels-photo-38375328.jpeg", "pexels"),
+            ("https://images.pexels.com/photos/5059930/pexels-photo-5059930.jpeg", "pexels"),
             ("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f", "Unsplash"),
             ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash"),
             ("https://images.unsplash.com/photo-1460925895917-afdab827c52f", "Unsplash")
         ],
         "세상이야기": [
             ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
+            ("https://images.pexels.com/photos/5059930/pexels-photo-5059930.jpeg", "pexels"),
+            ("https://images.pexels.com/photos/36261996/pexels-photo-36261996.jpeg", "pexels"),
             ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash"),
             ("https://images.unsplash.com/photo-1469571486292-0ba58a3f068b", "Unsplash"),
             ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash")
