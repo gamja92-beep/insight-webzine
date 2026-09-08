@@ -64,68 +64,10 @@ def init_db():
                 created_at TEXT
             )
         """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS visitors (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                visited_at TEXT
-            )
-        """)
         conn.commit()
         conn.close()
 
 init_db()
-
-def log_visitor():
-    kst = timezone(timedelta(hours=9))
-    current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
-    if supabase:
-        try:
-            supabase.table("visitors").insert({"visited_at": current_time_str}).execute()
-        except Exception as e:
-            print(f"🚨 [Supabase 방문자 기록 에러]: {e}")
-    else:
-        try:
-            conn = sqlite3.connect("database.db", check_same_thread=False)
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO visitors (visited_at) VALUES (?)", (current_time_str,))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print(f"🚨 [SQLite 방문자 기록 에러]: {e}")
-
-def get_visitor_stats():
-    kst = timezone(timedelta(hours=9))
-    today_prefix = datetime.now(kst).strftime("%Y-%m-%d")
-    if supabase:
-        try:
-            res = supabase.table("visitors").select("*", count="exact").execute()
-            total_count = res.count if res.count is not None else len(res.data or [])
-            
-            res_today = supabase.table("visitors").select("*", count="exact").gte("visited_at", f"{today_prefix} 00:00:00").execute()
-            today_count = res_today.count if res_today.count is not None else len(res_today.data or [])
-            
-            recent_res = supabase.table("visitors").select("*").order("id", desc=True).limit(5).execute()
-            recent_logs = recent_res.data or []
-            return total_count, today_count, recent_logs
-        except Exception:
-            return 0, 0, []
-    else:
-        try:
-            conn = sqlite3.connect("database.db", check_same_thread=False)
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM visitors")
-            total_count = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM visitors WHERE visited_at >= ?", (f"{today_prefix} 00:00:00",))
-            today_count = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT id, visited_at FROM visitors ORDER BY id DESC LIMIT 5")
-            rows = cursor.fetchall()
-            conn.close()
-            recent_logs = [{"visited_at": r[1]} for r in rows]
-            return total_count, today_count, recent_logs
-        except Exception:
-            return 0, 0, []
 
 def fetch_bulletproof_image(category_name):
     direct_pools = {
@@ -254,7 +196,7 @@ def clean_and_format_content(text, category_name="종합", title=""):
         if not p_str:
             continue
         
-        # 1. 제목 중복 방지: 본문 첫 부분 또는 소제목으로 타이틀과 똑같은 문장이 들어오는 경우 제외
+        # 1. 제목 중복 방지: 본문 시작 부분에 메인 기사 제목과 일치하는 줄이 있으면 건너뜀
         p_text_pure = re.sub(r'^[#|\s]+', '', p_str).replace('제목:', '').strip()
         if clean_title_str and p_text_pure == clean_title_str:
             continue
@@ -503,8 +445,6 @@ def ads_txt():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None, q: str = None):
-    log_visitor()
-
     subscribe_card_html = """
     <div class="author-subscribe-card">
         <div class="author-name">
@@ -837,13 +777,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         return RedirectResponse(url="/admin", status_code=303)
 
     rows = get_all_articles()
-    total_v, today_v, recent_logs = get_visitor_stats()
-
-    recent_logs_html = ""
-    for log in recent_logs:
-        recent_logs_html += f"<li style='margin-bottom: 5px; color: #555;'>🕒 방문 시각: {log['visited_at']}</li>"
-    if not recent_logs_html:
-        recent_logs_html = "<li style='color: #777;'>최근 방문 기록이 없습니다.</li>"
 
     articles_list_html = ""
     for r in rows:
@@ -884,9 +817,15 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
             table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            .stat-card {{ display: inline-block; width: 45%; background: #ebf5fb; padding: 15px; border-radius: 6px; text-align: center; margin-right: 4%; }}
-            .stat-num {{ font-size: 1.8em; font-weight: bold; color: #2980b9; margin-top: 5px; }}
             
+            .hub-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }}
+            .hub-btn {{ display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 14px; border-radius: 8px; font-weight: bold; font-size: 13.5px; text-decoration: none; color: white; transition: transform 0.2s, opacity 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.08); text-align: center; }}
+            .hub-btn:hover {{ opacity: 0.92; transform: translateY(-1px); }}
+            .hub-btn-naver-a {{ background: #03c75a; }}
+            .hub-btn-naver-s {{ background: #1f9c53; }}
+            .hub-btn-google-gsc {{ background: #4285f4; }}
+            .hub-btn-google-ga {{ background: #ea4335; }}
+
             .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
             .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
             .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
@@ -903,21 +842,23 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
         
         <div class="box" style="border-top: 5px solid #2ecc71;">
-            <h3>📊 방문자 통계 안내</h3>
-            <p style="color: #555; line-height: 1.6; margin-top: 8px;">
-                현재 <strong>네이버 애널리틱스</strong>가 연동되어 실시간 유입 분석이 정상 진행 중입니다.<br>
-                정밀한 일간/월간 방문자 수 및 네이버 검색 유입 키워드는 
-                <a href="https://analytics.naver.com/" target="_blank" style="color: #27ae60; font-weight: bold; text-decoration: underline;">[네이버 애널리틱스 대시보드 바로가기]</a>에서 바로 확인하실 수 있습니다.
+            <h3>📊 통계 분석 & 검색엔진 허브 센터</h3>
+            <p style="color: #666; font-size: 0.9em; margin-top: 6px; line-height: 1.6;">
+                네이버와 구글의 공식 대시보드로 바로 연결됩니다. 검색 유입 및 색인 현황, 정밀 트래픽을 안전하게 확인하세요.
             </p>
-            <div style="margin-top: 15px; display: flex; justify-content: space-between;">
-                <div class="stat-card" style="width: 48%;">
-                    <div style="color: #555; font-weight: bold;">자체 집계 오늘 방문</div>
-                    <div class="stat-num">{today_v} 명</div>
-                </div>
-                <div class="stat-card" style="width: 48%; margin-right: 0; background: #e8f8f5;">
-                    <div style="color: #555; font-weight: bold;">자체 집계 누적 방문</div>
-                    <div class="stat-num" style="color: #16a085;">{total_v} 명</div>
-                </div>
+            <div class="hub-grid">
+                <a href="https://analytics.naver.com/" target="_blank" class="hub-btn hub-btn-naver-a">
+                    🟢 네이버 애널리틱스
+                </a>
+                <a href="https://searchadvisor.naver.com/" target="_blank" class="hub-btn hub-btn-naver-s">
+                    🟢 네이버 서치어드바이저
+                </a>
+                <a href="https://search.google.com/search-console" target="_blank" class="hub-btn hub-btn-google-gsc">
+                    🔵 구글 서치 콘솔
+                </a>
+                <a href="https://analytics.google.com/" target="_blank" class="hub-btn hub-btn-google-ga">
+                    🔴 구글 애널리틱스(GA4)
+                </a>
             </div>
         </div>
 
