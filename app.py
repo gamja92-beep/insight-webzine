@@ -489,9 +489,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
         <script>
         window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
+        function gtag(){{dataLayer.push(arguments);}}
         gtag('js', new Date());
-
         gtag('config', 'G-LE89BB179K');
         </script>
             <meta charset="UTF-8">
