@@ -225,7 +225,6 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
         elif use_subtitle and len(p_str) < 42 and not p_str.endswith(('.', '?', '!')) and not p_str.startswith('<'):
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{p_str}</h3>')
         else:
-            # 소제목 제외 옵션일 때는 '###' 기호도 제거하여 일반 단락으로 처리
             clean_p = p_str.replace('###', '').strip()
             processed_lines.append(f'<p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{clean_p}</p>')
 
@@ -333,7 +332,7 @@ def delete_article_from_db(article_id):
         conn.commit()
         conn.close()
 
-def generate_ai_article(category_name, use_subtitle=True):
+def generate_ai_article(category_name, use_subtitle=True, region_scope="all"):
     strict_insight_context = (
         "STRICT EDITORIAL RULE: Today is September 10, 2026. "
         "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
@@ -342,6 +341,37 @@ def generate_ai_article(category_name, use_subtitle=True):
     )
 
     sub_directive = "각 핵심 단락 앞에는 반드시 '### 소제목' 형태로 소제목을 붙여 줘." if use_subtitle else "소제목(### 또는 별도 제목 라인)은 절대 넣지 말고, 문단별 줄글 형태로 자연스럽고 매끄럽게 연결해 줘."
+
+    # 지역창 세부 타겟팅 텍스트 구성
+    region_desc = "전국 각 지역의 생생한 현안과 로컬 소식"
+    if region_scope == "gangwon_all":
+        region_desc = "강원특별자치도 전역의 균형 발전, 도정 주요 정책 및 미래 산업 현안"
+    elif region_scope == "sokcho":
+        region_desc = "강원 영동권 '속초시'의 관광, 해양레저, 속초항 활성화, 소상공인 및 지역 밀착 소식"
+    elif region_scope == "goseong":
+        region_desc = "강원 영동권 '고성군'의 평화관광, 청정 자연생태, 접경지 발전 및 로컬 소식"
+    elif region_scope == "yangyang":
+        region_desc = "강원 영동권 '양양군'의 서핑 문화관광, 낙산 개발, 공항 활성화 및 로컬 라이프"
+    elif region_scope == "gangneung":
+        region_desc = "강원 영동권 '강릉시'의 관광 거점, 문화예술 및 첨단 산업 동향"
+    elif region_scope == "donghae":
+        region_desc = "강원 영동권 '동해시'의 항만 물류, 해양 관광 및 지역 경제 현안"
+    elif region_scope == "samcheok":
+        region_desc = "강원 영동권 '삼척시'의 수소 에너지 벨트 및 해양 생태 관광"
+    elif region_scope == "taebaek":
+        region_desc = "강원 영동권 '태백시'의 폐광 대체 청정에너지 산업 및 웰니스 힐링"
+    elif region_scope == "yeongdong_all":
+        region_desc = "강원 영동권(속초·고성·양양·강릉·동해·삼척·태백)의 동해안 관광벨트 및 지역 경제 연계 발전"
+    elif region_scope == "chuncheon":
+        region_desc = "강원 영서권 '춘천시'의 수열에너지 융복합 클러스터, 교육·문화 및 호수 관광"
+    elif region_scope == "wonju":
+        region_desc = "강원 영서권 '원주시'의 디지털 헬스케어, 혁신도시 발전 및 첨단 의료기기 산업"
+    elif region_scope == "hongcheon":
+        region_desc = "강원 영서권 '홍천군'의 바이오 신약 산업 및 체류형 전원 레저"
+    elif region_scope == "hoengseong":
+        region_desc = "강원 영서권 '횡성군'의 이모빌리티 특화 클러스터 및 한우 문화축제"
+    elif region_scope == "yeongseo_all":
+        region_desc = "강원 영서권(춘천·원주·홍천·횡성·화천·양구·인제·정선·평창·영월·철원)의 도정 연계 및 지역 경제"
 
     prompts = {
         "정치/시사": ("정치/시사", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. {sub_directive}"),
@@ -352,7 +382,7 @@ def generate_ai_article(category_name, use_subtitle=True):
         "생활정보": ("생활정보", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 일상생활에 유용한 실속 정보와 생활 속 지혜를 다루는 알찬 뉴스 기사를 작성해 주세요. {sub_directive}"),
         "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. {sub_directive}"),
         "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측 등을 다루는 전문적인 '스포츠 인사이트 칼럼'을 작성해 주세요. {sub_directive}"),
-        "지역창": ("지역창", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 강원도 속초 및 지역 사회의 생생한 현안, 지역 소상공인 소식, 로컬 문화, 지역 복지 및 생활 밀착형 지역 소식 기사를 전문적으로 작성해 주세요. {sub_directive}")
+        "지역창": ("지역창", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. [{region_desc}]에 관한 생생한 현안, 소상공인 및 로컬 경제, 생활 밀착형 심층 기사를 전문 언론인의 시각으로 작성해 주세요. {sub_directive}")
     }
     
     cat_info = prompts.get(category_name, ("종합", f"{strict_insight_context} 최신 트렌드 뉴스 기사 작성. {sub_directive}"))
@@ -400,7 +430,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
         file_ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
         unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
 
-        # 1. Supabase Storage 연동 시 영구 업로드
         if supabase:
             content_type = file.content_type or "image/jpeg"
             supabase.storage.from_("images").upload(
@@ -411,7 +440,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
             image_url = supabase.storage.from_("images").get_public_url(unique_filename)
             return {"url": image_url}
 
-        # 2. Supabase 미사용 시 로컬 백업 저장
         os.makedirs("static", exist_ok=True)
         file_path = os.path.join("static", unique_filename)
         with open(file_path, "wb") as f:
@@ -875,6 +903,11 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .sub-option-box {{ background: #f4f6f7; border: 1px solid #d5dbdb; border-radius: 6px; padding: 10px 14px; margin-top: 10px; margin-bottom: 15px; }}
             .sub-checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #2c3e50; cursor: pointer; font-size: 13.5px; margin: 0; }}
             .sub-checkbox-label input[type="checkbox"] {{ width: 18px; height: 18px; cursor: pointer; }}
+
+            /* 지역 세부 분류 선택 박스 스타일 */
+            .region-scope-box {{ background: #eafaf1; border: 1.5px solid #2ecc71; border-radius: 6px; padding: 12px 14px; margin-top: 10px; margin-bottom: 15px; display: none; }}
+            .region-scope-box label {{ margin-top: 0; color: #1e8449; font-size: 13.5px; }}
+            .region-scope-box select {{ margin-bottom: 0; background: white; font-weight: bold; color: #196f3d; }}
         </style>
     </head>
     <body>
@@ -906,7 +939,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
-                <select name="category">
+                <select name="category" id="auto_category" onchange="toggleRegionScope('auto_category', 'auto_region_box')">
                     <option value="정치/시사">정치/시사</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
@@ -917,6 +950,31 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="스포츠">스포츠</option>
                     <option value="지역창">지역창</option>
                 </select>
+
+                <div class="region-scope-box" id="auto_region_box">
+                    <label>📍 [지역창 세부 지역 타겟 선택]</label>
+                    <select name="region_scope">
+                        <option value="all">🌐 전국 (전국 주요 지역 현안)</option>
+                        <option value="gangwon_all">🌲 강원특별자치도 전역 (도정 및 전역 소식)</option>
+                        <optgroup label="🌊 강원 영동권">
+                            <option value="sokcho">속초시 (속초 현안, 관광, 항만, 로컬)</option>
+                            <option value="goseong">고성군 (평화관광, 청정자연, 접경지)</option>
+                            <option value="yangyang">양양군 (서핑, 낙산개발, 로컬라이프)</option>
+                            <option value="gangneung">강릉시 (관광거점, 문화예술, 혁신산업)</option>
+                            <option value="donghae">동해시 (항만물류, 해양관광, 로컬경제)</option>
+                            <option value="samcheok">삼척시 (수소에너지, 해양생태, 동해안)</option>
+                            <option value="taebaek">태백시 (청정에너지, 웰니스, 고원힐링)</option>
+                            <option value="yeongdong_all">강원 영동권 전역 (동해안 7개 시군 연계)</option>
+                        </optgroup>
+                        <optgroup label="⛰️ 강원 영서권">
+                            <option value="chuncheon">춘천시 (수열에너지 클러스터, 교육문화, 호수관광)</option>
+                            <option value="wonju">원주시 (디지털헬스케어, 혁신도시, 첨단의료)</option>
+                            <option value="hongcheon">홍천군 (바이오신약, 체류형관광, 로컬)</option>
+                            <option value="hoengseong">횡성군 (이모빌리티 클러스터, 축제, 로컬)</option>
+                            <option value="yeongseo_all">강원 영서권 전역 (영서권 시군 연계 발전)</option>
+                        </optgroup>
+                    </select>
+                </div>
 
                 <div class="sub-option-box">
                     <label class="sub-checkbox-label">
@@ -933,7 +991,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
             <form action="/admin/create-manual" method="post">
                 <label>카테고리 선택</label>
-                <select name="category">
+                <select name="category" id="manual_category" onchange="toggleRegionScope('manual_category', 'manual_region_box')">
                     <option value="정치/시사">정치/시사</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
@@ -944,6 +1002,32 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="스포츠">스포츠</option>
                     <option value="지역창">지역창</option>
                 </select>
+
+                <div class="region-scope-box" id="manual_region_box">
+                    <label>📍 [지역창 세부 지역 태깅/타겟]</label>
+                    <select name="region_scope">
+                        <option value="all">🌐 전국 (전국 이슈)</option>
+                        <option value="gangwon_all">🌲 강원특별자치도 전역</option>
+                        <optgroup label="🌊 강원 영동권">
+                            <option value="sokcho">속초시</option>
+                            <option value="goseong">고성군</option>
+                            <option value="yangyang">양양군</option>
+                            <option value="gangneung">강릉시</option>
+                            <option value="donghae">동해시</option>
+                            <option value="samcheok">삼척시</option>
+                            <option value="taebaek">태백시</option>
+                            <option value="yeongdong_all">강원 영동권 전역</option>
+                        </optgroup>
+                        <optgroup label="⛰️ 강원 영서권">
+                            <option value="chuncheon">춘천시</option>
+                            <option value="wonju">원주시</option>
+                            <option value="hongcheon">홍천군</option>
+                            <option value="hoengseong">횡성군</option>
+                            <option value="yeongseo_all">강원 영서권 전역</option>
+                        </optgroup>
+                    </select>
+                </div>
+
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목을 입력하세요" required>
                 
@@ -993,7 +1077,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
             <form action="/admin/create-ai-expand" method="post">
                 <label>카테고리 선택</label>
-                <select name="category">
+                <select name="category" id="expand_category" onchange="toggleRegionScope('expand_category', 'expand_region_box')">
                     <option value="정치/시사">정치/시사</option>
                     <option value="경제/주식">경제/주식</option>
                     <option value="세상이야기">세상이야기</option>
@@ -1004,6 +1088,32 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="스포츠">스포츠</option>
                     <option value="지역창">지역창</option>
                 </select>
+
+                <div class="region-scope-box" id="expand_region_box">
+                    <label>📍 [지역창 세부 지역 타겟 선택]</label>
+                    <select name="region_scope">
+                        <option value="all">🌐 전국 (전국 주요 지역 현안)</option>
+                        <option value="gangwon_all">🌲 강원특별자치도 전역 (도정 및 전역 소식)</option>
+                        <optgroup label="🌊 강원 영동권">
+                            <option value="sokcho">속초시 (속초 현안, 관광, 항만, 로컬)</option>
+                            <option value="goseong">고성군 (평화관광, 청정자연, 접경지)</option>
+                            <option value="yangyang">양양군 (서핑, 낙산개발, 로컬라이프)</option>
+                            <option value="gangneung">강릉시 (관광거점, 문화예술, 혁신산업)</option>
+                            <option value="donghae">동해시 (항만물류, 해양관광, 로컬경제)</option>
+                            <option value="samcheok">삼척시 (수소에너지, 해양생태, 동해안)</option>
+                            <option value="taebaek">태백시 (청정에너지, 웰니스, 고원힐링)</option>
+                            <option value="yeongdong_all">강원 영동권 전역 (동해안 7개 시군 연계)</option>
+                        </optgroup>
+                        <optgroup label="⛰️ 강원 영서권">
+                            <option value="chuncheon">춘천시 (수열에너지 클러스터, 교육문화, 호수관광)</option>
+                            <option value="wonju">원주시 (디지털헬스케어, 혁신도시, 첨단의료)</option>
+                            <option value="hongcheon">홍천군 (바이오신약, 체류형관광, 로컬)</option>
+                            <option value="hoengseong">횡성군 (이모빌리티 클러스터, 축제, 로컬)</option>
+                            <option value="yeongseo_all">강원 영서권 전역 (영서권 시군 연계 발전)</option>
+                        </optgroup>
+                    </select>
+                </div>
+
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
                 
@@ -1069,6 +1179,18 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
+        function toggleRegionScope(selectId, boxId) {{
+            const select = document.getElementById(selectId);
+            const box = document.getElementById(boxId);
+            if (select && box) {{
+                if (select.value === '지역창') {{
+                    box.style.display = 'block';
+                }} else {{
+                    box.style.display = 'none';
+                }}
+            }}
+        }}
+
         function toggleHeadImgSection(type) {{
             const chk = document.getElementById(type + '_use_unsplash');
             const wrap = document.getElementById(type + '_custom_head_wrap');
@@ -1157,6 +1279,13 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 input.value = "";
             }}
         }}
+
+        // 페이지 로드 시 초기 지역 선택 박스 상태 체크
+        window.onload = function() {{
+            toggleRegionScope('auto_category', 'auto_region_box');
+            toggleRegionScope('manual_category', 'manual_region_box');
+            toggleRegionScope('expand_category', 'expand_region_box');
+        }};
         </script>
     </body>
     </html>
@@ -1165,18 +1294,20 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 @app.post("/admin/create-auto")
 def create_auto(
     category: str = Form(...), 
+    region_scope: str = Form("all"),
     use_subtitle: str = Form(None),
     admin_auth: str = Cookie(None)
 ):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     has_sub = (use_subtitle == "yes")
-    generate_ai_article(category, use_subtitle=has_sub)
+    generate_ai_article(category, use_subtitle=has_sub, region_scope=region_scope)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-manual")
 def create_manual(
     category: str = Form(...), 
+    region_scope: str = Form("all"),
     title: str = Form(...), 
     content: str = Form(...), 
     use_subtitle: str = Form(None),
@@ -1203,6 +1334,7 @@ def create_manual(
 @app.post("/admin/create-ai-expand")
 def create_ai_expand(
     category: str = Form(...), 
+    region_scope: str = Form("all"),
     title: str = Form(...), 
     prompt: str = Form(...), 
     use_subtitle: str = Form(None),
@@ -1221,6 +1353,29 @@ def create_ai_expand(
     else:
         sub_rule = "2. 소제목(### 또는 별도 제목)은 절대 넣지 말고, 문단별 줄글로 매끄럽게 연결하세요.\n"
 
+    # 지역창 선택 시 취재 메모에 지역 타겟 프롬프트 추가
+    region_directive = ""
+    if category == "지역창":
+        region_map = {
+            "all": "전국 각 지역의 균형 발전 및 현안 이슈",
+            "gangwon_all": "강원특별자치도 전역의 도정 및 균형 발전",
+            "sokcho": "강원 영동권 속초시의 생생한 현안, 관광, 항만 및 로컬 경제",
+            "goseong": "강원 영동권 고성군의 평화관광, 청정 자연 및 접경지 발전",
+            "yangyang": "강원 영동권 양양군의 서핑 문화, 낙산 개발 및 로컬 라이프",
+            "gangneung": "강원 영동권 강릉시의 문화예술, 관광거점 및 로컬 혁신",
+            "donghae": "강원 영동권 동해시의 항만 물류 및 해양관광",
+            "samcheok": "강원 영동권 삼척시의 수소 에너지 및 해양 생태",
+            "taebaek": "강원 영동권 태백시의 청정에너지 및 웰니스 힐링",
+            "yeongdong_all": "강원 영동권(속초·고성·양양·강릉·동해·삼척·태백)의 연계 발전",
+            "chuncheon": "강원 영서권 춘천시의 수열에너지 클러스터, 교육문화 및 호수관광",
+            "wonju": "강원 영서권 원주시의 디지털 헬스케어, 혁신도시 및 첨단의료",
+            "hongcheon": "강원 영서권 홍천군의 바이오 신약 및 전원 레저",
+            "hoengseong": "강원 영서권 횡성군의 이모빌리티 및 지역 경제",
+            "yeongseo_all": "강원 영서권(춘천·원주·홍천·횡성·화천·양구·인제·정선·평창·영월·철원)의 연계 발전"
+        }
+        target_name = region_map.get(region_scope, "전국 및 로컬")
+        region_directive = f"\n[지역 타겟]: 이 기사는 '{target_name}'에 초점을 맞추어 작성되어야 합니다."
+
     system_directive = (
         "당신은 전문 수석 언론사 기자입니다. "
         "사용자가 제공한 [기사 제목]과 [핵심 취재 메모]를 바탕으로 완성도 높은 정식 뉴스 기사 본문을 작성하세요.\n"
@@ -1230,6 +1385,7 @@ def create_ai_expand(
         "4. 본문 시작 부분에 기사 제목을 다시 적지 마세요. 바로 첫 단락의 내용으로 시작하세요.\n"
         "5. 마크다운 특수기호(-, *, _)는 쓰지 말고 표준적인 한국어 보도체(~다)로 명확하게 서술하세요.\n"
         "6. 본문 끝에 해시태그는 직접 작성하지 마세요."
+        f"{region_directive}"
     )
     
     full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[핵심 취재 메모]: {prompt}"
