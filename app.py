@@ -384,17 +384,32 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
+# ==========================================================
+# 이미지 업로드 엔드포인트 (Supabase Storage 영구 저장 지원)
+# ==========================================================
 @app.post("/admin/upload-image")
 async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
         return {"error": "Unauthorized"}
     try:
-        os.makedirs("static", exist_ok=True)
-        file_ext = file.filename.split(".")[-1]
-        unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
-        file_path = os.path.join("static", unique_filename)
-        
         contents = await file.read()
+        file_ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+        unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
+
+        # 1. Supabase Storage 연동 시 영구 업로드
+        if supabase:
+            content_type = file.content_type or "image/jpeg"
+            supabase.storage.from_("images").upload(
+                path=unique_filename,
+                file=contents,
+                file_options={"content-type": content_type}
+            )
+            image_url = supabase.storage.from_("images").get_public_url(unique_filename)
+            return {"url": image_url}
+
+        # 2. Supabase 미사용 시 로컬 백업 저장
+        os.makedirs("static", exist_ok=True)
+        file_path = os.path.join("static", unique_filename)
         with open(file_path, "wb") as f:
             f.write(contents)
             
