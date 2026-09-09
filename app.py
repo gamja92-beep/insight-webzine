@@ -47,6 +47,21 @@ wcs_do();
 </script>
 """
 
+# ==========================================================
+# 구글 애널리틱스 추적 스크립트 (GA4)
+# ==========================================================
+GOOGLE_ANALYTICS_SCRIPT = """
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-LE89BB179K');
+</script>
+"""
+
 def init_db():
     if supabase:
         pass
@@ -485,14 +500,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <!DOCTYPE html>
         <html lang="ko">
         <head>
-        <!-- Google tag (gtag.js) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
-        <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){{dataLayer.push(arguments);}}
-        gtag('js', new Date());
-        gtag('config', 'G-LE89BB179K');
-        </script>
+            {GOOGLE_ANALYTICS_SCRIPT}
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art_title_clean} - 시사투데이 창</title>
@@ -635,6 +643,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <!DOCTYPE html>
     <html lang="ko">
     <head>
+        {GOOGLE_ANALYTICS_SCRIPT}
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>시사투데이 창 - 프리미엄 미디어</title>
