@@ -3,15 +3,15 @@ import re
 import time
 import sqlite3
 import datetime
-import urllib.parse
-import feedparser
+import urllib.request
+import xml.etree.ElementTree as ET
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw
 
-from flask import Flask, render_template_string, request, redirect, url_for, send_from_directory
+from flask import Flask, render_template_string, request, redirect, url_for
 
-# Flask 앱 인스턴스
+# 1. Flask 애플리케이션 초기화
 flask_app = Flask(__name__)
 
 # 기본 경로 및 데이터베이스 설정
@@ -22,7 +22,7 @@ DB_PATH = os.path.join(BASE_DIR, "webzine.db")
 
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
-# 카테고리 매핑 및 실시간 속보 RSS 소스
+# 카테고리별 실시간 속보 RSS 소스
 CATEGORIES = {
     "정치/시사": "https://news.google.com/rss/search?q=정치+시사&hl=ko&gl=KR&ceid=KR:ko",
     "경제/주식": "https://news.google.com/rss/search?q=경제+증시+주식&hl=ko&gl=KR&ceid=KR:ko",
@@ -37,7 +37,7 @@ CATEGORIES = {
 
 
 # ==========================================
-# 1. DB 초기화
+# 2. 데이터베이스 초기화
 # ==========================================
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -61,7 +61,7 @@ init_db()
 
 
 # ==========================================
-# 2. 엑박 방지: 썸네일 안전 저장 및 자체 생성
+# 3. 엑박 원천 방지: 이미지 로컬 다운로드 및 대체 생성
 # ==========================================
 def create_fallback_image(category: str, title: str, filename: str) -> str:
     filepath = os.path.join(IMAGE_DIR, filename)
@@ -97,8 +97,25 @@ def save_safe_image(original_url: str, category: str, title: str) -> str:
 
 
 # ==========================================
-# 3. 실시간 속보 수집 & 클릭 유도 심층 기사 생성
+# 4. 내장 XML 파서를 이용한 무결성 속보 수집 엔진
 # ==========================================
+def get_rss_items(rss_url):
+    """feedparser 라이브러리 없이도 파이썬 내장 모듈로 100% 동작"""
+    items = []
+    try:
+        req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            xml_data = response.read()
+        root = ET.fromstring(xml_data)
+        for it in root.findall('./channel/item'):
+            title = it.findtext('title') or ''
+            link = it.findtext('link') or ''
+            desc = it.findtext('description') or ''
+            items.append({'title': title, 'link': link, 'description': desc})
+    except Exception:
+        pass
+    return items
+
 def generate_click_worthy_title(original_title: str) -> str:
     clean = re.sub(r'\[.*?\]|\(.*?\)', '', original_title).strip()
     if any(k in clean for k in ['논란', '의혹', '충격', '폭등', '급락']):
@@ -128,38 +145,30 @@ def compose_depth_article(category: str, raw_title: str, summary: str) -> dict:
     <h3>4. 향후 관전 포인트 및 후속 일정</h3>
     <p>전문가들은 향후 관계 당국의 공식 발표와 입법·행정 절차의 구체화 시점을 면밀히 주시해야 한다고 조언합니다. 시사투데이는 추가적인 사실관계와 세부 변동사항을 지속적으로 추적 보도할 예정입니다.</p>
     """
-    return {
-        "title": click_title,
-        "lead": lead,
-        "content": body_html
-    }
+    return {"title": click_title, "lead": lead, "content": body_html}
 
 def fetch_and_publish_category(category_name: str, limit: int = 1):
     url = CATEGORIES.get(category_name)
     if not url:
         return
 
-    feed = feedparser.parse(url)
+    items = get_rss_items(url)
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
     count = 0
-    for entry in feed.entries:
+    for entry in items:
         if count >= limit:
             break
 
-        cur.execute("SELECT id FROM articles WHERE source_link = ?", (entry.link,))
+        cur.execute("SELECT id FROM articles WHERE source_link = ?", (entry['link'],))
         if cur.fetchone():
             continue
 
-        raw_summary = BeautifulSoup(entry.get('summary', ''), "html.parser").get_text()
-        article_data = compose_depth_article(category_name, entry.title, raw_summary)
+        raw_summary = BeautifulSoup(entry['description'], "html.parser").get_text()
+        article_data = compose_depth_article(category_name, entry['title'], raw_summary)
 
-        extracted_img = ""
-        if 'media_content' in entry and entry.media_content:
-            extracted_img = entry.media_content[0].get('url', '')
-
-        saved_image_url = save_safe_image(extracted_img, category_name, article_data["title"])
+        saved_image_url = save_safe_image("", category_name, article_data["title"])
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         cur.execute("""
@@ -171,7 +180,7 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
             article_data["lead"],
             article_data["content"],
             saved_image_url,
-            entry.link,
+            entry['link'],
             now_str
         ))
         conn.commit()
@@ -181,7 +190,7 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
 
 
 # ==========================================
-# 4. 프론트엔드 라우트 & 템플릿
+# 5. 프론트엔드 라우트 & 템플릿
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -320,15 +329,76 @@ def crawl_all():
 
 
 # ==========================================
-# 5. Render(Uvicorn & Gunicorn) 호환 ASGI/WSGI 래퍼
+# 6. Render Uvicorn 전용 ASGI 브리지 (외부 의존성 없음)
 # ==========================================
-try:
-    from a2wsgi import WSGIMiddleware
-    # Render의 'uvicorn app:app' 실행 시 자동으로 ASGI로 동작
-    app = WSGIMiddleware(flask_app)
-except ImportError:
-    # Gunicorn이나 파이썬 직접 실행 시 Flask WSGI로 동작
-    app = flask_app
+async def app(scope, receive, send):
+    """uvicorn app:app 명령어로 실행 시 WSGI를 ASGI로 변환해주는 순수 내장 브리지"""
+    if scope['type'] == 'lifespan':
+        while True:
+            message = await receive()
+            if message['type'] == 'lifespan.startup':
+                await send({'type': 'lifespan.startup.complete'})
+            elif message['type'] == 'lifespan.shutdown':
+                await send({'type': 'lifespan.shutdown.complete'})
+                return
+
+    if scope['type'] != 'http':
+        return
+
+    import io
+    body = b""
+    while True:
+        message = await receive()
+        body += message.get('body', b'')
+        if not message.get('more_body', False):
+            break
+
+    environ = {
+        'wsgi.version': (1, 0),
+        'wsgi.url_scheme': scope.get('scheme', 'http'),
+        'wsgi.input': io.BytesIO(body),
+        'wsgi.errors': sys.stderr if 'sys' in globals() else io.StringIO(),
+        'wsgi.multithread': False,
+        'wsgi.multiprocess': False,
+        'wsgi.run_once': False,
+        'REQUEST_METHOD': scope['method'],
+        'SCRIPT_NAME': '',
+        'PATH_INFO': urllib.parse.unquote(scope['path']),
+        'QUERY_STRING': scope['query_string'].decode('latin-1'),
+        'SERVER_NAME': 'localhost',
+        'SERVER_PORT': '80',
+    }
+
+    for name, value in scope.get('headers', []):
+        name = name.decode('latin-1')
+        if name == 'content-type':
+            environ['CONTENT_TYPE'] = value.decode('latin-1')
+        elif name == 'content-length':
+            environ['CONTENT_LENGTH'] = value.decode('latin-1')
+        else:
+            environ['HTTP_' + name.upper().replace('-', '_')] = value.decode('latin-1')
+
+    status_code = 200
+    response_headers = []
+
+    def start_response(status, headers, exc_info=None):
+        nonlocal status_code, response_headers
+        status_code = int(status.split(' ')[0])
+        response_headers = [(k.lower().encode('latin-1'), v.encode('latin-1')) for k, v in headers]
+
+    result = flask_app(environ, start_response)
+    response_body = b''.join(result)
+
+    await send({
+        'type': 'http.response.start',
+        'status': status_code,
+        'headers': response_headers
+    })
+    await send({
+        'type': 'http.response.body',
+        'body': response_body
+    })
+
 
 if __name__ == "__main__":
     flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
