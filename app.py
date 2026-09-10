@@ -622,38 +622,37 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
     # ==========================================================
-    # 상단 헤드라인 및 본문 리스트 레이아웃 혁신
+    # 상단 2개 헤드라인 카드 및 하단 통합 목록 레이아웃
     # ==========================================================
     featured_html = ""
     list_html = ""
 
-    # 1) 특정 카테고리를 클릭했을 때: 최신 1개는 메인 와이드 카드, 나머지는 '지난 기사/전체 목록'으로 통합
+    # 1) 개별 카테고리 클릭 시: 상단 최신 2개 헤드라인 카드 + 3번째부터 전체 지난 기사 목록
     if category and category != "전체":
         if articles:
-            top_art = articles[0]
-            cat_name = top_art['category'] if top_art['category'] else '종합'
-            img_url = top_art['image_url'] if top_art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-            
-            featured_html = f"""
-            <div class="featured-grid single-focus">
+            top_articles = articles[:2]
+            cards_markup = ""
+            for idx, top_art in enumerate(top_articles):
+                cat_name = top_art['category'] if top_art['category'] else '종합'
+                img_url = top_art['image_url'] if top_art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
+                cards_markup += f"""
                 <div class="featured-card">
-                    <div class="featured-img-wrap" style="height: 240px;">
+                    <div class="featured-img-wrap">
                         <a href="/?view={top_art['id']}"><img src="{img_url}" class="featured-img"></a>
                     </div>
                     <div class="featured-body">
-                        <span class="badge" style="background:#e74c3c; color:white;">🔥 {cat_name} 헤드라인 리포트</span>
-                        <h3 class="featured-title" style="font-size: 1.25em;"><a href="/?view={top_art['id']}">{top_art['title']}</a></h3>
+                        <span class="badge" style="background:#e74c3c; color:white;">🔥 {cat_name} 헤드라인 #{idx+1}</span>
+                        <h3 class="featured-title"><a href="/?view={top_art['id']}">{top_art['title']}</a></h3>
                         <div class="card-date">발행일시 | {top_art['created_at']}</div>
                     </div>
                 </div>
-            </div>
-            """
+                """
+            featured_html = f'<div class="featured-grid">{cards_markup}</div>'
             
-            # 2번째 기사부터는 '지난 기사 목록'으로 한 상자에 일목요연하게 표시
-            archive_articles = articles[1:]
+            archive_articles = articles[2:]
             if archive_articles:
                 list_html += f'<div class="news-section-box">'
-                list_html += f'<div class="section-header">📂 {category} 전체 뉴스 목록 ({len(archive_articles)}건)</div>'
+                list_html += f'<div class="section-header">📂 {category} 지난 뉴스 대장 ({len(archive_articles)}건)</div>'
                 for art in archive_articles:
                     list_html += f"""
                     <div class="news-list-item">
@@ -663,15 +662,16 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                     """
                 list_html += '</div>'
             else:
-                list_html += f'<div class="news-section-box"><p style="color:#888; font-size:0.9em; text-align:center; margin:10px 0;">이 카테고리의 이전 기사가 없습니다.</p></div>'
+                list_html += f'<div class="news-section-box"><p style="color:#888; font-size:0.9em; text-align:center; margin:10px 0;">이 카테고리의 지난 기사가 없습니다.</p></div>'
 
-    # 2) '전체' 메인 홈 화면일 때: 최신 2개는 메인 카드, 아래는 각 카테고리별 섹션 박스
+    # 2) '전체' 메인 홈 화면일 때: 전체 최신 2개 헤드라인 + 분야별 최신 뉴스 섹션
     else:
         featured_articles = articles[:2] if articles else []
+        cards_markup = ""
         for art in featured_articles:
             cat_name = art['category'] if art['category'] else '종합'
             img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-            featured_html += f"""
+            cards_markup += f"""
             <div class="featured-card">
                 <div class="featured-img-wrap">
                     <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
@@ -683,8 +683,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 </div>
             </div>
             """
-        if featured_html:
-            featured_html = f'<div class="featured-grid">{featured_html}</div>'
+        if cards_markup:
+            featured_html = f'<div class="featured-grid">{cards_markup}</div>'
 
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
@@ -742,7 +742,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
             
             .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
-            .featured-grid.single-focus {{ grid-template-columns: 1fr; }}
             .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
             .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
             .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
