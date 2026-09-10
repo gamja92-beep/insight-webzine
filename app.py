@@ -29,7 +29,7 @@ CRAWL_TARGETS = {
 }
 
 # ==========================================
-# 영구 보존용 40대 마스터 기사 데이터베이스 (자동 복원용)
+# 영구 보존용 40대 마스터 기사 데이터베이스
 # ==========================================
 RESTORE_ARTICLES = [
     # 1. 정치/시사
@@ -63,7 +63,7 @@ RESTORE_ARTICLES = [
      "<h3>1. 검사 절차</h3><p>기억력 감퇴가 의심될 때 즉시 인근 센터를 방문해 전문 상담을 받을 수 있습니다.</p>"),
 
     # 4. 세상이야기
-    ("세상이야기", "국내 힐링 명소 가이드 및 시니어를 위한 문화누리카드 알찬 활용법", "연 13만 원 지원되는 문화누리카드를 100% 누리는 숨은 명소와 여행 팁입니다.",
+    ("세상이야기", "국내 힐링 명소 가이드 및 시니어를 위한 문화누리카드 알찬 활용법", "연간 지원되는 문화누리카드를 100% 누리는 숨은 명소와 여행 팁입니다.",
      "<h3>1. 이용 혜택</h3><p>KTX 할인 및 주요 국립공원·문화재 무료 입장 등 폭넓은 시니어 우대 혜택을 연계할 수 있습니다.</p>"),
     ("세상이야기", "팬덤이 이끄는 스포츠 기부 생태계의 변화와 미래 전망", "단순 응원을 넘어 사회적 연대와 나눔으로 확장되는 대중문화 현상을 조명합니다.",
      "<h3>1. 문화적 현상</h3><p>선한 영향력을 확산하는 팬덤 기부 문화가 새로운 공익 기여 모델로 정착하고 있습니다.</p>"),
@@ -111,7 +111,6 @@ RESTORE_ARTICLES = [
      "<h3>1. 보전 노력</h3><p>밀원수 식재와 산림 감시 체계 고도화로 안전한 산림 환경을 가꾸어 갑니다.</p>")
 ]
 
-
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -120,6 +119,8 @@ def get_db_connection():
 def init_and_auto_restore_db():
     conn = get_db_connection()
     cur = conn.cursor()
+
+    # 1. 테이블 기본 생성
     cur.execute("""
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,7 +135,17 @@ def init_and_auto_restore_db():
     """)
     conn.commit()
 
-    # 기사가 10개 미만으로 리셋되어 있을 때 40대 마스터 기사 즉시 자동 복원
+    # 2. 기존 DB 테이블 컬럼 자동 점검 및 마이그레이션 (lead_text 누락 방어)
+    cur.execute("PRAGMA table_info(articles)")
+    columns = [row['name'] for row in cur.fetchall()]
+    if 'lead_text' not in columns:
+        try:
+            cur.execute("ALTER TABLE articles ADD COLUMN lead_text TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            pass
+
+    # 3. 기사가 부족할 경우 마스터 기사 30~40편 자동 복원
     cur.execute("SELECT COUNT(*) as cnt FROM articles")
     cnt = cur.fetchone()['cnt']
     if cnt < 10:
@@ -146,6 +157,7 @@ def init_and_auto_restore_db():
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (item[0], item[1], item[2], item[3], "", "", date_str))
         conn.commit()
+
     conn.close()
 
 init_and_auto_restore_db()
