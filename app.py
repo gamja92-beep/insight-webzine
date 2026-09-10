@@ -342,7 +342,6 @@ def generate_ai_article(category_name, use_subtitle=True, region_scope="all"):
 
     sub_directive = "각 핵심 단락 앞에는 반드시 '### 소제목' 형태로 소제목을 붙여 줘." if use_subtitle else "소제목(### 또는 별도 제목 라인)은 절대 넣지 말고, 문단별 줄글 형태로 자연스럽고 매끄럽게 연결해 줘."
 
-    # 지역창 세부 타겟팅 텍스트 구성
     region_desc = "전국 각 지역의 생생한 현안과 로컬 소식"
     if region_scope == "gangwon_all":
         region_desc = "강원특별자치도 전역의 균형 발전, 도정 주요 정책 및 미래 산업 현안"
@@ -904,7 +903,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .sub-checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #2c3e50; cursor: pointer; font-size: 13.5px; margin: 0; }}
             .sub-checkbox-label input[type="checkbox"] {{ width: 18px; height: 18px; cursor: pointer; }}
 
-            /* 지역 세부 분류 선택 박스 스타일 */
+            /* 지역 세부 분류 선택 박스 */
             .region-scope-box {{ background: #eafaf1; border: 1.5px solid #2ecc71; border-radius: 6px; padding: 12px 14px; margin-top: 10px; margin-bottom: 15px; display: none; }}
             .region-scope-box label {{ margin-top: 0; color: #1e8449; font-size: 13.5px; }}
             .region-scope-box select {{ margin-bottom: 0; background: white; font-weight: bold; color: #196f3d; }}
@@ -920,16 +919,16 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 네이버와 구글의 공식 대시보드로 바로 연결됩니다. 검색 유입 및 색인 현황, 정밀 트래픽을 안전하게 확인하세요.
             </p>
             <div class="hub-grid">
-                <a href="https://analytics.naver.com/" target="_blank" class="hub-btn hub-btn-naver-a">
+                <a href="https://analytics.naver.com/" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-naver-a">
                     🟢 네이버 애널리틱스
                 </a>
-                <a href="https://searchadvisor.naver.com/" target="_blank" class="hub-btn hub-btn-naver-s">
+                <a href="https://searchadvisor.naver.com/" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-naver-s">
                     🟢 네이버 서치어드바이저
                 </a>
-                <a href="https://search.google.com/search-console" target="_blank" class="hub-btn hub-btn-google-gsc">
+                <a href="https://search.google.com/search-console" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-google-gsc">
                     🔵 구글 서치 콘솔
                 </a>
-                <a href="https://analytics.google.com/" target="_blank" class="hub-btn hub-btn-google-ga">
+                <a href="https://analytics.google.com/analytics/web/" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-google-ga">
                     🔴 구글 애널리틱스(GA4)
                 </a>
             </div>
@@ -1280,7 +1279,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             }}
         }}
 
-        // 페이지 로드 시 초기 지역 선택 박스 상태 체크
         window.onload = function() {{
             toggleRegionScope('auto_category', 'auto_region_box');
             toggleRegionScope('manual_category', 'manual_region_box');
@@ -1353,7 +1351,6 @@ def create_ai_expand(
     else:
         sub_rule = "2. 소제목(### 또는 별도 제목)은 절대 넣지 말고, 문단별 줄글로 매끄럽게 연결하세요.\n"
 
-    # 지역창 선택 시 취재 메모에 지역 타겟 프롬프트 추가
     region_directive = ""
     if category == "지역창":
         region_map = {
