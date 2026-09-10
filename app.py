@@ -360,7 +360,7 @@ def generate_ai_article(category_name, use_subtitle=True, region_scope="all"):
     elif region_scope == "yeongdong_all":
         region_desc = "강원 영동권(속초·고성·양양·강릉·동해·삼척·태백)의 동해안 관광벨트 및 지역 경제 연계 발전"
     elif region_scope == "chuncheon":
-        region_desc = "강원 영서권 '춘천시'의 수열에너지 융복합 클러스터, 교육·문화 및 호수 관광"
+        region_desc = "강원 영서권 '춘천시'의 수열에너지 융복합 클러스터, 교육문화 및 호수 관광"
     elif region_scope == "wonju":
         region_desc = "강원 영서권 '원주시'의 디지털 헬스케어, 혁신도시 발전 및 첨단 의료기기 산업"
     elif region_scope == "hongcheon":
@@ -622,18 +622,17 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
     # ==========================================================
-    # 상단 2개 헤드라인 카드(#1, #2 표식 제거) 및 하단 통합 목록
+    # 상단 2개 헤드라인 뉴스 카드(빨간색 뱃지) 및 하단 카테고리 뉴스 목록
     # ==========================================================
     featured_html = ""
     list_html = ""
 
-    # 1) 개별 카테고리 클릭 시: 상단 최신 2개 카드(깔끔한 카테고리명 표기) + 3번째부터 전체 지난 기사 목록
+    # 1) 개별 카테고리 클릭 시: 상단 최신 2개는 빨간색 '헤드라인 뉴스' 카드 + 하단은 '[카테고리] 뉴스 목록'
     if category and category != "전체":
         if articles:
             top_articles = articles[:2]
             cards_markup = ""
             for top_art in top_articles:
-                cat_name = top_art['category'] if top_art['category'] else '종합'
                 img_url = top_art['image_url'] if top_art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
                 cards_markup += f"""
                 <div class="featured-card">
@@ -641,7 +640,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                         <a href="/?view={top_art['id']}"><img src="{img_url}" class="featured-img"></a>
                     </div>
                     <div class="featured-body">
-                        <span class="badge">{cat_name}</span>
+                        <span class="badge" style="background:#e74c3c; color:white; font-weight: bold;">🔥 헤드라인 뉴스</span>
                         <h3 class="featured-title"><a href="/?view={top_art['id']}">{top_art['title']}</a></h3>
                         <div class="card-date">발행일시 | {top_art['created_at']}</div>
                     </div>
@@ -652,7 +651,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             archive_articles = articles[2:]
             if archive_articles:
                 list_html += f'<div class="news-section-box">'
-                list_html += f'<div class="section-header">📂 {category} 지난 뉴스 대장 ({len(archive_articles)}건)</div>'
+                list_html += f'<div class="section-header">📂 {category} 뉴스 목록</div>'
                 for art in archive_articles:
                     list_html += f"""
                     <div class="news-list-item">
