@@ -211,12 +211,10 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
         if not p_str:
             continue
         
-        # 1. 제목 중복 방지: 본문 시작 부분에 메인 기사 제목과 일치하는 줄이 있으면 건너뜀
         p_text_pure = re.sub(r'^[#|\s]+', '', p_str).replace('제목:', '').strip()
         if clean_title_str and p_text_pure == clean_title_str:
             continue
 
-        # 2. 이미지 컨테이너 및 HTML 태그 보존
         if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure'):
             processed_lines.append(p_str)
         elif use_subtitle and p_str.startswith('###'):
@@ -623,40 +621,71 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
 
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
-    featured_articles = articles[:2] if articles else []
+    # ==========================================================
+    # 상단 헤드라인 및 본문 리스트 레이아웃 혁신
+    # ==========================================================
     featured_html = ""
-    for art in featured_articles:
-        cat_name = art['category'] if art['category'] else '종합'
-        img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-        featured_html += f"""
-        <div class="featured-card">
-            <div class="featured-img-wrap">
-                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
-            </div>
-            <div class="featured-body">
-                <span class="badge">{cat_name}</span>
-                <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
-                <div class="card-date">발행 | {art['created_at']}</div>
-            </div>
-        </div>
-        """
-
     list_html = ""
+
+    # 1) 특정 카테고리를 클릭했을 때: 최신 1개는 메인 와이드 카드, 나머지는 '지난 기사/전체 목록'으로 통합
     if category and category != "전체":
-        cat_articles = articles if not (q and q.strip()) else articles
-        chunked_list = [cat_articles[i:i+5] for i in range(0, len(cat_articles), 5)]
-        for chunk in chunked_list:
-            list_html += f'<div class="news-section-box">'
-            list_html += f'<div class="section-header">📌 {category} 최신 리포트</div>'
-            for art in chunk:
-                list_html += f"""
-                <div class="news-list-item">
-                    <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
-                    <span class="list-date">{art['created_at'].split()[0]}</span>
+        if articles:
+            top_art = articles[0]
+            cat_name = top_art['category'] if top_art['category'] else '종합'
+            img_url = top_art['image_url'] if top_art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
+            
+            featured_html = f"""
+            <div class="featured-grid single-focus">
+                <div class="featured-card">
+                    <div class="featured-img-wrap" style="height: 240px;">
+                        <a href="/?view={top_art['id']}"><img src="{img_url}" class="featured-img"></a>
+                    </div>
+                    <div class="featured-body">
+                        <span class="badge" style="background:#e74c3c; color:white;">🔥 {cat_name} 헤드라인 리포트</span>
+                        <h3 class="featured-title" style="font-size: 1.25em;"><a href="/?view={top_art['id']}">{top_art['title']}</a></h3>
+                        <div class="card-date">발행일시 | {top_art['created_at']}</div>
+                    </div>
                 </div>
-                """
-            list_html += '</div>'
+            </div>
+            """
+            
+            # 2번째 기사부터는 '지난 기사 목록'으로 한 상자에 일목요연하게 표시
+            archive_articles = articles[1:]
+            if archive_articles:
+                list_html += f'<div class="news-section-box">'
+                list_html += f'<div class="section-header">📂 {category} 전체 뉴스 목록 ({len(archive_articles)}건)</div>'
+                for art in archive_articles:
+                    list_html += f"""
+                    <div class="news-list-item">
+                        <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                        <span class="list-date">{art['created_at'].split()[0]}</span>
+                    </div>
+                    """
+                list_html += '</div>'
+            else:
+                list_html += f'<div class="news-section-box"><p style="color:#888; font-size:0.9em; text-align:center; margin:10px 0;">이 카테고리의 이전 기사가 없습니다.</p></div>'
+
+    # 2) '전체' 메인 홈 화면일 때: 최신 2개는 메인 카드, 아래는 각 카테고리별 섹션 박스
     else:
+        featured_articles = articles[:2] if articles else []
+        for art in featured_articles:
+            cat_name = art['category'] if art['category'] else '종합'
+            img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
+            featured_html += f"""
+            <div class="featured-card">
+                <div class="featured-img-wrap">
+                    <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
+                </div>
+                <div class="featured-body">
+                    <span class="badge">{cat_name}</span>
+                    <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
+                    <div class="card-date">발행 | {art['created_at']}</div>
+                </div>
+            </div>
+            """
+        if featured_html:
+            featured_html = f'<div class="featured-grid">{featured_html}</div>'
+
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
             cat_arts = [a for a in articles if a.get('category') == cat][:5]
@@ -673,7 +702,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 list_html += '</div>'
         
         other_arts = [a for a in articles if a.get('category') not in display_cats][:5]
-        if other_arts and not category:
+        if other_arts:
             list_html += f'<div class="news-section-box">'
             list_html += f'<div class="section-header">📰 종합 최신 소식</div>'
             for art in other_arts:
@@ -713,6 +742,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
             
             .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            .featured-grid.single-focus {{ grid-template-columns: 1fr; }}
             .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
             .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
             .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
@@ -771,7 +801,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         html += "<p style='text-align:center; color:#777; margin-top:80px; font-size: 1.1em;'>등록된 기사가 없습니다.</p>"
     else:
         if featured_html:
-            html += f'<div class="featured-grid">{featured_html}</div>'
+            html += f'{featured_html}'
         if list_html:
             html += f'{list_html}'
         
@@ -903,7 +933,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .sub-checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #2c3e50; cursor: pointer; font-size: 13.5px; margin: 0; }}
             .sub-checkbox-label input[type="checkbox"] {{ width: 18px; height: 18px; cursor: pointer; }}
 
-            /* 지역 세부 분류 선택 박스 */
             .region-scope-box {{ background: #eafaf1; border: 1.5px solid #2ecc71; border-radius: 6px; padding: 12px 14px; margin-top: 10px; margin-bottom: 15px; display: none; }}
             .region-scope-box label {{ margin-top: 0; color: #1e8449; font-size: 13.5px; }}
             .region-scope-box select {{ margin-bottom: 0; background: white; font-weight: bold; color: #196f3d; }}
