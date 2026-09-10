@@ -15,8 +15,8 @@ flask_app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "webzine.db")
 
-# 상단 메뉴바 카테고리 및 실시간 RSS 소스
-CATEGORIES = {
+# 실시간 기사 수집 대상 카테고리 (새 기사 생성용)
+CRAWL_TARGETS = {
     "정치/시사": "https://news.google.com/rss/search?q=정치+시사&hl=ko&gl=KR&ceid=KR:ko",
     "경제/주식": "https://news.google.com/rss/search?q=경제+증시+주식&hl=ko&gl=KR&ceid=KR:ko",
     "세상이야기": "https://news.google.com/rss/search?q=사회+사건+사고&hl=ko&gl=KR&ceid=KR:ko",
@@ -28,36 +28,15 @@ CATEGORIES = {
     "지역창": "https://news.google.com/rss/search?q=강원+지역+소식&hl=ko&gl=KR&ceid=KR:ko"
 }
 
-# 기존 영문 카테고리를 새 한글 카테고리로 자동 매핑 (과거 글 복구용)
-LEGACY_MAPPING = {
-    "culture": "세상이야기",
-    "economy": "경제/주식",
-    "welfare": "건강/복지",
-    "health": "건강/복지",
-    "society": "세상이야기",
-    "politics": "정치/시사",
-    "tech": "AI/테크",
-    "life": "생활정보",
-    "entertainment": "연예뉴스",
-    "sports": "스포츠"
-}
-
-# 카테고리별 테마 스타일 (그라데이션 및 아이콘)
-CATEGORY_THEMES = {
-    "정치/시사": ("#0f2027", "#203a43", "⚖️"),
-    "경제/주식": ("#134e5e", "#71b280", "📈"),
-    "세상이야기": ("#2c3e50", "#4ca1af", "📢"),
-    "AI/테크": ("#141e30", "#243b55", "⚡"),
-    "건강/복지": ("#1d976c", "#93f9b9", "🩺"),
-    "생활정보": ("#3a6073", "#3a7bd5", "💡"),
-    "연예뉴스": ("#4b134f", "#c94b4b", "🎬"),
-    "스포츠": ("#16222f", "#3a6073", "⚽"),
-    "지역창": ("#1e3c72", "#2a5298", "🗺️")
-}
-
-def init_and_migrate_db():
+def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # 컬럼 이름으로 안전하게 접근
+    return conn
+
+def init_db():
+    conn = get_db_connection()
     cur = conn.cursor()
+    # 테이블 구조 확인 및 생성
     cur.execute("""
         CREATE TABLE IF NOT EXISTS articles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,19 +49,14 @@ def init_and_migrate_db():
             created_at TEXT
         )
     """)
-    
-    # 과거 영문 카테고리 글들을 신규 한글 카테고리로 자동 치환하여 글 복구
-    for old_cat, new_cat in LEGACY_MAPPING.items():
-        cur.execute("UPDATE articles SET category = ? WHERE category = ?", (new_cat, old_cat))
-        
     conn.commit()
     conn.close()
 
-init_and_migrate_db()
+init_db()
 
 
 # ==========================================
-# 1. 텍스트 추출 및 심층 기사 생성 엔진
+# 1. 텍스트 정제 및 실시간 기사 작성 로직
 # ==========================================
 def strip_html_tags(text: str) -> str:
     if not text:
@@ -124,26 +98,26 @@ def compose_depth_article(category: str, raw_title: str, summary: str) -> dict:
     <p class="article-lead"><b>[시사투데이 실시간 기획분석]</b> {lead}</p>
     
     <h3>1. 사건 경위 및 최근 발생 배경</h3>
-    <p>{summary if summary else clean_title}와 관련하여 주요 이해관계자 간의 견해차가 가시화되면서 온·오프라인 상에서 뜨거운 반응이 이어지고 있습니다. 특히 단기적 이슈에 그치지 않고 사회·경제 전반에 미칠 파장에 대한 분석이 잇따르고 있습니다.</p>
+    <p>{summary if summary else clean_title}와 관련하여 주요 이해관계자 간의 견해차가 가시화되면서 온·오프라인 상에서 뜨거운 반응이 이어지고 있습니다. 특히 단기적 이슈에 그치지 않고 시장 전반에 미칠 파장에 대한 분석이 잇따르는 상황입니다.</p>
 
-    <h3>2. 핵심 쟁점 및 대립 구도</h3>
-    <p>이번 현안을 둘러싼 가장 큰 분기점은 실효성과 부작용의 균형입니다. 한편에서는 조속한 조치와 제도 개선을 요구하는 반면, 다른 한편에서는 안전망 확보와 신중한 접근이 선행되어야 한다고 맞서고 있습니다.</p>
+    <h3>2. 핵심 쟁점 및 찬반 대립 구도</h3>
+    <p>이번 현안을 둘러싼 가장 큰 분기점은 실효성과 부작용의 대립입니다. 일각에서는 현실적인 제도 개선과 발 빠른 조치를 요구하는 반면, 다른 한편에서는 신중한 접근과 보완 장치 마련이 선행되어야 한다고 맞서고 있습니다.</p>
 
-    <h3>3. 독자 및 실생활에 미치는 파급 영향</h3>
-    <p>본 사안은 일반 시민들의 일상생활과 직간접적으로 연결되어 있습니다. 향후 확정될 정책 방향이나 시장 상황에 따라 독자 여러분의 경제적 판단 및 권익 보호에도 중대한 영향을 미칠 전망입니다.</p>
+    <h3>3. 독자 및 경제·사회에 미치는 파급 영향</h3>
+    <p>본 사안은 일반 시민들의 실생활과 직간접적으로 맞닿아 있습니다. 향후 발표될 후속 대책의 수위에 따라 관련 시장의 지형 변화는 물론, 국민들의 체감 물가 및 권익에도 중대한 변곡점으로 작용할 전망입니다.</p>
 
     <h3>4. 향후 관전 포인트 및 후속 일정</h3>
-    <p>관계 당국의 공식 입장 발표 및 구체적인 후속 일정이 예정되어 있어 지속적인 모니터링이 필요합니다. 시사투데이는 추가적인 사실관계와 세부 변동사항을 확인되는 대로 신속히 보도하겠습니다.</p>
+    <p>전문가들은 향후 관계 당국의 공식 발표와 입법·행정 절차의 구체화 시점을 면밀히 주시해야 한다고 조언합니다. 시사투데이는 추가적인 사실관계와 세부 변동사항을 지속적으로 추적 보도할 예정입니다.</p>
     """
     return {"title": click_title, "lead": lead, "content": body_html}
 
 def fetch_and_publish_category(category_name: str, limit: int = 1):
-    url = CATEGORIES.get(category_name)
+    url = CRAWL_TARGETS.get(category_name)
     if not url:
         return
 
     items = get_rss_items(url)
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
 
     count = 0
@@ -178,7 +152,7 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
 
 
 # ==========================================
-# 2. 웹진 프론트엔드 라우트 & 반응형 UI
+# 2. 웹진 프론트엔드 UI 템플릿
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -189,41 +163,43 @@ HTML_TEMPLATE = """
     <title>시사투데이 창 - 정론 심층 분석 뉴스</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif; background-color: #f4f6f9; color: #222; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Pretendard", sans-serif; background-color: #f4f6f9; color: #222; }
         .header { background: #fff; border-bottom: 2px solid #002d5b; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; }
         .logo { font-size: 26px; font-weight: 900; color: #002d5b; text-decoration: none; }
         .logo span { background: #002d5b; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 5px; }
-        .btn-refresh { background: #ff0055; color: #fff; text-decoration: none; padding: 9px 18px; border-radius: 4px; font-size: 13px; font-weight: bold; }
-        
+        .btn-refresh { background: #ff0055; color: #fff; text-decoration: none; padding: 10px 18px; border-radius: 4px; font-size: 13px; font-weight: bold; }
+        .btn-refresh:hover { background: #e0004c; }
+
         .nav-bar { background: #fff; padding: 12px 24px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid #e0e4e9; }
         .nav-item { padding: 8px 16px; text-decoration: none; font-size: 13px; font-weight: bold; border-radius: 20px; color: #4b5563; background: #eef2f6; white-space: nowrap; }
+        .nav-item:hover { background: #dde3eb; }
         .nav-item.active { background: #002d5b; color: #fff; }
 
         .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
         .main-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; margin-bottom: 40px; }
         
-        /* 카드 전체가 클릭 가능하도록 a 태그 감싸기 */
         .card-link { text-decoration: none; color: inherit; display: block; }
-        .card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; height: 100%; transition: transform 0.2s, box-shadow 0.2s; }
+        .card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; height: 100%; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #eaecef; }
         .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
         
-        .card-visual { height: 170px; padding: 20px; color: #fff; display: flex; flex-direction: column; justify-content: space-between; }
-        .card-visual .badge { align-self: flex-start; background: rgba(0,0,0,0.35); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-        .card-visual .icon-title { font-size: 17px; font-weight: 800; line-height: 1.4; text-shadow: 0 2px 4px rgba(0,0,0,0.4); word-break: keep-all; }
+        .card-visual { height: 160px; padding: 20px; background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; display: flex; flex-direction: column; justify-content: space-between; }
+        .card-visual .badge { align-self: flex-start; background: rgba(0,0,0,0.4); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .card-visual .card-banner-text { font-size: 17px; font-weight: 800; line-height: 1.4; word-break: keep-all; }
         .card-visual .sub { font-size: 11px; opacity: 0.85; }
 
         .card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
         .card-title { font-size: 16px; font-weight: 700; line-height: 1.5; color: #111; margin-bottom: 12px; word-break: keep-all; }
-        .card-date { font-size: 12px; color: #888; margin-top: auto; }
+        .card-lead { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .card-date { font-size: 12px; color: #999; margin-top: auto; }
 
-        .detail-box { background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .detail-box { background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #eaecef; }
         .detail-cat { display: inline-block; background: #e0f2fe; color: #0284c7; font-weight: bold; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
-        .detail-title { font-size: 28px; font-weight: 800; margin: 16px 0 16px 0; line-height: 1.4; word-break: keep-all; }
+        .detail-title { font-size: 28px; font-weight: 800; margin: 16px 0; line-height: 1.4; word-break: keep-all; }
         .detail-date { font-size: 13px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 16px; margin-bottom: 24px; }
         .detail-content h3 { font-size: 19px; margin: 28px 0 12px 0; color: #002d5b; border-left: 4px solid #002d5b; padding-left: 10px; }
         .detail-content p { font-size: 16px; line-height: 1.85; color: #333; margin-bottom: 16px; word-break: keep-all; }
-        .article-lead { background: #f8fafc; padding: 18px; border-radius: 8px; border-left: 4px solid #0284c7; }
-        .empty-msg { text-align: center; padding: 60px 20px; color: #666; font-size: 15px; background: #fff; border-radius: 10px; }
+        .article-lead { background: #f8fafc; padding: 18px; border-radius: 8px; border-left: 4px solid #0284c7; font-size: 16px; line-height: 1.7; margin-bottom: 24px; }
+        .empty-msg { text-align: center; padding: 60px 20px; color: #666; font-size: 15px; background: #fff; border-radius: 10px; border: 1px solid #eaecef; }
     </style>
 </head>
 <body>
@@ -233,7 +209,7 @@ HTML_TEMPLATE = """
     </header>
 
     <nav class="nav-bar">
-        <a href="/" class="nav-item {% if not current_cat %}active{% endif %}">전체</a>
+        <a href="/" class="nav-item {% if not current_cat %}active{% endif %}">전체 ({{ total_count }})</a>
         {% for cat in categories %}
         <a href="/?cat={{ cat }}" class="nav-item {% if current_cat == cat %}active{% endif %}">{{ cat }}</a>
         {% endfor %}
@@ -242,44 +218,53 @@ HTML_TEMPLATE = """
     <main class="container">
         {% if is_detail %}
             <article class="detail-box">
-                <span class="detail-cat">{{ article[1] }}</span>
-                <h1 class="detail-title">{{ article[2] }}</h1>
-                <div class="detail-date">발행일시: {{ article[7] }} | 시사투데이 특별취재팀</div>
+                <span class="detail-cat">{{ article['category'] }}</span>
+                <h1 class="detail-title">{{ article['title'] }}</h1>
+                <div class="detail-date">발행일시: {{ article['created_at'] }} | 시사투데이 특별취재팀</div>
                 
-                {% if article[4] %}
-                    <div class="detail-content">{{ article[4]|safe }}</div>
-                {% else %}
-                    <!-- 과거 요약글만 있는 경우 본문 대체 표시 -->
-                    <div class="detail-content">
-                        <p class="article-lead">{{ article[3] }}</p>
-                        <h3>보도 상세 내용</h3>
-                        <p>본 기사는 시사투데이 공식 데이터베이스에 기록된 주요 보도 자료입니다. 관련 분야의 최신 후속 쟁점은 상단의 실시간 취재 기능을 통해 계속 업데이트됩니다.</p>
-                    </div>
+                {% if article['lead_text'] %}
+                    <div class="article-lead"><b>[핵심 개요]</b> {{ article['lead_text'] }}</div>
                 {% endif %}
+
+                <div class="detail-content">
+                    {% if article['content'] %}
+                        {{ article['content']|safe }}
+                    {% else %}
+                        <h3>보도 상세 내용</h3>
+                        <p>{{ article['lead_text'] if article['lead_text'] else article['title'] }}</p>
+                        <p>본 기사는 시사투데이 아카이브에 정식 등록된 기사입니다. 세부 속보 및 관련 이슈는 상단의 [실시간 이슈 자동 취재]를 통해 계속해서 업데이트됩니다.</p>
+                    {% endif %}
+                </div>
                 
-                <div style="margin-top: 36px;">
-                    <a href="/" class="nav-item active">목록으로 돌아가기</a>
+                <div style="margin-top: 36px; display: flex; gap: 10px;">
+                    <a href="/" class="nav-item active">← 전체 목록으로 돌아가기</a>
+                    {% if article['category'] %}
+                    <a href="/?cat={{ article['category'] }}" class="nav-item">[{{ article['category'] }}] 목록으로</a>
+                    {% endif %}
                 </div>
             </article>
         {% else %}
             {% if articles|length == 0 %}
                 <div class="empty-msg">
-                    <p>선택하신 카테고리에 등록된 기사가 없습니다.</p>
-                    <p style="margin-top: 12px;">우측 상단의 <b>[⚡ 전 카테고리 실시간 이슈 자동 취재]</b> 버튼을 누르면 실시간 기사가 즉시 등록됩니다.</p>
+                    <p>선택하신 카테고리에 기사가 없습니다.</p>
+                    <p style="margin-top: 12px;">우측 상단의 <b>[⚡ 전 카테고리 실시간 이슈 자동 취재]</b> 버튼을 누르면 실시간 속보가 즉시 등록됩니다.</p>
                 </div>
             {% else %}
                 <div class="main-grid">
                     {% for item in articles %}
-                    <a href="/article/{{ item[0] }}" class="card-link">
+                    <a href="/article/{{ item['id'] }}" class="card-link">
                         <div class="card">
-                            <div class="card-visual" style="background: linear-gradient(135deg, {{ themes.get(item[1], ('#1e3c72','#2a5298'))[0] }}, {{ themes.get(item[1], ('#1e3c72','#2a5298'))[1] }});">
-                                <span class="badge">{{ themes.get(item[1], ('','','📰'))[2] }} {{ item[1] }}</span>
-                                <div class="icon-title">{{ item[2][:26] }}{% if item[2]|length > 26 %}...{% endif %}</div>
-                                <span class="sub">SISATODAY ISSUE ANALYSIS</span>
+                            <div class="card-visual">
+                                <span class="badge">{{ item['category'] }}</span>
+                                <div class="card-banner-text">{{ item['title'][:28] }}{% if item['title']|length > 28 %}...{% endif %}</div>
+                                <span class="sub">SISATODAY ISSUE REPORT</span>
                             </div>
                             <div class="card-body">
-                                <div class="card-title">{{ item[2] }}</div>
-                                <span class="card-date">발행 | {{ item[7] }}</span>
+                                <div class="card-title">{{ item['title'] }}</div>
+                                {% if item['lead_text'] %}
+                                    <div class="card-lead">{{ item['lead_text'] }}</div>
+                                {% endif %}
+                                <span class="card-date">발행: {{ item['created_at'] }}</span>
                             </div>
                         </div>
                     </a>
@@ -294,9 +279,21 @@ HTML_TEMPLATE = """
 
 @flask_app.route("/")
 def index():
-    cat = request.args.get("cat", "")
-    conn = sqlite3.connect(DB_PATH)
+    cat = request.args.get("cat", "").strip()
+    conn = get_db_connection()
     cur = conn.cursor()
+
+    # DB에 존재하는 모든 카테고리를 실시간으로 자동 추출 (과거+현재 모든 카테고리 포함)
+    cur.execute("SELECT DISTINCT category FROM articles WHERE category IS NOT NULL AND category != ''")
+    db_cats = [row['category'] for row in cur.fetchall()]
+
+    # 기본 카테고리와 DB에 있는 카테고리를 합쳐서 중복 없이 메뉴 생성
+    all_categories = list(dict.fromkeys(list(CRAWL_TARGETS.keys()) + db_cats))
+
+    # 기사 수 카운트
+    cur.execute("SELECT COUNT(*) as cnt FROM articles")
+    total_count = cur.fetchone()['cnt']
+
     if cat:
         cur.execute("SELECT * FROM articles WHERE category = ? ORDER BY id DESC", (cat,))
     else:
@@ -307,16 +304,24 @@ def index():
     return render_template_string(
         HTML_TEMPLATE,
         articles=articles,
-        categories=list(CATEGORIES.keys()),
-        themes=CATEGORY_THEMES,
+        categories=all_categories,
         current_cat=cat,
+        total_count=total_count,
         is_detail=False
     )
 
 @flask_app.route("/article/<int:article_id>")
 def article_detail(article_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
+
+    cur.execute("SELECT DISTINCT category FROM articles WHERE category IS NOT NULL AND category != ''")
+    db_cats = [row['category'] for row in cur.fetchall()]
+    all_categories = list(dict.fromkeys(list(CRAWL_TARGETS.keys()) + db_cats))
+
+    cur.execute("SELECT COUNT(*) as cnt FROM articles")
+    total_count = cur.fetchone()['cnt']
+
     cur.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
     article = cur.fetchone()
     conn.close()
@@ -327,21 +332,21 @@ def article_detail(article_id):
     return render_template_string(
         HTML_TEMPLATE,
         article=article,
-        categories=list(CATEGORIES.keys()),
-        themes=CATEGORY_THEMES,
-        current_cat=article[1],
+        categories=all_categories,
+        current_cat=article['category'],
+        total_count=total_count,
         is_detail=True
     )
 
 @flask_app.route("/crawl-all")
 def crawl_all():
-    for cat in CATEGORIES.keys():
+    for cat in CRAWL_TARGETS.keys():
         fetch_and_publish_category(cat, limit=1)
     return redirect(url_for("index"))
 
 
 # ==========================================
-# 3. Render Uvicorn 호환 내장 ASGI 어댑터
+# 3. Render Uvicorn 호환 내장 ASGI 브리지
 # ==========================================
 async def app(scope, receive, send):
     if scope['type'] == 'lifespan':
