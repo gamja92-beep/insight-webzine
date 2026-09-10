@@ -7,11 +7,12 @@ import urllib.parse
 import feedparser
 import requests
 from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from flask import Flask, render_template_string, request, redirect, url_for, send_from_directory
 
-app = Flask(__name__)
+# Flask 앱 인스턴스
+flask_app = Flask(__name__)
 
 # 기본 경로 및 데이터베이스 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +37,7 @@ CATEGORIES = {
 
 
 # ==========================================
-# 1. DB 초기화 및 관리 함수
+# 1. DB 초기화
 # ==========================================
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -60,21 +61,16 @@ init_db()
 
 
 # ==========================================
-# 2. 엑박 원천 방지: 이미지 로컬 다운로드 및 대체 생성
+# 2. 엑박 방지: 썸네일 안전 저장 및 자체 생성
 # ==========================================
 def create_fallback_image(category: str, title: str, filename: str) -> str:
-    """외부 이미지 차단 시 즉시 시사 정론지 스타일의 고화질 썸네일을 자동 생성"""
     filepath = os.path.join(IMAGE_DIR, filename)
     img = Image.new("RGB", (800, 450), color=(26, 29, 36))
     draw = ImageDraw.Draw(img)
 
-    # 헤더 라벨
     draw.rectangle([(0, 0), (800, 10)], fill=(0, 204, 153))
-    
-    # 텍스트 렌더링 (기본 폰트 사용)
     draw.text((40, 60), f"[{category}] 시사투데이 특별 취재", fill=(0, 204, 153))
 
-    # 제목 줄바꿈 정리
     display_title = title if len(title) <= 30 else title[:28] + "..."
     draw.text((40, 180), display_title, fill=(240, 240, 240))
     draw.text((40, 360), "SISATODAY NEWS ISSUE ANALYSIS", fill=(120, 130, 145))
@@ -83,7 +79,6 @@ def create_fallback_image(category: str, title: str, filename: str) -> str:
     return f"/static/uploads/{filename}"
 
 def save_safe_image(original_url: str, category: str, title: str) -> str:
-    """외부 핫링크 이미지를 내 서버로 직접 다운로드 (실패 시 자체 생성 이미지로 완벽 대체)"""
     safe_name = f"thumb_{int(time.time() * 1000)}.jpg"
     local_path = os.path.join(IMAGE_DIR, safe_name)
 
@@ -102,10 +97,9 @@ def save_safe_image(original_url: str, category: str, title: str) -> str:
 
 
 # ==========================================
-# 3. 실시간 속보 수집 & 클릭 유도 심층 기사 생성기
+# 3. 실시간 속보 수집 & 클릭 유도 심층 기사 생성
 # ==========================================
 def generate_click_worthy_title(original_title: str) -> str:
-    """밋밋한 제목을 대중 독자가 클릭할 수 있는 의문형·쟁점형 제목으로 변환"""
     clean = re.sub(r'\[.*?\]|\(.*?\)', '', original_title).strip()
     if any(k in clean for k in ['논란', '의혹', '충격', '폭등', '급락']):
         return f"\"{clean}\"... 핵심 쟁점과 파급 효과 총정리"
@@ -115,7 +109,6 @@ def generate_click_worthy_title(original_title: str) -> str:
         return f"\"{clean}\"... 지금 실시간 주목받는 진짜 이유는?"
 
 def compose_depth_article(category: str, raw_title: str, summary: str) -> dict:
-    """배경-핵심쟁점-파급효과-향후전망 4단계 정규 심층 기사 포맷 생성"""
     clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
     click_title = generate_click_worthy_title(clean_title)
     lead = f"최근 {category} 분야에서 '{clean_title}' 소식이 전해지며 대중과 관련 업계의 이목이 집중되고 있습니다."
@@ -142,7 +135,6 @@ def compose_depth_article(category: str, raw_title: str, summary: str) -> dict:
     }
 
 def fetch_and_publish_category(category_name: str, limit: int = 1):
-    """지정 카테고리의 실시간 속보를 크롤링하여 웹진에 자동 등록"""
     url = CATEGORIES.get(category_name)
     if not url:
         return
@@ -156,7 +148,6 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
         if count >= limit:
             break
 
-        # 중복 기사 등록 방지
         cur.execute("SELECT id FROM articles WHERE source_link = ?", (entry.link,))
         if cur.fetchone():
             continue
@@ -164,7 +155,6 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
         raw_summary = BeautifulSoup(entry.get('summary', ''), "html.parser").get_text()
         article_data = compose_depth_article(category_name, entry.title, raw_summary)
 
-        # 이미지 추출 시도 (RSS 내 미디어 태그 탐색)
         extracted_img = ""
         if 'media_content' in entry and entry.media_content:
             extracted_img = entry.media_content[0].get('url', '')
@@ -191,7 +181,7 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
 
 
 # ==========================================
-# 4. 웹진 프론트엔드 라우트 & 템플릿
+# 4. 프론트엔드 라우트 & 템플릿
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -283,7 +273,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
-@app.route("/")
+@flask_app.route("/")
 def index():
     cat = request.args.get("cat", "")
     conn = sqlite3.connect(DB_PATH)
@@ -303,7 +293,7 @@ def index():
         is_detail=False
     )
 
-@app.route("/article/<int:article_id>")
+@flask_app.route("/article/<int:article_id>")
 def article_detail(article_id):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -322,23 +312,23 @@ def article_detail(article_id):
         is_detail=True
     )
 
-@app.route("/crawl-all")
+@flask_app.route("/crawl-all")
 def crawl_all():
-    """모든 카테고리의 최신 실시간 이슈를 1개씩 즉시 수집해 기사화"""
     for cat in CATEGORIES.keys():
         fetch_and_publish_category(cat, limit=1)
     return redirect(url_for("index"))
 
 
-if __name__ == "__main__":
-    # 최초 실행 시 샘플 기사 1건씩 자동 수집
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM articles")
-    if cur.fetchone()[0] == 0:
-        for c in ["정치/시사", "경제/주식", "세상이야기", "AI/테크"]:
-            fetch_and_publish_category(c, limit=1)
-    conn.close()
+# ==========================================
+# 5. Render(Uvicorn & Gunicorn) 호환 ASGI/WSGI 래퍼
+# ==========================================
+try:
+    from a2wsgi import WSGIMiddleware
+    # Render의 'uvicorn app:app' 실행 시 자동으로 ASGI로 동작
+    app = WSGIMiddleware(flask_app)
+except ImportError:
+    # Gunicorn이나 파이썬 직접 실행 시 Flask WSGI로 동작
+    app = flask_app
 
-    print("[웹진 서버 실행 완료] http://127.0.0.1:5000 접속")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+if __name__ == "__main__":
+    flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
