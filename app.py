@@ -15,7 +15,7 @@ flask_app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "webzine.db")
 
-# 상단 메뉴바와 1:1로 일치하는 실시간 RSS 주소
+# 상단 메뉴바 카테고리 및 실시간 RSS 소스
 CATEGORIES = {
     "정치/시사": "https://news.google.com/rss/search?q=정치+시사&hl=ko&gl=KR&ceid=KR:ko",
     "경제/주식": "https://news.google.com/rss/search?q=경제+증시+주식&hl=ko&gl=KR&ceid=KR:ko",
@@ -28,7 +28,21 @@ CATEGORIES = {
     "지역창": "https://news.google.com/rss/search?q=강원+지역+소식&hl=ko&gl=KR&ceid=KR:ko"
 }
 
-# 카테고리별 테마 그라데이션 색상 (엑박 없는 브라우저 자체 카드 생성용)
+# 기존 영문 카테고리를 새 한글 카테고리로 자동 매핑 (과거 글 복구용)
+LEGACY_MAPPING = {
+    "culture": "세상이야기",
+    "economy": "경제/주식",
+    "welfare": "건강/복지",
+    "health": "건강/복지",
+    "society": "세상이야기",
+    "politics": "정치/시사",
+    "tech": "AI/테크",
+    "life": "생활정보",
+    "entertainment": "연예뉴스",
+    "sports": "스포츠"
+}
+
+# 카테고리별 테마 스타일 (그라데이션 및 아이콘)
 CATEGORY_THEMES = {
     "정치/시사": ("#0f2027", "#203a43", "⚖️"),
     "경제/주식": ("#134e5e", "#71b280", "📈"),
@@ -41,7 +55,7 @@ CATEGORY_THEMES = {
     "지역창": ("#1e3c72", "#2a5298", "🗺️")
 }
 
-def init_db():
+def init_and_migrate_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("""
@@ -56,10 +70,15 @@ def init_db():
             created_at TEXT
         )
     """)
+    
+    # 과거 영문 카테고리 글들을 신규 한글 카테고리로 자동 치환하여 글 복구
+    for old_cat, new_cat in LEGACY_MAPPING.items():
+        cur.execute("UPDATE articles SET category = ? WHERE category = ?", (new_cat, old_cat))
+        
     conn.commit()
     conn.close()
 
-init_db()
+init_and_migrate_db()
 
 
 # ==========================================
@@ -182,28 +201,29 @@ HTML_TEMPLATE = """
 
         .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
         .main-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; margin-bottom: 40px; }
-        .card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; transition: transform 0.2s; }
-        .card:hover { transform: translateY(-3px); }
         
-        /* 엑박 원천 방지: 모던 카드 썸네일 */
-        .card-visual { height: 180px; padding: 20px; color: #fff; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
-        .card-visual .badge { align-self: flex-start; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-        .card-visual .icon-title { font-size: 18px; font-weight: 800; line-height: 1.4; text-shadow: 0 2px 4px rgba(0,0,0,0.4); word-break: keep-all; }
-        .card-visual .sub { font-size: 11px; opacity: 0.8; }
+        /* 카드 전체가 클릭 가능하도록 a 태그 감싸기 */
+        .card-link { text-decoration: none; color: inherit; display: block; }
+        .card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; height: 100%; transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.12); }
+        
+        .card-visual { height: 170px; padding: 20px; color: #fff; display: flex; flex-direction: column; justify-content: space-between; }
+        .card-visual .badge { align-self: flex-start; background: rgba(0,0,0,0.35); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .card-visual .icon-title { font-size: 17px; font-weight: 800; line-height: 1.4; text-shadow: 0 2px 4px rgba(0,0,0,0.4); word-break: keep-all; }
+        .card-visual .sub { font-size: 11px; opacity: 0.85; }
 
         .card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
-        .card-title { font-size: 16px; font-weight: 700; line-height: 1.5; color: #111; text-decoration: none; margin-bottom: 12px; }
-        .card-title:hover { color: #002d5b; }
+        .card-title { font-size: 16px; font-weight: 700; line-height: 1.5; color: #111; margin-bottom: 12px; word-break: keep-all; }
         .card-date { font-size: 12px; color: #888; margin-top: auto; }
 
         .detail-box { background: #fff; padding: 40px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-        .detail-cat { color: #002d5b; font-weight: bold; font-size: 15px; }
-        .detail-title { font-size: 28px; font-weight: 800; margin: 14px 0 20px 0; line-height: 1.4; word-break: keep-all; }
+        .detail-cat { display: inline-block; background: #e0f2fe; color: #0284c7; font-weight: bold; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .detail-title { font-size: 28px; font-weight: 800; margin: 16px 0 16px 0; line-height: 1.4; word-break: keep-all; }
         .detail-date { font-size: 13px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 16px; margin-bottom: 24px; }
         .detail-content h3 { font-size: 19px; margin: 28px 0 12px 0; color: #002d5b; border-left: 4px solid #002d5b; padding-left: 10px; }
         .detail-content p { font-size: 16px; line-height: 1.85; color: #333; margin-bottom: 16px; word-break: keep-all; }
         .article-lead { background: #f8fafc; padding: 18px; border-radius: 8px; border-left: 4px solid #0284c7; }
-        .empty-msg { text-align: center; padding: 60px 20px; color: #666; font-size: 15px; }
+        .empty-msg { text-align: center; padding: 60px 20px; color: #666; font-size: 15px; background: #fff; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -222,10 +242,21 @@ HTML_TEMPLATE = """
     <main class="container">
         {% if is_detail %}
             <article class="detail-box">
-                <span class="detail-cat">카테고리: {{ article[1] }}</span>
+                <span class="detail-cat">{{ article[1] }}</span>
                 <h1 class="detail-title">{{ article[2] }}</h1>
                 <div class="detail-date">발행일시: {{ article[7] }} | 시사투데이 특별취재팀</div>
-                <div class="detail-content">{{ article[4]|safe }}</div>
+                
+                {% if article[4] %}
+                    <div class="detail-content">{{ article[4]|safe }}</div>
+                {% else %}
+                    <!-- 과거 요약글만 있는 경우 본문 대체 표시 -->
+                    <div class="detail-content">
+                        <p class="article-lead">{{ article[3] }}</p>
+                        <h3>보도 상세 내용</h3>
+                        <p>본 기사는 시사투데이 공식 데이터베이스에 기록된 주요 보도 자료입니다. 관련 분야의 최신 후속 쟁점은 상단의 실시간 취재 기능을 통해 계속 업데이트됩니다.</p>
+                    </div>
+                {% endif %}
+                
                 <div style="margin-top: 36px;">
                     <a href="/" class="nav-item active">목록으로 돌아가기</a>
                 </div>
@@ -233,23 +264,25 @@ HTML_TEMPLATE = """
         {% else %}
             {% if articles|length == 0 %}
                 <div class="empty-msg">
-                    <p>현재 등록된 기사가 없습니다.</p>
-                    <p style="margin-top: 12px;">우측 상단의 <b>[⚡ 전 카테고리 실시간 이슈 자동 취재]</b> 버튼을 누르면 실시간 기사가 등록됩니다.</p>
+                    <p>선택하신 카테고리에 등록된 기사가 없습니다.</p>
+                    <p style="margin-top: 12px;">우측 상단의 <b>[⚡ 전 카테고리 실시간 이슈 자동 취재]</b> 버튼을 누르면 실시간 기사가 즉시 등록됩니다.</p>
                 </div>
             {% else %}
                 <div class="main-grid">
                     {% for item in articles %}
-                    <div class="card">
-                        <div class="card-visual" style="background: linear-gradient(135deg, {{ themes.get(item[1], ('#1e3c72','#2a5298'))[0] }}, {{ themes.get(item[1], ('#1e3c72','#2a5298'))[1] }});">
-                            <span class="badge">{{ themes.get(item[1], ('','','📰'))[2] }} {{ item[1] }}</span>
-                            <div class="icon-title">{{ item[2][:26] }}{% if item[2]|length > 26 %}...{% endif %}</div>
-                            <span class="sub">SISATODAY ISSUE ANALYSIS</span>
+                    <a href="/article/{{ item[0] }}" class="card-link">
+                        <div class="card">
+                            <div class="card-visual" style="background: linear-gradient(135deg, {{ themes.get(item[1], ('#1e3c72','#2a5298'))[0] }}, {{ themes.get(item[1], ('#1e3c72','#2a5298'))[1] }});">
+                                <span class="badge">{{ themes.get(item[1], ('','','📰'))[2] }} {{ item[1] }}</span>
+                                <div class="icon-title">{{ item[2][:26] }}{% if item[2]|length > 26 %}...{% endif %}</div>
+                                <span class="sub">SISATODAY ISSUE ANALYSIS</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-title">{{ item[2] }}</div>
+                                <span class="card-date">발행 | {{ item[7] }}</span>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <a href="/article/{{ item[0] }}" class="card-title">{{ item[2] }}</a>
-                            <span class="card-date">발행 | {{ item[7] }}</span>
-                        </div>
-                    </div>
+                    </a>
                     {% endfor %}
                 </div>
             {% endif %}
@@ -302,14 +335,6 @@ def article_detail(article_id):
 
 @flask_app.route("/crawl-all")
 def crawl_all():
-    # 과거 잘못된 영문 카테고리 기사 일괄 정리
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("DELETE FROM articles WHERE category NOT IN ({})".format(','.join('?' * len(CATEGORIES))), list(CATEGORIES.keys()))
-    conn.commit()
-    conn.close()
-
-    # 현재 9개 카테고리 실시간 이슈 자동 수집
     for cat in CATEGORIES.keys():
         fetch_and_publish_category(cat, limit=1)
     return redirect(url_for("index"))
