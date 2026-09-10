@@ -1,1664 +1,344 @@
-import sys
 import os
-import sqlite3
-import random
-import time
-import requests
 import re
-from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse
-from fastapi.staticfiles import StaticFiles
-from google import genai
-from apscheduler.schedulers.background import BackgroundScheduler
-from supabase import create_client, Client
+import time
+import sqlite3
+import datetime
+import urllib.parse
+import feedparser
+import requests
+from bs4 import BeautifulSoup
+from PIL import Image, ImageDraw, ImageFont
 
-app = FastAPI()
+from flask import Flask, render_template_string, request, redirect, url_for, send_from_directory
 
-os.makedirs("static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app = Flask(__name__)
 
-API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-3.6-flash"
+# 기본 경로 및 데이터베이스 설정
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+IMAGE_DIR = os.path.join(STATIC_DIR, "uploads")
+DB_PATH = os.path.join(BASE_DIR, "webzine.db")
 
-UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
-ADMIN_PASSWORD = "1234"
+os.makedirs(IMAGE_DIR, exist_ok=True)
 
-client = genai.Client(api_key=API_KEY)
-
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-
-supabase: Client = None
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ==========================================================
-# 네이버 애널리틱스 추적 스크립트
-# ==========================================================
-NAVER_ANALYTICS_SCRIPT = """
-<script type="text/javascript" src="//wcs.pstatic.net/wcslog.js"></script>
-<script type="text/javascript">
-if(!wcs_add) var wcs_add = {};
-wcs_add["wa"] = "25f06e1fad42a20";
-if(window.wcs) {
-wcs_do();
+# 카테고리 매핑 및 실시간 속보 RSS 소스
+CATEGORIES = {
+    "정치/시사": "https://news.google.com/rss/search?q=정치+시사&hl=ko&gl=KR&ceid=KR:ko",
+    "경제/주식": "https://news.google.com/rss/search?q=경제+증시+주식&hl=ko&gl=KR&ceid=KR:ko",
+    "세상이야기": "https://news.google.com/rss/search?q=사회+사건+사고&hl=ko&gl=KR&ceid=KR:ko",
+    "AI/테크": "https://news.google.com/rss/search?q=인공지능+IT+테크&hl=ko&gl=KR&ceid=KR:ko",
+    "건강/복지": "https://news.google.com/rss/search?q=건강+복지+의료&hl=ko&gl=KR&ceid=KR:ko",
+    "생활정보": "https://news.google.com/rss/search?q=부동산+물가+생활정보&hl=ko&gl=KR&ceid=KR:ko",
+    "연예뉴스": "https://news.google.com/rss/search?q=방송+연예+이슈&hl=ko&gl=KR&ceid=KR:ko",
+    "스포츠": "https://news.google.com/rss/search?q=스포츠+경기&hl=ko&gl=KR&ceid=KR:ko",
+    "지역창": "https://news.google.com/rss/search?q=강원+지역+소식&hl=ko&gl=KR&ceid=KR:ko"
 }
-</script>
-"""
 
-# ==========================================================
-# 구글 애널리틱스 추적 스크립트 (GA4)
-# ==========================================================
-GOOGLE_ANALYTICS_SCRIPT = """
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
 
-  gtag('config', 'G-LE89BB179K');
-</script>
-"""
-
+# ==========================================
+# 1. DB 초기화 및 관리 함수
+# ==========================================
 def init_db():
-    if supabase:
-        pass
-    else:
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS articles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category TEXT DEFAULT '종합',
-                title TEXT,
-                content TEXT,
-                image_url TEXT,
-                image_author TEXT,
-                created_at TEXT
-            )
-        """)
-        conn.commit()
-        conn.close()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS articles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            title TEXT,
+            lead_text TEXT,
+            content TEXT,
+            image_url TEXT,
+            source_link TEXT,
+            created_at TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 init_db()
 
-def fetch_bulletproof_image(category_name):
-    direct_pools = {
-        "정치/시사": [
-            ("https://images.unsplash.com/photo-1541872703-74c5e44368f9", "Unsplash"),
-            ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620", "Unsplash"),
-            ("https://images.pexels.com/photos/6077326/pexels-photo-6077326.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/1550337/pexels-photo-1550337.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/696627/pexels-photo-696627.jpeg", "pexels"),
-            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash")
-        ],
-        "경제/주식": [
-            ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
-            ("https://images.pexels.com/photos/38375328/pexels-photo-38375328.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/5059930/pexels-photo-5059930.jpeg", "pexels"),
-            ("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f", "Unsplash"),
-            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash"),
-            ("https://images.unsplash.com/photo-1460925895917-afdab827c52f", "Unsplash")
-        ],
-        "세상이야기": [
-            ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
-            ("https://images.pexels.com/photos/5059930/pexels-photo-5059930.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/36261996/pexels-photo-36261996.jpeg", "pexels"),
-            ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash"),
-            ("https://images.unsplash.com/photo-1469571486292-0ba58a3f068b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash")
-        ],
-        "AI/테크": [
-            ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
-            ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
-            ("https://images.unsplash.com/photo-1531482615713-2afd69097998", "Unsplash"),
-            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash")
-        ],
-        "건강/복지": [
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash"),
-            ("https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05", "Unsplash")
-        ],
-        "생활정보": [
-            ("https://images.unsplash.com/photo-1484807352052-23338990c6c8", "Unsplash"),
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
-        ],
-        "연예계뉴스": [
-            ("https://images.unsplash.com/photo-1492684223066-81342ee5ff30", "Unsplash"),
-            ("https://images.unsplash.com/photo-1470225620780-dba8ba36b745", "Unsplash"),
-            ("https://images.unsplash.com/photo-1514525253161-7a46d19cd819", "Unsplash"),
-            ("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4", "Unsplash")
-        ],
-        "스포츠": [
-            ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
-            ("https://images.unsplash.com/photo-1517649763962-0c623066013b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash"),
-            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash")
-        ],
-        "지역창": [
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
-            ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash")
-        ]
+
+# ==========================================
+# 2. 엑박 원천 방지: 이미지 로컬 다운로드 및 대체 생성
+# ==========================================
+def create_fallback_image(category: str, title: str, filename: str) -> str:
+    """외부 이미지 차단 시 즉시 시사 정론지 스타일의 고화질 썸네일을 자동 생성"""
+    filepath = os.path.join(IMAGE_DIR, filename)
+    img = Image.new("RGB", (800, 450), color=(26, 29, 36))
+    draw = ImageDraw.Draw(img)
+
+    # 헤더 라벨
+    draw.rectangle([(0, 0), (800, 10)], fill=(0, 204, 153))
+    
+    # 텍스트 렌더링 (기본 폰트 사용)
+    draw.text((40, 60), f"[{category}] 시사투데이 특별 취재", fill=(0, 204, 153))
+
+    # 제목 줄바꿈 정리
+    display_title = title if len(title) <= 30 else title[:28] + "..."
+    draw.text((40, 180), display_title, fill=(240, 240, 240))
+    draw.text((40, 360), "SISATODAY NEWS ISSUE ANALYSIS", fill=(120, 130, 145))
+
+    img.save(filepath, "JPEG")
+    return f"/static/uploads/{filename}"
+
+def save_safe_image(original_url: str, category: str, title: str) -> str:
+    """외부 핫링크 이미지를 내 서버로 직접 다운로드 (실패 시 자체 생성 이미지로 완벽 대체)"""
+    safe_name = f"thumb_{int(time.time() * 1000)}.jpg"
+    local_path = os.path.join(IMAGE_DIR, safe_name)
+
+    if original_url and original_url.startswith("http"):
+        try:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            res = requests.get(original_url, headers=headers, timeout=4)
+            if res.status_code == 200 and len(res.content) > 1024:
+                with open(local_path, "wb") as f:
+                    f.write(res.content)
+                return f"/static/uploads/{safe_name}"
+        except Exception:
+            pass
+
+    return create_fallback_image(category, title, safe_name)
+
+
+# ==========================================
+# 3. 실시간 속보 수집 & 클릭 유도 심층 기사 생성기
+# ==========================================
+def generate_click_worthy_title(original_title: str) -> str:
+    """밋밋한 제목을 대중 독자가 클릭할 수 있는 의문형·쟁점형 제목으로 변환"""
+    clean = re.sub(r'\[.*?\]|\(.*?\)', '', original_title).strip()
+    if any(k in clean for k in ['논란', '의혹', '충격', '폭등', '급락']):
+        return f"\"{clean}\"... 핵심 쟁점과 파급 효과 총정리"
+    elif '?' in clean:
+        return f"{clean} 현장 분석 및 전문가 전망"
+    else:
+        return f"\"{clean}\"... 지금 실시간 주목받는 진짜 이유는?"
+
+def compose_depth_article(category: str, raw_title: str, summary: str) -> dict:
+    """배경-핵심쟁점-파급효과-향후전망 4단계 정규 심층 기사 포맷 생성"""
+    clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
+    click_title = generate_click_worthy_title(clean_title)
+    lead = f"최근 {category} 분야에서 '{clean_title}' 소식이 전해지며 대중과 관련 업계의 이목이 집중되고 있습니다."
+
+    body_html = f"""
+    <p class="article-lead"><b>[시사투데이 실시간 기획분석]</b> {lead}</p>
+    
+    <h3>1. 사건 경위 및 최근 발생 배경</h3>
+    <p>{summary if summary else clean_title}와 관련하여 주요 이해관계자 간의 견해차가 가시화되면서 온·오프라인 상에서 뜨거운 반응이 이어지고 있습니다. 특히 단기적 이슈에 그치지 않고 시장 전반에 미칠 파장에 대한 분석이 잇따르는 상황입니다.</p>
+
+    <h3>2. 핵심 쟁점 및 찬반 대립 구도</h3>
+    <p>이번 현안을 둘러싼 가장 큰 분기점은 실효성과 부작용의 대립입니다. 일각에서는 현실적인 제도 개선과 발 빠른 조치를 요구하는 반면, 다른 한편에서는 신중한 접근과 보완 장치 마련이 선행되어야 한다고 맞서고 있습니다.</p>
+
+    <h3>3. 독자 및 경제·사회에 미치는 파급 영향</h3>
+    <p>본 사안은 일반 시민들의 실생활과 직간접적으로 맞닿아 있습니다. 향후 발표될 후속 대책의 수위에 따라 관련 시장의 지형 변화는 물론, 국민들의 체감 물가 및 권익에도 중대한 변곡점으로 작용할 전망입니다.</p>
+
+    <h3>4. 향후 관전 포인트 및 후속 일정</h3>
+    <p>전문가들은 향후 관계 당국의 공식 발표와 입법·행정 절차의 구체화 시점을 면밀히 주시해야 한다고 조언합니다. 시사투데이는 추가적인 사실관계와 세부 변동사항을 지속적으로 추적 보도할 예정입니다.</p>
+    """
+    return {
+        "title": click_title,
+        "lead": lead,
+        "content": body_html
     }
 
-    pool = direct_pools.get(category_name, direct_pools["세상이야기"])
-    
-    try:
-        search_queries = {
-            "정치/시사": "government building architecture wide",
-            "경제/주식": "modern city skyscraper architecture wide",
-            "세상이야기": "beautiful nature landscape sceneries wide",
-            "AI/테크": "futuristic technology abstract background wide",
-            "건강/복지": "peaceful nature park scenery wide",
-            "생활정보": "lifestyle interior cozy modern wide",
-            "연예계뉴스": "empty concert stage lights background wide",
-            "스포츠": "empty stadium sports arena field wide",
-            "지역창": "local community scenery landscape wide"
-        }
-        headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 50)}
-        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
-        
-        if response.status_code == 200:
-            data = response.json()
-            results = data.get("results", [])
-            if results:
-                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people', 'player', 'athlete'])]
-                if not safe_results:
-                    safe_results = results
-                item = random.choice(safe_results)
-                return item["urls"]["regular"], item["user"]["name"]
-    except Exception as e:
-        print(f"[이미지 API 경고]: {e}")
-    
-    chosen = random.choice(pool)
-    return chosen[0], chosen[1]
+def fetch_and_publish_category(category_name: str, limit: int = 1):
+    """지정 카테고리의 실시간 속보를 크롤링하여 웹진에 자동 등록"""
+    url = CATEGORIES.get(category_name)
+    if not url:
+        return
 
-def generate_smart_tags(text, title=""):
-    try:
-        prompt = (
-            f"다음 기사 제목과 본문을 분석하여, 이 기사의 핵심 키워드를 나타내는 해시태그를 정확히 6개 생성해 주세요. "
-            f"반드시 '#키워드' 형식으로 띄어쓰기로 구분하여 한 줄로 출력해 주세요. 다른 설명은 절대 쓰지 마세요.\n\n"
-            f"제목: {title}\n본문: {text[:800]}"
-        )
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-        )
-        tags_text = response.text.strip()
-        tags = re.findall(r'#[\w가-힣]+', tags_text)
-        if len(tags) >= 5:
-            return " ".join(tags[:7])
-    except Exception:
-        pass
-    
-    return "#시사투데이 #지역뉴스 #이슈분석 #트렌드 #인사이트 #사회동향"
+    feed = feedparser.parse(url)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
 
-def clean_and_format_content(text, category_name="종합", title="", use_subtitle=True):
-    text = text.replace('**', '').replace('__', '')
-    clean_title_str = title.replace('**', '').replace('*', '').strip()
+    count = 0
+    for entry in feed.entries:
+        if count >= limit:
+            break
 
-    lines_raw = text.split('\n')
-    processed_lines = []
-
-    for line in lines_raw:
-        p_str = line.strip()
-        if not p_str:
-            continue
-        
-        p_text_pure = re.sub(r'^[#|\s]+', '', p_str).replace('제목:', '').strip()
-        if clean_title_str and p_text_pure == clean_title_str:
+        # 중복 기사 등록 방지
+        cur.execute("SELECT id FROM articles WHERE source_link = ?", (entry.link,))
+        if cur.fetchone():
             continue
 
-        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure'):
-            processed_lines.append(p_str)
-        elif use_subtitle and p_str.startswith('###'):
-            title_text = p_str.replace('###', '').strip()
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
-        elif use_subtitle and len(p_str) < 42 and not p_str.endswith(('.', '?', '!')) and not p_str.startswith('<'):
-            processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{p_str}</h3>')
-        else:
-            clean_p = p_str.replace('###', '').strip()
-            processed_lines.append(f'<p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{clean_p}</p>')
+        raw_summary = BeautifulSoup(entry.get('summary', ''), "html.parser").get_text()
+        article_data = compose_depth_article(category_name, entry.title, raw_summary)
 
-    final_html = "".join(processed_lines)
-    
-    if '#시사투데이' not in final_html and '#이슈분석' not in final_html and 'word-spacing: 5px;' not in final_html:
-        clean_tags_str = generate_smart_tags(text, title)
-        tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
-        final_html += tag_html
+        # 이미지 추출 시도 (RSS 내 미디어 태그 탐색)
+        extracted_img = ""
+        if 'media_content' in entry and entry.media_content:
+            extracted_img = entry.media_content[0].get('url', '')
 
-    return final_html
+        saved_image_url = save_safe_image(extracted_img, category_name, article_data["title"])
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def save_article_to_db(category, title, content, image_url, image_author):
-    kst = timezone(timedelta(hours=9))
-    current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
-    
-    if supabase:
-        supabase.table("articles").insert({
-            "category": category,
-            "title": title,
-            "content": content,
-            "image_url": image_url,
-            "image_author": image_author,
-            "created_at": current_time_str
-        }).execute()
-    else:
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
-            (category, title, content, image_url, image_author, current_time_str)
-        )
+        cur.execute("""
+            INSERT INTO articles (category, title, lead_text, content, image_url, source_link, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            category_name,
+            article_data["title"],
+            article_data["lead"],
+            article_data["content"],
+            saved_image_url,
+            entry.link,
+            now_str
+        ))
         conn.commit()
-        conn.close()
+        count += 1
 
-def get_all_articles(category=None):
-    if supabase:
-        query = supabase.table("articles").select("*").order("id", desc=True)
-        if category and category != "전체":
-            query = query.eq("category", category)
-        response = query.execute()
-        return response.data
+    conn.close()
+
+
+# ==========================================
+# 4. 웹진 프론트엔드 라우트 & 템플릿
+# ==========================================
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시사투데이 창 - 정론 심층 분석 뉴스</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #f4f6f9; color: #222; }
+        .header { background: #fff; border-bottom: 2px solid #002d5b; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { font-size: 26px; font-weight: 900; color: #002d5b; text-decoration: none; }
+        .logo span { background: #002d5b; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 5px; }
+        .btn-refresh { background: #ff0055; color: #fff; text-decoration: none; padding: 8px 16px; border-radius: 4px; font-size: 13px; font-weight: bold; }
+        
+        .nav-bar { background: #fff; padding: 12px 24px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid #e0e4e9; }
+        .nav-item { padding: 7px 14px; text-decoration: none; font-size: 13px; font-weight: bold; border-radius: 20px; color: #4b5563; background: #eef2f6; white-space: nowrap; }
+        .nav-item.active { background: #002d5b; color: #fff; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        
+        .main-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px; margin-bottom: 40px; }
+        .card { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-direction: column; }
+        .card-img-wrap { width: 100%; height: 210px; background: #1a1d24; overflow: hidden; position: relative; }
+        .card-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+        .card-body { padding: 18px; flex: 1; display: flex; flex-direction: column; }
+        .cat-tag { align-self: flex-start; background: #e0f2fe; color: #0284c7; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-bottom: 10px; }
+        .card-title { font-size: 17px; font-weight: 700; line-height: 1.45; color: #111; text-decoration: none; margin-bottom: 10px; }
+        .card-title:hover { color: #002d5b; }
+        .card-date { font-size: 12px; color: #888; margin-top: auto; }
+
+        .detail-box { background: #fff; padding: 36px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .detail-cat { color: #002d5b; font-weight: bold; font-size: 14px; }
+        .detail-title { font-size: 28px; font-weight: 800; margin: 12px 0 20px 0; line-height: 1.4; }
+        .detail-date { font-size: 13px; color: #666; border-bottom: 1px solid #eee; padding-bottom: 16px; margin-bottom: 24px; }
+        .detail-content h3 { font-size: 19px; margin: 24px 0 10px 0; color: #002d5b; border-left: 4px solid #002d5b; padding-left: 10px; }
+        .detail-content p { font-size: 16px; line-height: 1.8; color: #333; margin-bottom: 16px; word-break: keep-all; }
+        .article-lead { background: #f8fafc; padding: 16px; border-radius: 6px; border-left: 4px solid #0284c7; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="logo">시사투데이<span>창</span></a>
+        <a href="/crawl-all" class="btn-refresh">⚡ 전 카테고리 실시간 이슈 자동 취재</a>
+    </header>
+
+    <nav class="nav-bar">
+        <a href="/" class="nav-item {% if not current_cat %}active{% endif %}">전체</a>
+        {% for cat in categories %}
+        <a href="/?cat={{ cat }}" class="nav-item {% if current_cat == cat %}active{% endif %}">{{ cat }}</a>
+        {% endfor %}
+    </nav>
+
+    <main class="container">
+        {% if is_detail %}
+            <article class="detail-box">
+                <span class="detail-cat">카테고리: {{ article[1] }}</span>
+                <h1 class="detail-title">{{ article[2] }}</h1>
+                <div class="detail-date">발행일시: {{ article[7] }} | 시사투데이 특별취재팀</div>
+                {% if article[5] %}
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <img src="{{ article[5] }}" alt="기사 썸네일" style="max-width: 100%; border-radius: 8px;">
+                </div>
+                {% endif %}
+                <div class="detail-content">{{ article[4]|safe }}</div>
+                <div style="margin-top: 30px;">
+                    <a href="/" class="nav-item active">목록으로 돌아가기</a>
+                </div>
+            </article>
+        {% else %}
+            <div class="main-grid">
+                {% for item in articles %}
+                <div class="card">
+                    <div class="card-img-wrap">
+                        <img src="{{ item[5] }}" onerror="this.onerror=null; this.src='/static/uploads/default.jpg';" alt="썸네일">
+                    </div>
+                    <div class="card-body">
+                        <span class="cat-tag">{{ item[1] }}</span>
+                        <a href="/article/{{ item[0] }}" class="card-title">{{ item[2] }}</a>
+                        <span class="card-date">발행 | {{ item[7] }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </main>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    cat = request.args.get("cat", "")
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    if cat:
+        cur.execute("SELECT * FROM articles WHERE category = ? ORDER BY id DESC", (cat,))
     else:
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        if category and category != "전체":
-            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
-        else:
-            cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
-        rows = cursor.fetchall()
-        conn.close()
-        return [{
-            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "created_at": r[6]
-        } for r in rows]
+        cur.execute("SELECT * FROM articles ORDER BY id DESC")
+    articles = cur.fetchall()
+    conn.close()
 
-def get_article_by_id(article_id):
-    if supabase:
-        response = supabase.table("articles").select("*").eq("id", article_id).execute()
-        return response.data[0] if response.data else None
-    else:
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE id = ?", (article_id,))
-        r = cursor.fetchone()
-        conn.close()
-        if not r:
-            return None
-        return {
-            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "created_at": r[6]
-        }
-
-def update_article_in_db(article_id, category, title, content, image_url, image_author, use_subtitle=True):
-    formatted_content = clean_and_format_content(content, category, title, use_subtitle)
-    clean_url = image_url.strip() if image_url and image_url.strip() else ""
-    clean_author = image_author.strip() if image_author and image_author.strip() else ""
-    
-    if supabase:
-        update_data = {
-            "category": category,
-            "title": title,
-            "content": formatted_content,
-            "image_url": clean_url,
-            "image_author": clean_author
-        }
-        supabase.table("articles").update(update_data).eq("id", article_id).execute()
-    else:
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", 
-            (category, title, formatted_content, clean_url, clean_author, article_id)
-        )
-        conn.commit()
-        conn.close()
-
-def delete_article_from_db(article_id):
-    if supabase:
-        supabase.table("articles").delete().eq("id", article_id).execute()
-    else:
-        conn = sqlite3.connect("database.db", check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
-        conn.commit()
-        conn.close()
-
-def generate_ai_article(category_name, use_subtitle=True, region_scope="all"):
-    strict_insight_context = (
-        "STRICT EDITORIAL RULE: Today is September 10, 2026. "
-        "For Sports and Entertainment categories, DO NOT write match results, past game scores, or retrospective match recaps. "
-        "Instead, write professional, analytical insight columns focusing on sports/entertainment industry trends, tactical evolution, player milestone predictions, structural issues, or future outlooks. "
-        "Never fabricate past game scores or fake match results."
+    return render_template_string(
+        HTML_TEMPLATE,
+        articles=articles,
+        categories=list(CATEGORIES.keys()),
+        current_cat=cat,
+        is_detail=False
     )
 
-    sub_directive = "각 핵심 단락 앞에는 반드시 '### 소제목' 형태로 소제목을 붙여 줘." if use_subtitle else "소제목(### 또는 별도 제목 라인)은 절대 넣지 말고, 문단별 줄글 형태로 자연스럽고 매끄럽게 연결해 줘."
+@app.route("/article/<int:article_id>")
+def article_detail(article_id):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
+    article = cur.fetchone()
+    conn.close()
 
-    region_desc = "전국 각 지역의 생생한 현안과 로컬 소식"
-    if region_scope == "gangwon_all":
-        region_desc = "강원특별자치도 전역의 균형 발전, 도정 주요 정책 및 미래 산업 현안"
-    elif region_scope == "sokcho":
-        region_desc = "강원 영동권 '속초시'의 관광, 해양레저, 속초항 활성화, 소상공인 및 지역 밀착 소식"
-    elif region_scope == "goseong":
-        region_desc = "강원 영동권 '고성군'의 평화관광, 청정 자연생태, 접경지 발전 및 로컬 소식"
-    elif region_scope == "yangyang":
-        region_desc = "강원 영동권 '양양군'의 서핑 문화관광, 낙산 개발, 공항 활성화 및 로컬 라이프"
-    elif region_scope == "gangneung":
-        region_desc = "강원 영동권 '강릉시'의 관광 거점, 문화예술 및 첨단 산업 동향"
-    elif region_scope == "donghae":
-        region_desc = "강원 영동권 '동해시'의 항만 물류, 해양 관광 및 지역 경제 현안"
-    elif region_scope == "samcheok":
-        region_desc = "강원 영동권 '삼척시'의 수소 에너지 벨트 및 해양 생태 관광"
-    elif region_scope == "taebaek":
-        region_desc = "강원 영동권 '태백시'의 폐광 대체 청정에너지 산업 및 웰니스 힐링"
-    elif region_scope == "yeongdong_all":
-        region_desc = "강원 영동권(속초·고성·양양·강릉·동해·삼척·태백)의 동해안 관광벨트 및 지역 경제 연계 발전"
-    elif region_scope == "chuncheon":
-        region_desc = "강원 영서권 '춘천시'의 수열에너지 융복합 클러스터, 교육문화 및 호수 관광"
-    elif region_scope == "wonju":
-        region_desc = "강원 영서권 '원주시'의 디지털 헬스케어, 혁신도시 발전 및 첨단 의료기기 산업"
-    elif region_scope == "hongcheon":
-        region_desc = "강원 영서권 '홍천군'의 바이오 신약 산업 및 체류형 전원 레저"
-    elif region_scope == "hoengseong":
-        region_desc = "강원 영서권 '횡성군'의 이모빌리티 특화 클러스터 및 한우 문화축제"
-    elif region_scope == "yeongseo_all":
-        region_desc = "강원 영서권(춘천·원주·홍천·횡성·화천·양구·인제·정선·평창·영월·철원)의 도정 연계 및 지역 경제"
+    if not article:
+        return redirect(url_for("index"))
 
-    prompts = {
-        "정치/시사": ("정치/시사", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 정치 현안과 입법 동향, 정책적 시사점을 다루는 객관적이고 균형 잡힌 시사 칼럼을 작성해 주세요. {sub_directive}"),
-        "경제/주식": ("경제/주식", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주식 시장과 경제 동향에 대한 전문적인 뉴스 기사를 작성해 주고, {sub_directive}"),
-        "세상이야기": ("세상이야기", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 우리 주변의 따뜻한 세상 이야기나 트렌드에 대한 뉴스 기사를 작성해 주고, {sub_directive}"),
-        "AI/테크": ("AI/테크", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 현재 주목받는 AI 기술 트렌드에 대한 전문적인 뉴스 기사를 작성해 주고, {sub_directive}"),
-        "건강/복지": ("건강/복지", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 시니어 세대를 위한 유용한 복지 정책과 건강 관리에 대한 뉴스 기사를 작성해 주고, {sub_directive}"),
-        "생활정보": ("생활정보", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 일상생활에 유용한 실속 정보와 생활 속 지혜를 다루는 알찬 뉴스 기사를 작성해 주세요. {sub_directive}"),
-        "연예계뉴스": ("연예계뉴스", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 방송가와 대중문화계의 구조적 트렌드, 콘텐츠 제작 방식의 변화, 미디어 산업 전망 등을 다루는 깊이 있는 분석/인사이트 칼럼 기사를 작성해 주세요. {sub_directive}"),
-        "스포츠": ("스포츠", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. 스포츠계의 전술적 트렌디함, 유망주 육성 시스템의 변화, 선수의 대기록 달성 가능성 예측 등을 다루는 전문적인 '스포츠 인사이트 칼럼'을 작성해 주세요. {sub_directive}"),
-        "지역창": ("지역창", f"{strict_insight_context} 첫 번째 줄에는 반드시 명확하고 짧은 기사 제목을 한 줄로 작성해 주고, 두 번째 줄부터는 빈 줄을 두고 본문을 작성해 줘. [{region_desc}]에 관한 생생한 현안, 소상공인 및 로컬 경제, 생활 밀착형 심층 기사를 전문 언론인의 시각으로 작성해 주세요. {sub_directive}")
-    }
-    
-    cat_info = prompts.get(category_name, ("종합", f"{strict_insight_context} 최신 트렌드 뉴스 기사 작성. {sub_directive}"))
-    prompt = cat_info[1]
-    
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-        )
-        raw_content = response.text.strip()
-    except Exception as e:
-        raw_content = f"기사 생성 오류: {e}"
-
-    split_lines = raw_content.split("\n", 1)
-    if len(split_lines) > 1 and len(split_lines[0].strip()) <= 55:
-        art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
-        body_content = split_lines[1].strip()
-    else:
-        art_title = f"{category_name} 인사이트 리포트"
-        body_content = raw_content
-
-    img_url, author_name = fetch_bulletproof_image(category_name)
-    formatted_content = clean_and_format_content(body_content, category_name, art_title, use_subtitle)
-    save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
-
-def scheduled_job():
-    categories = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-    target_cat = random.choice(categories)
-    generate_ai_article(target_cat, use_subtitle=True)
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(scheduled_job, 'interval', hours=6)
-scheduler.start()
-
-# ==========================================================
-# 이미지 업로드 엔드포인트 (Supabase Storage 영구 저장 지원)
-# ==========================================================
-@app.post("/admin/upload-image")
-async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return {"error": "Unauthorized"}
-    try:
-        contents = await file.read()
-        file_ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
-        unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
-
-        if supabase:
-            content_type = file.content_type or "image/jpeg"
-            supabase.storage.from_("images").upload(
-                path=unique_filename,
-                file=contents,
-                file_options={"content-type": content_type}
-            )
-            image_url = supabase.storage.from_("images").get_public_url(unique_filename)
-            return {"url": image_url}
-
-        os.makedirs("static", exist_ok=True)
-        file_path = os.path.join("static", unique_filename)
-        with open(file_path, "wb") as f:
-            f.write(contents)
-            
-        image_url = f"/static/{unique_filename}"
-        return {"url": image_url}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/robots.txt", response_class=PlainResponse)
-def robots_txt():
-    robots_text = (
-        "User-agent: Googlebot\n"
-        "Allow: /\n"
-        "Crawl-delay: 0\n\n"
-        "User-agent: *\n"
-        "Allow: /\n\n"
-        "Sitemap: https://insight-webzine.onrender.com/sitemap.xml"
+    return render_template_string(
+        HTML_TEMPLATE,
+        article=article,
+        categories=list(CATEGORIES.keys()),
+        current_cat=article[1],
+        is_detail=True
     )
-    return PlainResponse(content=robots_text, media_type="text/plain", headers={"X-Robots-Tag": "index, follow"})
 
-@app.get("/sitemap.xml", response_class=PlainResponse)
-def sitemap():
-    articles = get_all_articles()
-    base_url = "https://insight-webzine.onrender.com"
-    
-    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    xml_content += f"  <url>\n    <loc>{base_url}/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n"
-    for art in articles:
-        art_id = art['id']
-        xml_content += f"  <url>\n    <loc>{base_url}/?view={art_id}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n"
-    xml_content += '</urlset>'
-    return PlainResponse(content=xml_content, media_type="application/xml")
-
-@app.get("/rss", response_class=PlainResponse)
-def rss_feed():
-    articles = get_all_articles()
-    base_url = "https://insight-webzine.onrender.com"
-    
-    rss_content = '<?xml version="2.0" encoding="UTF-8" ?>\n'
-    rss_content += '<rss version="2.0">\n<channel>\n'
-    rss_content += '  <title>시사투데이 창</title>\n'
-    rss_content += f'  <link>{base_url}/</link>\n'
-    rss_content += '  <description>프리미엄 시사투데이 창 - 정치, 경제, 건강 및 지역 소식 트렌드 뉴스</description>\n'
-    
-    for art in articles:
-        art_id = art['id']
-        title = art['title'].replace('&', '&amp;')
-        date_str = art['created_at']
-        rss_content += '  <item>\n'
-        rss_content += f'    <title>{title}</title>\n'
-        rss_content += f'    <link>{base_url}/?view={art_id}</link>\n'
-        rss_content += f'    <guid>{base_url}/?view={art_id}</guid>\n'
-        rss_content += f'    <pubDate>{date_str}</pubDate>\n'
-        rss_content += '  </item>\n'
-        
-    rss_content += '</channel>\n</rss>'
-    return PlainResponse(content=rss_content, media_type="application/rss+xml")
-
-@app.get("/ads.txt", response_class=PlainResponse)
-def ads_txt():
-    return PlainResponse("google.com, pub-0517985818592419, DIRECT, f08c47fec0942fa0", media_type="text/plain")
-
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request, category: str = None, view: int = None, q: str = None):
-    subscribe_card_html = """
-    <div class="author-subscribe-card">
-        <div class="author-name">
-            시사투데이 창 <span class="author-arrow">›</span>
-        </div>
-        <button type="button" class="btn-subscribe" onclick="subscribeNotice();">
-            <svg class="sub-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7.5" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-            구독하기
-        </button>
-    </div>
-    """
-
-    subscribe_js = """
-    <script>
-    function subscribeNotice() {
-        alert("⭐ [구독 및 바로가기 안내]\\n\\n'시사투데이 창'을 구독해 주셔서 감사합니다!\\n\\n아이폰: 하단 공유(📤) → [홈 화면에 추가]\\n갤럭시: 우측 상단 메뉴(⋮) → [현재 페이지 추가] → [홈 화면]\\n\\n스마트폰 바탕화면에서 매일 새로운 프리미엄 시사 칼럼을 바로 만나보실 수 있습니다.");
-    }
-    </script>
-    """
-
-    if view:
-        art = get_article_by_id(view)
-        if not art:
-            return RedirectResponse(url="/", status_code=303)
-        
-        art_title_clean = art['title'].replace('"', '')
-        art_desc_clean = art['content'][:100].replace('<p>', '').replace('</p>', '').replace('"', '')
-        art_img = art['image_url']
-        art_author = art.get('image_author', '')
-        art_link = f"https://insight-webzine.onrender.com/?view={art['id']}"
-
-        img_block = ""
-        if art_img and art_img.strip():
-            author_html = f'<div class="img-source">📷 Photo by {art_author}</div>' if art_author else ""
-            img_block = f'<img src="{art_img}" class="article-img">{author_html}'
-
-        detail_html = f"""
-        <!DOCTYPE html>
-        <html lang="ko">
-        <head>
-            {GOOGLE_ANALYTICS_SCRIPT}
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{art_title_clean} - 시사투데이 창</title>
-            <meta name="description" content="{art_desc_clean}">
-            <meta property="og:title" content="{art_title_clean}">
-            <meta property="og:description" content="{art_desc_clean}">
-            <meta property="og:image" content="{art_img}">
-            <meta property="og:url" content="{art_link}">
-            <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
-            {NAVER_ANALYTICS_SCRIPT}
-            <style>
-                body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
-                .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
-                .back-btn {{ display: inline-block; padding: 6px 14px; background: #1b4f72; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 0.85em; transition: 0.2s; }}
-                .back-btn:hover {{ background: #12334a; }}
-                .article-container {{ background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }}
-                .badge {{ display: none; }}
-                h1 {{ font-size: 1.3em; color: #1a252f; margin-top: 10px; margin-bottom: 15px; line-height: 1.4; word-break: keep-all; letter-spacing: -0.5px; }}
-                .date {{ font-size: 0.9em; color: #7f8c8d; margin-bottom: 25px; border-bottom: 1px solid #eaecee; padding-bottom: 15px; }}
-                .article-img {{ width: 100%; max-height: 480px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; display: block; }}
-                .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; text-align: left; }}
-                .content {{ font-size: 1.02em; color: #111111; word-break: normal; text-align: left !important; line-height: 1.8; letter-spacing: -0.3px; }}
-                .content p {{ margin-bottom: 24px; text-align: left !important; word-break: normal; }}
-                
-                .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
-                .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
-                .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
-                .search-input:focus {{ border-color: #1b4f72; }}
-                .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
-                .search-btn:hover {{ background: #12334a; }}
-                
-                .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
-                .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
-                .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
-                .btn-subscribe {{ display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
-                .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
-                .sub-icon {{ width: 14px; height: 14px; color: #555; }}
-
-                img {{ max-width: 100% !important; height: auto !important; }}
-                .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
-            </style>
-        </head>
-        <body>
-            <div class="top-bar">
-                <a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a>
-            </div>
-
-            <div class="article-container">
-                <h1>{art['title']}</h1>
-                <div class="date">발행일시: {art['created_at']}</div>
-                {img_block}
-                <div class="content">{art['content']}</div>
-            </div>
-
-            <div class="footer-search-box">
-                <form action="/" method="get" class="search-form">
-                    <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색...">
-                    <button type="submit" class="search-btn">검색</button>
-                </form>
-            </div>
-            
-            {subscribe_card_html}
-            {subscribe_js}
-        </body>
-        </html>
-        """
-        return detail_html
-
-    articles = get_all_articles(category)
-    
-    if q and q.strip():
-        keyword = q.strip().lower()
-        articles = [a for a in articles if keyword in a['title'].lower() or keyword in a['content'].lower()]
-
-    categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-
-    # ==========================================================
-    # 상단 2개 헤드라인 뉴스 카드(빨간색 뱃지) 및 하단 카테고리 뉴스 목록
-    # ==========================================================
-    featured_html = ""
-    list_html = ""
-
-    # 1) 개별 카테고리 클릭 시: 상단 최신 2개는 빨간색 '헤드라인 뉴스' 카드 + 하단은 '[카테고리] 뉴스 목록'
-    if category and category != "전체":
-        if articles:
-            top_articles = articles[:2]
-            cards_markup = ""
-            for top_art in top_articles:
-                img_url = top_art['image_url'] if top_art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-                cards_markup += f"""
-                <div class="featured-card">
-                    <div class="featured-img-wrap">
-                        <a href="/?view={top_art['id']}"><img src="{img_url}" class="featured-img"></a>
-                    </div>
-                    <div class="featured-body">
-                        <span class="badge" style="background:#e74c3c; color:white; font-weight: bold;">🔥 헤드라인 뉴스</span>
-                        <h3 class="featured-title"><a href="/?view={top_art['id']}">{top_art['title']}</a></h3>
-                        <div class="card-date">발행일시 | {top_art['created_at']}</div>
-                    </div>
-                </div>
-                """
-            featured_html = f'<div class="featured-grid">{cards_markup}</div>'
-            
-            archive_articles = articles[2:]
-            if archive_articles:
-                list_html += f'<div class="news-section-box">'
-                list_html += f'<div class="section-header">📂 {category} 뉴스 목록</div>'
-                for art in archive_articles:
-                    list_html += f"""
-                    <div class="news-list-item">
-                        <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
-                        <span class="list-date">{art['created_at'].split()[0]}</span>
-                    </div>
-                    """
-                list_html += '</div>'
-            else:
-                list_html += f'<div class="news-section-box"><p style="color:#888; font-size:0.9em; text-align:center; margin:10px 0;">이 카테고리의 지난 기사가 없습니다.</p></div>'
-
-    # 2) '전체' 메인 홈 화면일 때: 전체 최신 2개 헤드라인 + 분야별 최신 뉴스 섹션
-    else:
-        featured_articles = articles[:2] if articles else []
-        cards_markup = ""
-        for art in featured_articles:
-            cat_name = art['category'] if art['category'] else '종합'
-            img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
-            cards_markup += f"""
-            <div class="featured-card">
-                <div class="featured-img-wrap">
-                    <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
-                </div>
-                <div class="featured-body">
-                    <span class="badge">{cat_name}</span>
-                    <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
-                    <div class="card-date">발행 | {art['created_at']}</div>
-                </div>
-            </div>
-            """
-        if cards_markup:
-            featured_html = f'<div class="featured-grid">{cards_markup}</div>'
-
-        display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-        for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category') == cat][:5]
-            if cat_arts:
-                list_html += f'<div class="news-section-box">'
-                list_html += f'<div class="section-header">📂 {cat} 최신 소식</div>'
-                for art in cat_arts:
-                    list_html += f"""
-                    <div class="news-list-item">
-                        <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
-                        <span class="list-date">{art['created_at'].split()[0]}</span>
-                    </div>
-                    """
-                list_html += '</div>'
-        
-        other_arts = [a for a in articles if a.get('category') not in display_cats][:5]
-        if other_arts:
-            list_html += f'<div class="news-section-box">'
-            list_html += f'<div class="section-header">📰 종합 최신 소식</div>'
-            for art in other_arts:
-                list_html += f"""
-                <div class="news-list-item">
-                    <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
-                    <span class="list-date">{art['created_at'].split()[0]}</span>
-                </div>
-                """
-            list_html += '</div>'
-
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        {GOOGLE_ANALYTICS_SCRIPT}
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>시사투데이 창 - 프리미엄 미디어</title>
-        <meta name="description" content="AI, 경제, 주식, 건강 및 지역 소식을 전하는 프리미엄 시사투데이 창 미디어">
-        <meta property="og:title" content="시사투데이 창">
-        <meta property="og:description" content="AI, 경제, 주식, 건강 및 지역 소식을 전하는 프리미엄 시사투데이 창 미디어">
-        <meta property="og:image" content="https://images.unsplash.com/photo-1451187580459-43490279c0fa">
-        <meta property="og:url" content="https://insight-webzine.onrender.com/">
-        <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
-        {NAVER_ANALYTICS_SCRIPT}
-        <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
-            
-            .logo-title {{ font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.6em; font-weight: 700; color: #1a252f; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }}
-            .logo-chang {{ display: inline-block; background: #ffffff; color: #111111; border: 2.5px solid #111111; padding: 4px 16px; border-radius: 6px; font-family: 'Gowun Batang', 'Batang', serif; font-size: 1.1em; font-weight: 700; transform: rotate(5deg); box-shadow: 3px 3px 6px rgba(0,0,0,0.12); }}
-            
-            .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
-            .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.2s; white-space: nowrap; box-sizing: border-box; }}
-            .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
-            
-            .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
-            .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
-            .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
-            .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
-            .featured-card:hover .featured-img {{ transform: scale(1.03); }}
-            .featured-body {{ padding: 15px; display: flex; flex-direction: column; flex-grow: 1; }}
-            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; margin-bottom: 8px; width: fit-content; }}
-            .featured-title {{ font-size: 1.1em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; word-break: keep-all; }}
-            .featured-title a {{ color: inherit; text-decoration: none; }}
-            .featured-title a:hover {{ color: #2980b9; }}
-            .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
-
-            .news-section-box {{ background: white; border-radius: 10px; padding: 15px 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-bottom: 15px; }}
-            .section-header {{ font-size: 1.05em; font-weight: bold; color: #1b4f72; border-bottom: 2px solid #ebf5fb; padding-bottom: 8px; margin-bottom: 10px; }}
-            
-            .news-list-item {{ display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f8f9fa; }}
-            .news-list-item:last-child {{ border-bottom: none; }}
-            .list-title {{ flex-grow: 1; font-size: 0.96em; color: #2c3e50; text-decoration: none; font-weight: 600; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 15px; }}
-            .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
-            .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
-
-            .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); margin-top: 20px; text-align: center; }}
-            .search-form {{ display: flex; gap: 8px; justify-content: center; width: 100%; max-width: 400px; margin: 0 auto; }}
-            .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95em; outline: none; flex-grow: 1; transition: 0.2s; }}
-            .search-input:focus {{ border-color: #1b4f72; }}
-            .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; white-space: nowrap; }}
-            .search-btn:hover {{ background: #12334a; }}
-            
-            .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
-            .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
-            .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
-            .btn-subscribe {{ display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
-            .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
-            .sub-icon {{ width: 14px; height: 14px; color: #555; }}
-
-            img {{ max-width: 100% !important; height: auto !important; }}
-            .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
-        </style>
-    </head>
-    <body>
-        <div class="header-flex">
-            <div class="logo-title">
-                시사투데이&nbsp;<span class="logo-chang">창</span>
-            </div>
-        </div>
-        <div class="nav-tabs">
-    """
-    
-    for cat in categories:
-        active_class = "active" if (not category and cat == "전체") or (category == cat) else ""
-        cat_param = "" if cat == "전체" else f"?category={cat}"
-        html += f'<a href="/{cat_param}" class="tab-item {active_class}">{cat}</a>'
-        
-    html += "</div>"
-
-    if not articles:
-        html += "<p style='text-align:center; color:#777; margin-top:80px; font-size: 1.1em;'>등록된 기사가 없습니다.</p>"
-    else:
-        if featured_html:
-            html += f'{featured_html}'
-        if list_html:
-            html += f'{list_html}'
-        
-    html += f"""
-        <div class="footer-search-box">
-            <form action="/" method="get" class="search-form">
-                {'<input type="hidden" name="category" value="' + category + '">' if category else ''}
-                <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색..." value="{q if q else ''}">
-                <button type="submit" class="search-btn">검색</button>
-            </form>
-        </div>
-        
-        {subscribe_card_html}
-        {subscribe_js}
-    """
-
-    html += "</body></html>"
-    return html
-
-@app.get("/admin", response_class=HTMLResponse)
-def admin_login_page(request: Request, error: str = None):
-    err_msg = "<p style='color: #e74c3c; font-size: 0.9em; margin-bottom: 15px;'>비밀번호가 틀렸습니다!</p>" if error else ""
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>관리자 로그인</title>
-        <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; background: #f0f3f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; box-sizing: border-box; padding: 15px; }}
-            .login-box {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 320px; text-align: center; }}
-            h2 {{ color: #1b4f72; margin-bottom: 20px; }}
-            input[type="password"] {{ width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; text-align: center; }}
-            button {{ width: 100%; padding: 12px; background: #1b4f72; color: white; border: none; border-radius: 5px; font-weight: bold; font-size: 16px; cursor: pointer; }}
-            button:hover {{ background: #12334a; }}
-            .back-link {{ display: block; margin-top: 15px; color: #7f8c8d; text-decoration: none; font-size: 0.9em; }}
-        </style>
-    </head>
-    <body>
-        <div class="login-box">
-            <h2>🔐 관리자 인증</h2>
-            {err_msg}
-            <form action="/admin/login" method="post">
-                <input type="password" name="password" placeholder="비밀번호를 입력하세요" required autofocus>
-                <button type="submit">로그인</button>
-            </form>
-            <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        </div>
-    </body>
-    </html>
-    """
-
-@app.post("/admin/login")
-def admin_login(response: Response, password: str = Form(...)):
-    if password == ADMIN_PASSWORD:
-        resp = RedirectResponse(url="/admin/studio", status_code=303)
-        resp.set_cookie(key="admin_auth", value="authenticated", max_age=86400)
-        return resp
-    else:
-        return RedirectResponse(url="/admin?error=true", status_code=303)
-
-@app.get("/admin/studio", response_class=HTMLResponse)
-def admin_studio(request: Request, admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-
-    rows = get_all_articles()
-
-    articles_list_html = ""
-    for r in rows:
-        articles_list_html += f"""
-        <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px 10px; font-size: 0.9em; color: #555;">{r['category']}</td>
-            <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
-            <td style="padding: 12px 10px; font-size: 0.85em; color: #777; white-space: nowrap;">{r['created_at']}</td>
-            <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
-                <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px; display: inline-block;">✏️ 수정</a>
-                <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
-            </td>
-        </tr>
-        """
-
-    if not articles_list_html:
-        articles_list_html = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: #777;'>등록된 기사가 없습니다.</td></tr>"
-
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>시사투데이 창 관리자 스튜디오</title>
-        <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
-            h1 {{ color: #2c3e50; font-size: 1.5em; }}
-            .box {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
-            button {{ background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
-            button:hover {{ background: #219653; }}
-            .manual-btn {{ background: #2980b9; }}
-            .manual-btn:hover {{ background: #1f618d; }}
-            .ai-expand-btn {{ background: #8e44ad; }}
-            .ai-expand-btn:hover {{ background: #732d91; }}
-            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
-            textarea {{ height: 150px; resize: vertical; }}
-            label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
-            .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            
-            .hub-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }}
-            .hub-btn {{ display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 14px; border-radius: 8px; font-weight: bold; font-size: 13.5px; text-decoration: none; color: white; transition: transform 0.2s, opacity 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.08); text-align: center; }}
-            .hub-btn:hover {{ opacity: 0.92; transform: translateY(-1px); }}
-            .hub-btn-naver-a {{ background: #03c75a; }}
-            .hub-btn-naver-s {{ background: #1f9c53; }}
-            .hub-btn-google-gsc {{ background: #4285f4; }}
-            .hub-btn-google-ga {{ background: #ea4335; }}
-
-            .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
-            .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
-            .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
-            .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
-            .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
-            
-            .custom-head-box {{ background: #fcf3cf; border: 1.5px solid #f39c12; border-radius: 6px; padding: 14px; margin-top: 10px; margin-bottom: 15px; }}
-            .checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #7d6608; cursor: pointer; margin-top: 0; }}
-            .preview-box-img {{ max-width: 180px; max-height: 100px; border-radius: 4px; margin-top: 8px; display: none; }}
-
-            .sub-option-box {{ background: #f4f6f7; border: 1px solid #d5dbdb; border-radius: 6px; padding: 10px 14px; margin-top: 10px; margin-bottom: 15px; }}
-            .sub-checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #2c3e50; cursor: pointer; font-size: 13.5px; margin: 0; }}
-            .sub-checkbox-label input[type="checkbox"] {{ width: 18px; height: 18px; cursor: pointer; }}
-
-            .region-scope-box {{ background: #eafaf1; border: 1.5px solid #2ecc71; border-radius: 6px; padding: 12px 14px; margin-top: 10px; margin-bottom: 15px; display: none; }}
-            .region-scope-box label {{ margin-top: 0; color: #1e8449; font-size: 13.5px; }}
-            .region-scope-box select {{ margin-bottom: 0; background: white; font-weight: bold; color: #196f3d; }}
-        </style>
-    </head>
-    <body>
-        <a href="/" class="back-link">← 메인 페이지로 돌아가기</a>
-        <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
-        
-        <div class="box" style="border-top: 5px solid #2ecc71;">
-            <h3>📊 통계 분석 & 검색엔진 허브 센터</h3>
-            <p style="color: #666; font-size: 0.9em; margin-top: 6px; line-height: 1.6;">
-                네이버와 구글의 공식 대시보드로 바로 연결됩니다. 검색 유입 및 색인 현황, 정밀 트래픽을 안전하게 확인하세요.
-            </p>
-            <div class="hub-grid">
-                <a href="https://analytics.naver.com/" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-naver-a">
-                    🟢 네이버 애널리틱스
-                </a>
-                <a href="https://searchadvisor.naver.com/" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-naver-s">
-                    🟢 네이버 서치어드바이저
-                </a>
-                <a href="https://search.google.com/search-console" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-google-gsc">
-                    🔵 구글 서치 콘솔
-                </a>
-                <a href="https://analytics.google.com/analytics/web/" target="_blank" rel="noopener noreferrer" class="hub-btn hub-btn-google-ga">
-                    🔴 구글 애널리틱스(GA4)
-                </a>
-            </div>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
-            <form action="/admin/create-auto" method="post">
-                <label>카테고리 선택</label>
-                <select name="category" id="auto_category" onchange="toggleRegionScope('auto_category', 'auto_region_box')">
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="경제/주식">경제/주식</option>
-                    <option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option>
-                    <option value="건강/복지">건강/복지</option>
-                    <option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option>
-                    <option value="스포츠">스포츠</option>
-                    <option value="지역창">지역창</option>
-                </select>
-
-                <div class="region-scope-box" id="auto_region_box">
-                    <label>📍 [지역창 세부 지역 타겟 선택]</label>
-                    <select name="region_scope">
-                        <option value="all">🌐 전국 (전국 주요 지역 현안)</option>
-                        <option value="gangwon_all">🌲 강원특별자치도 전역 (도정 및 전역 소식)</option>
-                        <optgroup label="🌊 강원 영동권">
-                            <option value="sokcho">속초시 (속초 현안, 관광, 항만, 로컬)</option>
-                            <option value="goseong">고성군 (평화관광, 청정자연, 접경지)</option>
-                            <option value="yangyang">양양군 (서핑, 낙산개발, 로컬라이프)</option>
-                            <option value="gangneung">강릉시 (관광거점, 문화예술, 혁신산업)</option>
-                            <option value="donghae">동해시 (항만물류, 해양관광, 로컬경제)</option>
-                            <option value="samcheok">삼척시 (수소에너지, 해양생태, 동해안)</option>
-                            <option value="taebaek">태백시 (청정에너지, 웰니스, 고원힐링)</option>
-                            <option value="yeongdong_all">강원 영동권 전역 (동해안 7개 시군 연계)</option>
-                        </optgroup>
-                        <optgroup label="⛰️ 강원 영서권">
-                            <option value="chuncheon">춘천시 (수열에너지 클러스터, 교육문화, 호수관광)</option>
-                            <option value="wonju">원주시 (디지털헬스케어, 혁신도시, 첨단의료)</option>
-                            <option value="hongcheon">홍천군 (바이오신약, 체류형관광, 로컬)</option>
-                            <option value="hoengseong">횡성군 (이모빌리티 클러스터, 축제, 로컬)</option>
-                            <option value="yeongseo_all">강원 영서권 전역 (영서권 시군 연계 발전)</option>
-                        </optgroup>
-                    </select>
-                </div>
-
-                <div class="sub-option-box">
-                    <label class="sub-checkbox-label">
-                        <input type="checkbox" name="use_subtitle" value="yes" checked>
-                        <span>📑 본문에 소제목 자동 생성 및 포함하기 (체크 해제 시 소제목 없이 자연스러운 줄글로 작성)</span>
-                    </label>
-                </div>
-
-                <button type="submit">🚀 즉시 자동 기사 발행하기</button>
-            </form>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #2980b9;">
-            <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
-            <form action="/admin/create-manual" method="post">
-                <label>카테고리 선택</label>
-                <select name="category" id="manual_category" onchange="toggleRegionScope('manual_category', 'manual_region_box')">
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="경제/주식">경제/주식</option>
-                    <option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option>
-                    <option value="건강/복지">건강/복지</option>
-                    <option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option>
-                    <option value="스포츠">스포츠</option>
-                    <option value="지역창">지역창</option>
-                </select>
-
-                <div class="region-scope-box" id="manual_region_box">
-                    <label>📍 [지역창 세부 지역 태깅/타겟]</label>
-                    <select name="region_scope">
-                        <option value="all">🌐 전국 (전국 이슈)</option>
-                        <option value="gangwon_all">🌲 강원특별자치도 전역</option>
-                        <optgroup label="🌊 강원 영동권">
-                            <option value="sokcho">속초시</option>
-                            <option value="goseong">고성군</option>
-                            <option value="yangyang">양양군</option>
-                            <option value="gangneung">강릉시</option>
-                            <option value="donghae">동해시</option>
-                            <option value="samcheok">삼척시</option>
-                            <option value="taebaek">태백시</option>
-                            <option value="yeongdong_all">강원 영동권 전역</option>
-                        </optgroup>
-                        <optgroup label="⛰️ 강원 영서권">
-                            <option value="chuncheon">춘천시</option>
-                            <option value="wonju">원주시</option>
-                            <option value="hongcheon">홍천군</option>
-                            <option value="hoengseong">횡성군</option>
-                            <option value="yeongseo_all">강원 영서권 전역</option>
-                        </optgroup>
-                    </select>
-                </div>
-
-                <label>기사 제목</label>
-                <input type="text" name="title" placeholder="제목을 입력하세요" required>
-                
-                <div class="custom-head-box">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
-                        <span>🖼️ 언스플래시(Unsplash) 자동 대표 이미지 사용하기 (체크 해제 시 내가 직접 지정한 이미지 적용)</span>
-                    </label>
-                    <div id="manual_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
-                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정] 아래에 이미지 URL 또는 내 기기 사진을 올려주세요.</small>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" name="custom_image_url" id="manual_head_url" placeholder="직접 넣을 대표 이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
-                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('manual_head_file').click()">📁 내 기기 파일</button>
-                            <input type="file" id="manual_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'manual_head_url', 'manual_head_preview')">
-                        </div>
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공, pexels 등)" style="margin-bottom: 4px;">
-                        <img id="manual_head_preview" class="preview-box-img">
-                    </div>
-                </div>
-
-                <div class="sub-option-box">
-                    <label class="sub-checkbox-label">
-                        <input type="checkbox" name="use_subtitle" value="yes" checked>
-                        <span>📑 짧은 문단이나 '###'을 소제목으로 변환하기 (체크 해제 시 소제목 없이 모든 문단을 일반 본문으로 표기)</span>
-                    </label>
-                </div>
-
-                <label>기사 본문 및 이미지 삽입</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
-                    <div class="img-tool-row">
-                        <input type="text" id="manual_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 국회방송 캡처 등)" style="flex: 1;">
-                    </div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('manual_file_input').click()">📁 내 기기 파일 올리기</button>
-                        <input type="file" id="manual_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'manualContent', 'manual_source')">
-                    </div>
-                </div>
-
-                <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
-                <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
-            </form>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
-            <form action="/admin/create-ai-expand" method="post">
-                <label>카테고리 선택</label>
-                <select name="category" id="expand_category" onchange="toggleRegionScope('expand_category', 'expand_region_box')">
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="경제/주식">경제/주식</option>
-                    <option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option>
-                    <option value="건강/복지">건강/복지</option>
-                    <option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option>
-                    <option value="스포츠">스포츠</option>
-                    <option value="지역창">지역창</option>
-                </select>
-
-                <div class="region-scope-box" id="expand_region_box">
-                    <label>📍 [지역창 세부 지역 타겟 선택]</label>
-                    <select name="region_scope">
-                        <option value="all">🌐 전국 (전국 주요 지역 현안)</option>
-                        <option value="gangwon_all">🌲 강원특별자치도 전역 (도정 및 전역 소식)</option>
-                        <optgroup label="🌊 강원 영동권">
-                            <option value="sokcho">속초시 (속초 현안, 관광, 항만, 로컬)</option>
-                            <option value="goseong">고성군 (평화관광, 청정자연, 접경지)</option>
-                            <option value="yangyang">양양군 (서핑, 낙산개발, 로컬라이프)</option>
-                            <option value="gangneung">강릉시 (관광거점, 문화예술, 혁신산업)</option>
-                            <option value="donghae">동해시 (항만물류, 해양관광, 로컬경제)</option>
-                            <option value="samcheok">삼척시 (수소에너지, 해양생태, 동해안)</option>
-                            <option value="taebaek">태백시 (청정에너지, 웰니스, 고원힐링)</option>
-                            <option value="yeongdong_all">강원 영동권 전역 (동해안 7개 시군 연계)</option>
-                        </optgroup>
-                        <optgroup label="⛰️ 강원 영서권">
-                            <option value="chuncheon">춘천시 (수열에너지 클러스터, 교육문화, 호수관광)</option>
-                            <option value="wonju">원주시 (디지털헬스케어, 혁신도시, 첨단의료)</option>
-                            <option value="hongcheon">홍천군 (바이오신약, 체류형관광, 로컬)</option>
-                            <option value="hoengseong">횡성군 (이모빌리티 클러스터, 축제, 로컬)</option>
-                            <option value="yeongseo_all">강원 영서권 전역 (영서권 시군 연계 발전)</option>
-                        </optgroup>
-                    </select>
-                </div>
-
-                <label>기사 제목</label>
-                <input type="text" name="title" placeholder="기사 제목을 입력하세요" required>
-                
-                <div class="custom-head-box">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
-                        <span>🖼️ 언스플래시(Unsplash) 자동 대표 이미지 사용하기 (체크 해제 시 내가 직접 지정한 이미지 적용)</span>
-                    </label>
-                    <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
-                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정] 아래에 이미지 URL 또는 내 기기 사진을 올려주세요.</small>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" name="custom_image_url" id="expand_head_url" placeholder="직접 넣을 대표 이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
-                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
-                            <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
-                        </div>
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스, 독자 제공, pexels 등)" style="margin-bottom: 4px;">
-                        <img id="expand_head_preview" class="preview-box-img">
-                    </div>
-                </div>
-
-                <div class="sub-option-box">
-                    <label class="sub-checkbox-label">
-                        <input type="checkbox" name="use_subtitle" value="yes" checked>
-                        <span>📑 본문 단락마다 핵심 소제목 생성하기 (체크 해제 시 소제목 없이 부드러운 줄글로 확장)</span>
-                    </label>
-                </div>
-
-                <label>AI 확장용 프롬프트 / 메모 및 본문 추가 이미지</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 출처(Credit) 입력</div>
-                    <div class="img-tool-row">
-                        <input type="text" id="expand_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 픽사베이 등)" style="flex: 1;">
-                    </div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('expand_file_input').click()">📁 내 기기 파일 올리기</button>
-                        <input type="file" id="expand_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'expandPrompt', 'expand_source')">
-                    </div>
-                </div>
-
-                <textarea name="prompt" id="expandPrompt" placeholder="예: 속초 지역의 가을 축제와 지역 경제 활성화 방안에 대해 전문적인 기사로 상세히 작성해줘." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
-            </form>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #34495e;">
-            <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
-            <div style="overflow-x: auto;">
-                <table>
-                    <thead>
-                        <tr style="border-bottom: 2px solid #ccc; text-align: left;">
-                            <th style="padding: 10px;">카테고리</th>
-                            <th style="padding: 10px;">기사 제목</th>
-                            <th style="padding: 10px;">발행일시</th>
-                            <th style="padding: 10px; text-align: right;">관리</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {articles_list_html}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <script>
-        function toggleRegionScope(selectId, boxId) {{
-            const select = document.getElementById(selectId);
-            const box = document.getElementById(boxId);
-            if (select && box) {{
-                if (select.value === '지역창') {{
-                    box.style.display = 'block';
-                }} else {{
-                    box.style.display = 'none';
-                }}
-            }}
-        }}
-
-        function toggleHeadImgSection(type) {{
-            const chk = document.getElementById(type + '_use_unsplash');
-            const wrap = document.getElementById(type + '_custom_head_wrap');
-            if (!chk.checked) {{
-                wrap.style.display = 'block';
-            }} else {{
-                wrap.style.display = 'none';
-            }}
-        }}
-
-        async function uploadDirectHeadImage(input, urlInputId, previewImgId) {{
-            if (input.files && input.files[0]) {{
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{
-                        method: "POST",
-                        body: formData
-                    }});
-                    const data = await response.json();
-                    if (data.url) {{
-                        document.getElementById(urlInputId).value = data.url;
-                        const preview = document.getElementById(previewImgId);
-                        preview.src = data.url;
-                        preview.style.display = 'block';
-                        alert("대표 이미지가 성공적으로 등록되었습니다!");
-                    }} else {{
-                        alert("업로드 실패: " + (data.error || "오류"));
-                    }}
-                }} catch (err) {{
-                    alert("업로드 오류: " + err);
-                }}
-                input.value = "";
-            }}
-        }}
-
-        function injectHtmlTag(elementId, imgUrl, sourceText) {{
-            let captionHtml = "";
-            let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {{
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
-                    cleanSource = "Photo by " + cleanSource;
-                }}
-                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
-            }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
-            
-            const textarea = document.getElementById(elementId);
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-            textarea.focus();
-        }}
-
-        function insertImageWithSource(elementId, sourceInputId) {{
-            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {{
-                const source = document.getElementById(sourceInputId).value;
-                injectHtmlTag(elementId, url, source);
-                document.getElementById(sourceInputId).value = "";
-            }}
-        }}
-
-        async function uploadImageWithSource(input, elementId, sourceInputId) {{
-            if (input.files && input.files[0]) {{
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                
-                try {{
-                    const response = await fetch("/admin/upload-image", {{
-                        method: "POST",
-                        body: formData
-                    }});
-                    const data = await response.json();
-                    if (data.url) {{
-                        const source = document.getElementById(sourceInputId).value;
-                        injectHtmlTag(elementId, data.url, source);
-                        document.getElementById(sourceInputId).value = "";
-                        alert("사진과 출처가 성공적으로 본문에 삽입되었습니다!");
-                    }} else {{
-                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
-                    }}
-                }} catch (err) {{
-                    alert("사진 업로드 중 오류 발생: " + err);
-                }}
-                input.value = "";
-            }}
-        }}
-
-        window.onload = function() {{
-            toggleRegionScope('auto_category', 'auto_region_box');
-            toggleRegionScope('manual_category', 'manual_region_box');
-            toggleRegionScope('expand_category', 'expand_region_box');
-        }};
-        </script>
-    </body>
-    </html>
-    """
-
-@app.post("/admin/create-auto")
-def create_auto(
-    category: str = Form(...), 
-    region_scope: str = Form("all"),
-    use_subtitle: str = Form(None),
-    admin_auth: str = Cookie(None)
-):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    has_sub = (use_subtitle == "yes")
-    generate_ai_article(category, use_subtitle=has_sub, region_scope=region_scope)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.post("/admin/create-manual")
-def create_manual(
-    category: str = Form(...), 
-    region_scope: str = Form("all"),
-    title: str = Form(...), 
-    content: str = Form(...), 
-    use_subtitle: str = Form(None),
-    use_unsplash: str = Form(None),
-    custom_image_url: str = Form(None),
-    custom_image_author: str = Form(None),
-    admin_auth: str = Cookie(None)
-):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
-    
-    if not use_unsplash and custom_image_url and custom_image_url.strip():
-        img_url = custom_image_url.strip()
-        author_name = custom_image_author.strip() if custom_image_author else ""
-    else:
-        img_url, author_name = fetch_bulletproof_image(category)
-    
-    has_sub = (use_subtitle == "yes")
-    formatted_content = clean_and_format_content(content, category, clean_title, use_subtitle=has_sub)
-    save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.post("/admin/create-ai-expand")
-def create_ai_expand(
-    category: str = Form(...), 
-    region_scope: str = Form("all"),
-    title: str = Form(...), 
-    prompt: str = Form(...), 
-    use_subtitle: str = Form(None),
-    use_unsplash: str = Form(None),
-    custom_image_url: str = Form(None),
-    custom_image_author: str = Form(None),
-    admin_auth: str = Cookie(None)
-):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
-    
-    has_sub = (use_subtitle == "yes")
-    if has_sub:
-        sub_rule = "2. 각 핵심 단락 앞에는 '### 소제목' 형태로 소제목을 반드시 붙이세요.\n"
-    else:
-        sub_rule = "2. 소제목(### 또는 별도 제목)은 절대 넣지 말고, 문단별 줄글로 매끄럽게 연결하세요.\n"
-
-    region_directive = ""
-    if category == "지역창":
-        region_map = {
-            "all": "전국 각 지역의 균형 발전 및 현안 이슈",
-            "gangwon_all": "강원특별자치도 전역의 도정 및 균형 발전",
-            "sokcho": "강원 영동권 속초시의 생생한 현안, 관광, 항만 및 로컬 경제",
-            "goseong": "강원 영동권 고성군의 평화관광, 청정 자연 및 접경지 발전",
-            "yangyang": "강원 영동권 양양군의 서핑 문화, 낙산 개발 및 로컬 라이프",
-            "gangneung": "강원 영동권 강릉시의 문화예술, 관광거점 및 로컬 혁신",
-            "donghae": "강원 영동권 동해시의 항만 물류 및 해양관광",
-            "samcheok": "강원 영동권 삼척시의 수소 에너지 및 해양 생태",
-            "taebaek": "강원 영동권 태백시의 청정에너지 및 웰니스 힐링",
-            "yeongdong_all": "강원 영동권(속초·고성·양양·강릉·동해·삼척·태백)의 연계 발전",
-            "chuncheon": "강원 영서권 춘천시의 수열에너지 클러스터, 교육문화 및 호수관광",
-            "wonju": "강원 영서권 원주시의 디지털 헬스케어, 혁신도시 및 첨단의료",
-            "hongcheon": "강원 영서권 홍천군의 바이오 신약 및 전원 레저",
-            "hoengseong": "강원 영서권 횡성군의 이모빌리티 및 지역 경제",
-            "yeongseo_all": "강원 영서권(춘천·원주·홍천·횡성·화천·양구·인제·정선·평창·영월·철원)의 연계 발전"
-        }
-        target_name = region_map.get(region_scope, "전국 및 로컬")
-        region_directive = f"\n[지역 타겟]: 이 기사는 '{target_name}'에 초점을 맞추어 작성되어야 합니다."
-
-    system_directive = (
-        "당신은 전문 수석 언론사 기자입니다. "
-        "사용자가 제공한 [기사 제목]과 [핵심 취재 메모]를 바탕으로 완성도 높은 정식 뉴스 기사 본문을 작성하세요.\n"
-        "1. 서론-본론-결론 구조를 갖춘 풍성한 분량(최소 4개 이상의 문단)으로 작성하세요.\n"
-        f"{sub_rule}"
-        "3. 만약 사용자의 취재 메모 안에 <div class=\"article-img-box\"나 <img 등 HTML 태그가 있다면 삭제하지 말고 본문 흐름에 맞게 그대로 포함하세요.\n"
-        "4. 본문 시작 부분에 기사 제목을 다시 적지 마세요. 바로 첫 단락의 내용으로 시작하세요.\n"
-        "5. 마크다운 특수기호(-, *, _)는 쓰지 말고 표준적인 한국어 보도체(~다)로 명확하게 서술하세요.\n"
-        "6. 본문 끝에 해시태그는 직접 작성하지 마세요."
-        f"{region_directive}"
-    )
-    
-    full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[핵심 취재 메모]: {prompt}"
-
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=full_query,
-        )
-        final_content = response.text.strip()
-    except Exception as e:
-        print(f"🚨 [Gemini 기사 확장 생성 에러]: {e}")
-        final_content = f"기사 본문 생성 중 API 오류가 발생했습니다: {e}\n\n취재 메모:\n{prompt}"
-
-    if not use_unsplash and custom_image_url and custom_image_url.strip():
-        img_url = custom_image_url.strip()
-        author_name = custom_image_author.strip() if custom_image_author else ""
-    else:
-        img_url, author_name = fetch_bulletproof_image(category)
-
-    final_content = clean_and_format_content(final_content, category, clean_title, use_subtitle=has_sub)
-    save_article_to_db(category, clean_title, final_content, img_url, author_name)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
-def edit_page(article_id: int, admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-
-    art = get_article_by_id(article_id)
-    if not art:
-        return RedirectResponse(url="/admin/studio", status_code=303)
-
-    current_img = art.get('image_url', '') or ''
-    current_author = art.get('image_author', '') or ''
-
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>기사 수정하기</title>
-        <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
-            h1 {{ color: #2c3e50; font-size: 1.5em; }}
-            .box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
-            button {{ background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
-            button:hover {{ background: #d68910; }}
-            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
-            textarea {{ height: 250px; resize: vertical; }}
-            label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
-            .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
-            .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
-            
-            .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
-            .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
-            .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
-            .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
-            .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
-            
-            .header-img-box {{ background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
-            
-            .sub-option-box {{ background: #f4f6f7; border: 1px solid #d5dbdb; border-radius: 6px; padding: 10px 14px; margin-top: 10px; margin-bottom: 15px; }}
-            .sub-checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #2c3e50; cursor: pointer; font-size: 13.5px; margin: 0; }}
-            .sub-checkbox-label input[type="checkbox"] {{ width: 18px; height: 18px; cursor: pointer; }}
-        </style>
-    </head>
-    <body>
-        <a href="/admin/studio" class="back-link">← 관리자 스튜디오로 돌아가기</a>
-        <div class="box">
-            <h1>✏️ 기사 및 대표 이미지 수정하기</h1>
-            <form action="/admin/update/{art['id']}" method="post">
-                <label>카테고리</label>
-                <select name="category">
-                    <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
-                    <option value="경제/주식" {"selected" if art['category']=="경제/주식" else ""}>경제/주식</option>
-                    <option value="세상이야기" {"selected" if art['category']=="세상이야기" else ""}>세상이야기</option>
-                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
-                    <option value="건강/복지" {"selected" if art['category']=="건강/복지" else ""}>건강/복지</option>
-                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
-                    <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
-                    <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
-                    <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
-                </select>
-                
-                <label>기사 제목</label>
-                <input type="text" name="title" value="{art['title']}" required>
-                
-                <div class="header-img-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="font-weight: bold; color: #2c3e50; font-size: 14px;">🖼️ 기사 상단 대표 이미지 및 출처 설정</span>
-                        <button type="button" onclick="clearMainImage()" style="width: auto; background: #e74c3c; padding: 5px 12px; font-size: 12px; border-radius: 4px;">🗑️ 대표 이미지 완전 삭제</button>
-                    </div>
-
-                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 주소(URL)</label>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="main_img_url" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소를 입력하세요" style="flex: 1; margin-bottom: 8px;">
-                        <button type="button" onclick="document.getElementById('main_img_file').click()" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;">📁 내 파일 올리기</button>
-                        <input type="file" id="main_img_file" style="display: none;" accept="image/*" onchange="uploadMainImageFile(this)">
-                    </div>
-
-                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 출처 표기</label>
-                    <input type="text" id="main_img_author" name="image_author" value="{current_author}" placeholder="출처를 입력하세요 (예: pexels, 연합뉴스, 기본소득당 제공 등)" style="margin-bottom: 8px;">
-                    
-                    <small style="color: #7f8c8d; display: block; margin-top: 4px;">현재 등록된 대표 이미지 미리보기:</small>
-                    <img id="main_img_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
-                </div>
-
-                <div class="sub-option-box">
-                    <label class="sub-checkbox-label">
-                        <input type="checkbox" name="use_subtitle" value="yes" checked>
-                        <span>📑 짧은 문단이나 '###'을 소제목으로 변환하기 (체크 해제 시 소제목 없이 일반 본문으로 저장)</span>
-                    </label>
-                </div>
-
-                <label>기사 내용 및 본문 추가 이미지</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
-                    <div class="img-tool-row">
-                        <input type="text" id="edit_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 국회방송 캡처 등)" style="flex: 1;">
-                    </div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일 올리기</button>
-                        <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
-                    </div>
-                </div>
-
-                <textarea name="content" id="editContent" required>{art['content']}</textarea>
-                
-                <button type="submit">💾 수정 사항 저장하기</button>
-            </form>
-        </div>
-
-        <script>
-        function clearMainImage() {{
-            document.getElementById('main_img_url').value = '';
-            document.getElementById('main_img_author').value = '';
-            const preview = document.getElementById('main_img_preview');
-            preview.src = '';
-            preview.style.display = 'none';
-            alert("대표 이미지와 출처가 삭제되었습니다. 하단의 [수정 사항 저장하기]를 누르면 완전히 반영됩니다.");
-        }}
-
-        async function uploadMainImageFile(input) {{
-            if (input.files && input.files[0]) {{
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{
-                        method: "POST",
-                        body: formData
-                    }});
-                    const data = await response.json();
-                    if (data.url) {{
-                        document.getElementById('main_img_url').value = data.url;
-                        const preview = document.getElementById('main_img_preview');
-                        preview.src = data.url;
-                        preview.style.display = 'block';
-                        alert("대표 이미지가 업로드되었습니다. 아래 출처 입력란에 출처를 적어주세요.");
-                    }} else {{
-                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
-                    }}
-                }} catch (err) {{
-                    alert("사진 업로드 중 오류 발생: " + err);
-                }}
-                input.value = "";
-            }}
-        }}
-
-        function injectHtmlTag(elementId, imgUrl, sourceText) {{
-            let captionHtml = "";
-            let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {{
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
-                    cleanSource = "Photo by " + cleanSource;
-                }}
-                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
-            }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
-            
-            const textarea = document.getElementById(elementId);
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-            textarea.focus();
-        }}
-
-        function insertImageWithSource(elementId, sourceInputId) {{
-            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {{
-                const source = document.getElementById(sourceInputId).value;
-                injectHtmlTag(elementId, url, source);
-                document.getElementById(sourceInputId).value = "";
-            }}
-        }}
-
-        async function uploadImageWithSource(input, elementId, sourceInputId) {{
-            if (input.files && input.files[0]) {{
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                
-                try {{
-                    const response = await fetch("/admin/upload-image", {{
-                        method: "POST",
-                        body: formData
-                    }});
-                    const data = await response.json();
-                    if (data.url) {{
-                        const source = document.getElementById(sourceInputId).value;
-                        injectHtmlTag(elementId, data.url, source);
-                        document.getElementById(sourceInputId).value = "";
-                        alert("사진과 출처가 성공적으로 본문에 삽입되었습니다!");
-                    }} else {{
-                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
-                    }}
-                }} catch (err) {{
-                    alert("사진 업로드 중 오류 발생: " + err);
-                }}
-                input.value = "";
-            }}
-        }}
-        </script>
-    </body>
-    </html>
-    """
-
-@app.post("/admin/update/{article_id}")
-def update_article(
-    article_id: int, 
-    category: str = Form(...), 
-    title: str = Form(...), 
-    content: str = Form(...), 
-    use_subtitle: str = Form(None),
-    image_url: str = Form(None), 
-    image_author: str = Form(None), 
-    admin_auth: str = Cookie(None)
-):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
-    has_sub = (use_subtitle == "yes")
-    update_article_in_db(article_id, category, clean_title, content, image_url, image_author, use_subtitle=has_sub)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.get("/admin/delete/{article_id}")
-def delete_article(article_id: int, admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    delete_article_from_db(article_id)
-    return RedirectResponse(url="/admin/studio", status_code=303)
+@app.route("/crawl-all")
+def crawl_all():
+    """모든 카테고리의 최신 실시간 이슈를 1개씩 즉시 수집해 기사화"""
+    for cat in CATEGORIES.keys():
+        fetch_and_publish_category(cat, limit=1)
+    return redirect(url_for("index"))
+
+
+if __name__ == "__main__":
+    # 최초 실행 시 샘플 기사 1건씩 자동 수집
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM articles")
+    if cur.fetchone()[0] == 0:
+        for c in ["정치/시사", "경제/주식", "세상이야기", "AI/테크"]:
+            fetch_and_publish_category(c, limit=1)
+    conn.close()
+
+    print("[웹진 서버 실행 완료] http://127.0.0.1:5000 접속")
+    app.run(host="0.0.0.0", port=5000, debug=False)
