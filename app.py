@@ -1,13 +1,12 @@
 import os
 import re
+import sys
 import time
 import sqlite3
 import datetime
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
-import requests
-from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw
 
 from flask import Flask, render_template_string, request, redirect, url_for
 
@@ -61,46 +60,41 @@ init_db()
 
 
 # ==========================================
-# 3. 엑박 원천 방지: 이미지 로컬 다운로드 및 대체 생성
+# 3. 엑박 원천 방지: SVG 벡터 그래픽 썸네일 생성 (Pillow 불필요)
 # ==========================================
-def create_fallback_image(category: str, title: str, filename: str) -> str:
+def create_fallback_svg(category: str, title: str, filename: str) -> str:
+    """Pillow 라이브러리 없이 파이썬 내장 파일 처리로 고화질 SVG 카드 생성"""
     filepath = os.path.join(IMAGE_DIR, filename)
-    img = Image.new("RGB", (800, 450), color=(26, 29, 36))
-    draw = ImageDraw.Draw(img)
+    display_title = title if len(title) <= 24 else title[:22] + "..."
+    
+    svg_content = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%">
+        <rect width="800" height="450" fill="#181a20"/>
+        <rect width="800" height="12" fill="#00ffcc"/>
+        <rect x="40" y="50" width="120" height="32" rx="6" fill="#00ffcc" fill-opacity="0.15"/>
+        <text x="52" y="72" fill="#00ffcc" font-size="16" font-family="sans-serif" font-weight="bold">[{category}]</text>
+        <text x="40" y="200" fill="#ffffff" font-size="28" font-family="sans-serif" font-weight="bold">{display_title}</text>
+        <text x="40" y="240" fill="#a0a5b5" font-size="18" font-family="sans-serif">시사투데이 실시간 이슈 심층 분석 리포트</text>
+        <line x1="40" y1="360" x2="760" y2="360" stroke="#2c303b" stroke-width="2"/>
+        <text x="40" y="395" fill="#656c7d" font-size="15" font-family="sans-serif" font-weight="bold">SISATODAY NEWS ARCHIVE</text>
+    </svg>"""
 
-    draw.rectangle([(0, 0), (800, 10)], fill=(0, 204, 153))
-    draw.text((40, 60), f"[{category}] 시사투데이 특별 취재", fill=(0, 204, 153))
-
-    display_title = title if len(title) <= 30 else title[:28] + "..."
-    draw.text((40, 180), display_title, fill=(240, 240, 240))
-    draw.text((40, 360), "SISATODAY NEWS ISSUE ANALYSIS", fill=(120, 130, 145))
-
-    img.save(filepath, "JPEG")
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(svg_content)
     return f"/static/uploads/{filename}"
 
-def save_safe_image(original_url: str, category: str, title: str) -> str:
-    safe_name = f"thumb_{int(time.time() * 1000)}.jpg"
-    local_path = os.path.join(IMAGE_DIR, safe_name)
-
-    if original_url and original_url.startswith("http"):
-        try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            res = requests.get(original_url, headers=headers, timeout=4)
-            if res.status_code == 200 and len(res.content) > 1024:
-                with open(local_path, "wb") as f:
-                    f.write(res.content)
-                return f"/static/uploads/{safe_name}"
-        except Exception:
-            pass
-
-    return create_fallback_image(category, title, safe_name)
-
 
 # ==========================================
-# 4. 내장 XML 파서를 이용한 무결성 속보 수집 엔진
+# 4. 내장 정규식 기반 텍스트 추출 & RSS 수집 (bs4/feedparser 불필요)
 # ==========================================
+def strip_html_tags(text: str) -> str:
+    """BeautifulSoup 없이 내장 정규식으로 HTML 태그 제거"""
+    if not text:
+        return ""
+    clean = re.sub(r'<[^>]+>', '', text)
+    return re.sub(r'\s+', ' ', clean).strip()
+
 def get_rss_items(rss_url):
-    """feedparser 라이브러리 없이도 파이썬 내장 모듈로 100% 동작"""
+    """파이썬 내장 라이브러리만으로 RSS 피드 수집"""
     items = []
     try:
         req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -126,7 +120,7 @@ def generate_click_worthy_title(original_title: str) -> str:
         return f"\"{clean}\"... 지금 실시간 주목받는 진짜 이유는?"
 
 def compose_depth_article(category: str, raw_title: str, summary: str) -> dict:
-    clean_title = re.sub(r'<[^>]+>', '', raw_title).strip()
+    clean_title = strip_html_tags(raw_title)
     click_title = generate_click_worthy_title(clean_title)
     lead = f"최근 {category} 분야에서 '{clean_title}' 소식이 전해지며 대중과 관련 업계의 이목이 집중되고 있습니다."
 
@@ -165,10 +159,11 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
         if cur.fetchone():
             continue
 
-        raw_summary = BeautifulSoup(entry['description'], "html.parser").get_text()
+        raw_summary = strip_html_tags(entry['description'])
         article_data = compose_depth_article(category_name, entry['title'], raw_summary)
 
-        saved_image_url = save_safe_image("", category_name, article_data["title"])
+        filename = f"thumb_{int(time.time() * 1000)}_{count}.svg"
+        saved_image_url = create_fallback_svg(category_name, article_data["title"], filename)
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         cur.execute("""
@@ -190,7 +185,7 @@ def fetch_and_publish_category(category_name: str, limit: int = 1):
 
 
 # ==========================================
-# 5. 프론트엔드 라우트 & 템플릿
+# 5. 프론트엔드 라우트 & 반응형 템플릿
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -201,7 +196,7 @@ HTML_TEMPLATE = """
     <title>시사투데이 창 - 정론 심층 분석 뉴스</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #f4f6f9; color: #222; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif; background-color: #f4f6f9; color: #222; }
         .header { background: #fff; border-bottom: 2px solid #002d5b; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; }
         .logo { font-size: 26px; font-weight: 900; color: #002d5b; text-decoration: none; }
         .logo span { background: #002d5b; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 5px; }
@@ -212,10 +207,9 @@ HTML_TEMPLATE = """
         .nav-item.active { background: #002d5b; color: #fff; }
 
         .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
-        
-        .main-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px; margin-bottom: 40px; }
+        .main-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; margin-bottom: 40px; }
         .card { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; flex-direction: column; }
-        .card-img-wrap { width: 100%; height: 210px; background: #1a1d24; overflow: hidden; position: relative; }
+        .card-img-wrap { width: 100%; height: 200px; background: #181a20; overflow: hidden; }
         .card-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
         .card-body { padding: 18px; flex: 1; display: flex; flex-direction: column; }
         .cat-tag { align-self: flex-start; background: #e0f2fe; color: #0284c7; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-bottom: 10px; }
@@ -266,7 +260,7 @@ HTML_TEMPLATE = """
                 {% for item in articles %}
                 <div class="card">
                     <div class="card-img-wrap">
-                        <img src="{{ item[5] }}" onerror="this.onerror=null; this.src='/static/uploads/default.jpg';" alt="썸네일">
+                        <img src="{{ item[5] }}" alt="썸네일">
                     </div>
                     <div class="card-body">
                         <span class="cat-tag">{{ item[1] }}</span>
@@ -329,16 +323,16 @@ def crawl_all():
 
 
 # ==========================================
-# 6. Render Uvicorn 전용 ASGI 브리지 (외부 의존성 없음)
+# 6. Render(Uvicorn) 직접 구동을 위한 내장 ASGI 브리지
 # ==========================================
 async def app(scope, receive, send):
-    """uvicorn app:app 명령어로 실행 시 WSGI를 ASGI로 변환해주는 순수 내장 브리지"""
+    """uvicorn app:app 명령어로 호출될 때 동작하는 내장 ASGI 어댑터"""
     if scope['type'] == 'lifespan':
         while True:
-            message = await receive()
-            if message['type'] == 'lifespan.startup':
+            msg = await receive()
+            if msg['type'] == 'lifespan.startup':
                 await send({'type': 'lifespan.startup.complete'})
-            elif message['type'] == 'lifespan.shutdown':
+            elif msg['type'] == 'lifespan.shutdown':
                 await send({'type': 'lifespan.shutdown.complete'})
                 return
 
@@ -348,16 +342,16 @@ async def app(scope, receive, send):
     import io
     body = b""
     while True:
-        message = await receive()
-        body += message.get('body', b'')
-        if not message.get('more_body', False):
+        msg = await receive()
+        body += msg.get('body', b'')
+        if not msg.get('more_body', False):
             break
 
     environ = {
         'wsgi.version': (1, 0),
         'wsgi.url_scheme': scope.get('scheme', 'http'),
         'wsgi.input': io.BytesIO(body),
-        'wsgi.errors': sys.stderr if 'sys' in globals() else io.StringIO(),
+        'wsgi.errors': sys.stderr,
         'wsgi.multithread': False,
         'wsgi.multiprocess': False,
         'wsgi.run_once': False,
@@ -369,35 +363,29 @@ async def app(scope, receive, send):
         'SERVER_PORT': '80',
     }
 
-    for name, value in scope.get('headers', []):
-        name = name.decode('latin-1')
-        if name == 'content-type':
-            environ['CONTENT_TYPE'] = value.decode('latin-1')
-        elif name == 'content-length':
-            environ['CONTENT_LENGTH'] = value.decode('latin-1')
+    for name, val in scope.get('headers', []):
+        k = name.decode('latin-1').lower()
+        v = val.decode('latin-1')
+        if k == 'content-type':
+            environ['CONTENT_TYPE'] = v
+        elif k == 'content-length':
+            environ['CONTENT_LENGTH'] = v
         else:
-            environ['HTTP_' + name.upper().replace('-', '_')] = value.decode('latin-1')
+            environ['HTTP_' + k.upper().replace('-', '_')] = v
 
     status_code = 200
-    response_headers = []
+    headers = []
 
-    def start_response(status, headers, exc_info=None):
-        nonlocal status_code, response_headers
+    def start_response(status, resp_headers, exc_info=None):
+        nonlocal status_code, headers
         status_code = int(status.split(' ')[0])
-        response_headers = [(k.lower().encode('latin-1'), v.encode('latin-1')) for k, v in headers]
+        headers = [(h[0].lower().encode('latin-1'), h[1].encode('latin-1')) for h in resp_headers]
 
-    result = flask_app(environ, start_response)
-    response_body = b''.join(result)
+    resp = flask_app(environ, start_response)
+    resp_body = b''.join(resp)
 
-    await send({
-        'type': 'http.response.start',
-        'status': status_code,
-        'headers': response_headers
-    })
-    await send({
-        'type': 'http.response.body',
-        'body': response_body
-    })
+    await send({'type': 'http.response.start', 'status': status_code, 'headers': headers})
+    await send({'type': 'http.response.body', 'body': resp_body})
 
 
 if __name__ == "__main__":
