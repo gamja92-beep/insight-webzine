@@ -1158,6 +1158,202 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     </html>
     """
 
+# ==========================================================
+# 기사 수정 기능 라우터 추가
+# ==========================================================
+@app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
+def edit_page(article_id: int, admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
+
+    art = get_article_by_id(article_id)
+    if not art:
+        return RedirectResponse(url="/admin/studio", status_code=303)
+
+    current_img = art.get('image_url', '') or ''
+    current_author = art.get('image_author', '') or ''
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>기사 수정하기</title>
+        <style>
+            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
+            h1 {{ color: #2c3e50; font-size: 1.5em; }}
+            .box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+            button {{ background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
+            button:hover {{ background: #d68910; }}
+            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
+            textarea {{ height: 250px; resize: vertical; }}
+            label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
+            .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
+            .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
+            
+            .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
+            .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
+            .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
+            .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
+            .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
+            
+            .header-img-box {{ background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
+        </style>
+    </head>
+    <body>
+        <a href="/admin/studio" class="back-link">← 관리자 스튜디오로 돌아가기</a>
+        <div class="box">
+            <h1>✏️ 기사 및 대표 이미지 수정하기</h1>
+            <form action="/admin/update/{art['id']}" method="post">
+                <label>카테고리</label>
+                <select name="category">
+                    <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
+                    <option value="경제/주식" {"selected" if art['category']=="경제/주식" else ""}>경제/주식</option>
+                    <option value="세상이야기" {"selected" if art['category']=="세상이야기" else ""}>세상이야기</option>
+                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
+                    <option value="건강/복지" {"selected" if art['category']=="건강/복지" else ""}>건강/복지</option>
+                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
+                    <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
+                    <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
+                    <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
+                </select>
+                
+                <label>기사 제목</label>
+                <input type="text" name="title" value="{art['title']}" required>
+                
+                <div class="header-img-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-weight: bold; color: #2c3e50; font-size: 14px;">🖼️ 기사 상단 대표 이미지 및 출처 설정</span>
+                        <button type="button" onclick="clearMainImage()" style="width: auto; background: #e74c3c; padding: 5px 12px; font-size: 12px; border-radius: 4px;">🗑️ 대표 이미지 완전 삭제</button>
+                    </div>
+
+                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 주소(URL)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="main_img_url" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소를 입력하세요" style="flex: 1; margin-bottom: 8px;">
+                        <button type="button" onclick="document.getElementById('main_img_file').click()" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;">📁 내 파일 올리기</button>
+                        <input type="file" id="main_img_file" style="display: none;" accept="image/*" onchange="uploadMainImageFile(this)">
+                    </div>
+
+                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 출처 표기</label>
+                    <input type="text" id="main_img_author" name="image_author" value="{current_author}" placeholder="출처를 입력하세요 (예: pexels, 연합뉴스 등)" style="margin-bottom: 8px;">
+                    
+                    <small style="color: #7f8c8d; display: block; margin-top: 4px;">현재 등록된 대표 이미지 미리보기:</small>
+                    <img id="main_img_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
+                </div>
+
+                <label>기사 내용 및 본문 추가 이미지</label>
+                <div class="img-tool-box">
+                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
+                    <div class="img-tool-row">
+                        <input type="text" id="edit_source" placeholder="출처 표기 (예: pexels, 연합뉴스 등)" style="flex: 1;">
+                    </div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
+                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일 올리기</button>
+                        <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
+                    </div>
+                </div>
+
+                <textarea name="content" id="editContent" required>{art['content']}</textarea>
+                
+                <button type="submit">💾 수정 사항 저장하기</button>
+            </form>
+        </div>
+
+        <script>
+        function clearMainImage() {{
+            document.getElementById('main_img_url').value = '';
+            document.getElementById('main_img_author').value = '';
+            const preview = document.getElementById('main_img_preview');
+            preview.src = '';
+            preview.style.display = 'none';
+            alert("대표 이미지와 출처가 삭제되었습니다. 하단의 [수정 사항 저장하기]를 누르면 완전히 반영됩니다.");
+        }}
+
+        async function uploadMainImageFile(input) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                try {{
+                    const response = await fetch("/admin/upload-image", {{
+                        method: "POST",
+                        body: formData
+                    }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        document.getElementById('main_img_url').value = data.url;
+                        const preview = document.getElementById('main_img_preview');
+                        preview.src = data.url;
+                        preview.style.display = 'block';
+                        alert("대표 이미지가 업로드되었습니다. 아래 출처 입력란에 출처를 적어주세요.");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
+                    }}
+                }} catch (err) {{
+                    alert("사진 업로드 중 오류 발생: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+
+        function injectHtmlTag(elementId, imgUrl, sourceText) {{
+            let captionHtml = "";
+            let cleanSource = sourceText ? sourceText.trim() : "";
+            if (cleanSource !== "") {{
+                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
+                    cleanSource = "Photo by " + cleanSource;
+                }}
+                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+            }}
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            
+            const textarea = document.getElementById(elementId);
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+            textarea.focus();
+        }}
+
+        function insertImageWithSource(elementId, sourceInputId) {{
+            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+            if (url) {{
+                const source = document.getElementById(sourceInputId).value;
+                injectHtmlTag(elementId, url, source);
+                document.getElementById(sourceInputId).value = "";
+            }}
+        }}
+
+        async function uploadImageWithSource(input, elementId, sourceInputId) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                
+                try {{
+                    const response = await fetch("/admin/upload-image", {{
+                        method: "POST",
+                        body: formData
+                    }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        const source = document.getElementById(sourceInputId).value;
+                        injectHtmlTag(elementId, data.url, source);
+                        document.getElementById(sourceInputId).value = "";
+                        alert("사진과 출처가 성공적으로 본문에 삽입되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
+                    }}
+                }} catch (err) {{
+                    alert("사진 업로드 중 오류 발생: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+        </script>
+    </body>
+    </html>
+    """
+
 @app.post("/admin/update/{article_id}")
 def update_article(
     article_id: int, 
