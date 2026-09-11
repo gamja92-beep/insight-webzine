@@ -1,12 +1,12 @@
 import os
 import re
+import sys
 import time
 import sqlite3
 import datetime
-import requests
-import feedparser
-from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw
+import urllib.request
+import urllib.parse
+import xml.etree.ElementTree as ET
 
 from flask import Flask, render_template_string, request, redirect, url_for
 
@@ -14,13 +14,9 @@ flask_app = Flask(__name__)
 flask_app.secret_key = "sisatoday_secret_key"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-IMAGE_DIR = os.path.join(STATIC_DIR, "uploads")
 DB_PATH = os.path.join(BASE_DIR, "webzine.db")
 
-os.makedirs(IMAGE_DIR, exist_ok=True)
-
-# 9대 정규 카테고리 RSS 피드
+# 9대 정규 카테고리
 CATEGORIES = {
     "정치/시사": "https://news.google.com/rss/search?q=정치+시사&hl=ko&gl=KR&ceid=KR:ko",
     "경제/주식": "https://news.google.com/rss/search?q=경제+증시+주식&hl=ko&gl=KR&ceid=KR:ko",
@@ -33,7 +29,19 @@ CATEGORIES = {
     "지역창": "https://news.google.com/rss/search?q=강원+지역+소식&hl=ko&gl=KR&ceid=KR:ko"
 }
 
-# 서버 재부팅 시 자동 유지되는 40여 편 마스터 아카이브
+CATEGORY_COLORS = {
+    "정치/시사": ("#0f2027", "#203a43"),
+    "경제/주식": ("#134e5e", "#71b280"),
+    "세상이야기": ("#2c3e50", "#4ca1af"),
+    "AI/테크": ("#141e30", "#243b55"),
+    "건강/복지": ("#1d976c", "#93f9b9"),
+    "생활정보": ("#3a6073", "#3a7bd5"),
+    "연예뉴스": ("#4b134f", "#c94b4b"),
+    "스포츠": ("#16222f", "#3a6073"),
+    "지역창": ("#1e3c72", "#2a5298")
+}
+
+# 40여 편 완성형 마스터 아카이브
 MASTER_ARTICLES = [
     # 1. 정치/시사
     ("정치/시사", "신산업 규제 혁신과 사회적 안전망 구축의 상생 해법", "글로벌 기술 경쟁 시대, 신성장 동력 확보와 국민 안전을 위한 입법적 과제를 진단합니다.",
@@ -108,9 +116,6 @@ MASTER_ARTICLES = [
      "<h3>1. 미래를 위한 숲</h3><p>지역 특화 수종 식재와 산림 감시 체계 구축을 통해 안전하고 아름다운 자연유산을 지켜나갑니다.</p>")
 ]
 
-# ==========================================
-# 1. 데이터베이스 초기화 및 자동 복원
-# ==========================================
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -133,7 +138,18 @@ def init_db():
     """)
     conn.commit()
 
-    # 기사가 비어있을 때 마스터 40여 편 자동 복구
+    # 컬럼 누락 방어
+    cur.execute("PRAGMA table_info(articles)")
+    cols = [r['name'] for r in cur.fetchall()]
+    for col in ['lead_text', 'image_url', 'source_link']:
+        if col not in cols:
+            try:
+                cur.execute(f"ALTER TABLE articles ADD COLUMN {col} TEXT DEFAULT ''")
+            except Exception:
+                pass
+    conn.commit()
+
+    # 기사가 부족할 경우 마스터 40여 편 자동 복원
     cur.execute("SELECT COUNT(*) as cnt FROM articles")
     cnt = cur.fetchone()['cnt']
     if cnt < 10:
@@ -151,37 +167,7 @@ init_db()
 
 
 # ==========================================
-# 2. 이미지 & RSS 수집 보조 엔진
-# ==========================================
-def create_fallback_image(category, title, filename):
-    filepath = os.path.join(IMAGE_DIR, filename)
-    img = Image.new("RGB", (800, 450), color=(26, 32, 44))
-    draw = ImageDraw.Draw(img)
-    draw.rectangle([(0, 0), (800, 10)], fill=(0, 168, 132))
-    draw.text((40, 50), f"[{category}] 시사투데이 특별 리포트", fill=(0, 204, 153))
-    t = title if len(title) <= 26 else title[:24] + "..."
-    draw.text((40, 180), t, fill=(240, 240, 240))
-    draw.text((40, 370), "SISATODAY ISSUE ARCHIVE", fill=(130, 140, 155))
-    img.save(filepath, "JPEG")
-    return f"/static/uploads/{filename}"
-
-def save_image(url, category, title):
-    name = f"thumb_{int(time.time()*1000)}.jpg"
-    path = os.path.join(IMAGE_DIR, name)
-    if url and url.startswith("http"):
-        try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3)
-            if r.status_code == 200 and len(r.content) > 1024:
-                with open(path, "wb") as f:
-                    f.write(r.content)
-                return f"/static/uploads/{name}"
-        except Exception:
-            pass
-    return create_fallback_image(category, title, name)
-
-
-# ==========================================
-# 3. 사용자 화면 (본래의 모던 카드 템플릿)
+# 사용자 화면 (오늘 아침의 모던 카드 그리드 UI)
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -211,11 +197,9 @@ HTML_TEMPLATE = """
         .card { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.06); display: flex; flex-direction: column; height: 100%; border: 1px solid #e9edf2; transition: transform 0.2s; }
         .card:hover { transform: translateY(-4px); }
         
-        .card-img-wrap { width: 100%; height: 200px; background-color: #1e293b; overflow: hidden; position: relative; }
-        .card-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
-        .card-fallback { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, #1e3c72, #2a5298); color: #fff; }
-        .card-fallback .badge { align-self: flex-start; background: rgba(0,0,0,0.35); padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        .card-fallback .hl-text { font-size: 17px; font-weight: 800; line-height: 1.4; }
+        .card-visual { width: 100%; height: 180px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; color: #fff; }
+        .card-visual .badge { align-self: flex-start; background: rgba(0,0,0,0.35); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .card-visual .hl-text { font-size: 17px; font-weight: 800; line-height: 1.4; }
 
         .card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
         .cat-tag { align-self: flex-start; background: #e0f2fe; color: #0284c7; font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-bottom: 10px; }
@@ -267,16 +251,10 @@ HTML_TEMPLATE = """
                 {% for item in articles %}
                 <a href="/article/{{ item['id'] }}" class="card-link">
                     <div class="card">
-                        <div class="card-img-wrap">
-                            {% if item['image_url'] %}
-                                <img src="{{ item['image_url'] }}" alt="기사 이미지">
-                            {% else %}
-                                <div class="card-fallback">
-                                    <span class="badge">{{ item['category'] }}</span>
-                                    <div class="hl-text">{{ item['title'][:26] }}{% if item['title']|length > 26 %}...{% endif %}</div>
-                                    <span style="font-size:11px; opacity:0.8;">SISATODAY ARCHIVE</span>
-                                </div>
-                            {% endif %}
+                        <div class="card-visual" style="background: linear-gradient(135deg, {{ colors.get(item['category'], ('#1e3c72', '#2a5298'))[0] }}, {{ colors.get(item['category'], ('#1e3c72', '#2a5298'))[1] }});">
+                            <span class="badge">{{ item['category'] }}</span>
+                            <div class="hl-text">{{ item['title'][:26] }}{% if item['title']|length > 26 %}...{% endif %}</div>
+                            <span style="font-size:11px; opacity:0.8;">SISATODAY REPORT</span>
                         </div>
                         <div class="card-body">
                             <span class="cat-tag">{{ item['category'] }}</span>
@@ -284,7 +262,7 @@ HTML_TEMPLATE = """
                             {% if item['lead_text'] %}
                                 <div class="card-lead">{{ item['lead_text'] }}</div>
                             {% endif %}
-                            <span class="card-date">발행: {{ item['created_at'] }}</span>
+                            <span class="card-date">발행: {{ item['created_at'][:10] }}</span>
                         </div>
                     </div>
                 </a>
@@ -297,7 +275,7 @@ HTML_TEMPLATE = """
 """
 
 # ==========================================
-# 4. 관리자 시스템 (/admin)
+# 관리자 시스템 (/admin)
 # ==========================================
 ADMIN_TEMPLATE = """
 <!DOCTYPE html>
@@ -373,7 +351,7 @@ ADMIN_TEMPLATE = """
 """
 
 # ==========================================
-# 5. 라우트 정의
+# 라우트 핸들러
 # ==========================================
 @flask_app.route("/")
 def index():
@@ -401,6 +379,7 @@ def index():
         categories=all_categories,
         current_cat=cat,
         total_count=total_count,
+        colors=CATEGORY_COLORS,
         is_detail=False
     )
 
@@ -429,6 +408,7 @@ def article_detail(article_id):
         categories=all_categories,
         current_cat=article['category'],
         total_count=total_count,
+        colors=CATEGORY_COLORS,
         is_detail=True
     )
 
@@ -470,7 +450,7 @@ def admin_delete(article_id):
 
 
 # ==========================================
-# 6. Render 구동용 ASGI 브리지
+# Render 구동용 ASGI 어댑터
 # ==========================================
 async def app(scope, receive, send):
     if scope['type'] == 'lifespan':
