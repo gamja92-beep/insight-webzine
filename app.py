@@ -420,6 +420,13 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
+@app.post("/admin/create-auto")
+def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return RedirectResponse(url="/admin", status_code=303)
+    generate_ai_article(category)
+    return RedirectResponse(url="/admin/studio", status_code=303)
+
 @app.post("/admin/upload-image")
 async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
@@ -863,7 +870,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             .manual-btn:hover {{ background: #1f618d; }}
             .ai-expand-btn {{ background: #8e44ad; }}
             .ai-expand-btn:hover {{ background: #732d91; }}
-            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
+            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
             textarea {{ height: 150px; resize: vertical; }}
             label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
             .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
@@ -914,7 +921,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (구글 1면 최신 속보 전용)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 포털 1면 속보 직결)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
