@@ -21,7 +21,7 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-3.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
 
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 ADMIN_PASSWORD = "1234"
@@ -49,21 +49,23 @@ wcs_do();
 </script>
 """
 
-# 실시간 최신 구글 속보 RSS (최신 이슈 기반 취재용)
+# ==========================================================
+# 카테고리별 실시간 구글 속보 RSS (키워드 최적화)
+# ==========================================================
 NEWS_FEEDS = {
-    "정치/시사": "https://news.google.com/rss/search?q=정치+시사+속보&hl=ko&gl=KR&ceid=KR:ko",
-    "경제/주식": "https://news.google.com/rss/search?q=경제+증시+주식+금리&hl=ko&gl=KR&ceid=KR:ko",
-    "세상이야기": "https://news.google.com/rss/search?q=사회+이슈+사건&hl=ko&gl=KR&ceid=KR:ko",
-    "AI/테크": "https://news.google.com/rss/search?q=인공지능+IT+테크+AI&hl=ko&gl=KR&ceid=KR:ko",
-    "건강/복지": "https://news.google.com/rss/search?q=건강+의료+복지+시니어&hl=ko&gl=KR&ceid=KR:ko",
-    "생활정보": "https://news.google.com/rss/search?q=부동산+물가+생활정보+지원금&hl=ko&gl=KR&ceid=KR:ko",
-    "연예계뉴스": "https://news.google.com/rss/search?q=연예+방송+드라마+영화&hl=ko&gl=KR&ceid=KR:ko",
-    "스포츠": "https://news.google.com/rss/search?q=스포츠+경기+선수&hl=ko&gl=KR&ceid=KR:ko",
-    "지역창": "https://news.google.com/rss/search?q=강원+속초+영동+지역소식&hl=ko&gl=KR&ceid=KR:ko"
+    "정치/시사": "https://news.google.com/rss/search?q=정치+시사+국회+이슈&hl=ko&gl=KR&ceid=KR:ko",
+    "경제/주식": "https://news.google.com/rss/search?q=증시+주식+테마주+코스피+환율+금리&hl=ko&gl=KR&ceid=KR:ko",
+    "세상이야기": "https://news.google.com/rss/search?q=사회+훈훈한+미담+사람들+이야기&hl=ko&gl=KR&ceid=KR:ko",
+    "AI/테크": "https://news.google.com/rss/search?q=생성형AI+챗GPT+제미니+클로드+딥시크+코파일럿&hl=ko&gl=KR&ceid=KR:ko",
+    "건강/복지": "https://news.google.com/rss/search?q=시니어+건강+의료+기초연금+복지혜택&hl=ko&gl=KR&ceid=KR:ko",
+    "생활정보": "https://news.google.com/rss/search?q=생활정보+부동산+물가+절세+지원금&hl=ko&gl=KR&ceid=KR:ko",
+    "연예계뉴스": "https://news.google.com/rss/search?q=방송+연예+드라마+영화+화제인물&hl=ko&gl=KR&ceid=KR:ko",
+    "스포츠": "https://news.google.com/rss/search?q=스포츠+경기결과+하이라이트+선수&hl=ko&gl=KR&ceid=KR:ko",
+    "지역창": "https://news.google.com/rss/search?q=속초+강원+축제+맛집+관광+문화재&hl=ko&gl=KR&ceid=KR:ko"
 }
 
 def get_latest_realtime_news(category_name):
-    """실시간 최신 속보를 검색해 현재 이슈를 가져오는 안전 엔진"""
+    """카테고리별 실시간 뉴스 헤드라인과 요약을 수집"""
     feed_url = NEWS_FEEDS.get(category_name, NEWS_FEEDS["세상이야기"])
     try:
         req = urllib.request.Request(feed_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -72,13 +74,13 @@ def get_latest_realtime_news(category_name):
         root = ET.fromstring(xml_data)
         items = root.findall('./channel/item')
         if items:
-            chosen = random.choice(items[:5]) # 최신 5대 속보 중 무작위 1개 선정
+            chosen = random.choice(items[:5])
             title = chosen.findtext('title') or ''
             desc = chosen.findtext('description') or ''
             clean_desc = re.sub(r'<[^>]+>', '', desc).strip()
             return title.strip(), clean_desc
     except Exception as e:
-        print(f"[실시간 속보 수집 알림]: {e}")
+        print(f"[실시간 뉴스 수집 알림]: {e}")
     return "", ""
 
 def init_db():
@@ -177,7 +179,7 @@ def fetch_bulletproof_image(category_name):
             "생활정보": "lifestyle interior cozy modern wide",
             "연예계뉴스": "empty concert stage lights background wide",
             "스포츠": "empty stadium sports arena field wide",
-            "지역창": "local community scenery landscape wide"
+            "지역창": "korean travel coastal ocean mountain landscape wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
         params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 50)}
@@ -201,8 +203,8 @@ def fetch_bulletproof_image(category_name):
 def generate_smart_tags(text, title=""):
     try:
         prompt = (
-            f"다음 기사 제목과 본문을 분석하여, 이 기사의 핵심 키워드를 나타내는 해시태그를 정확히 6개 생성해 주세요. "
-            f"반드시 '#키워드' 형식으로 띄어쓰기로 구분하여 한 줄로 출력해 주세요. 다른 설명은 절대 쓰지 마세요.\n\n"
+            f"다음 기사 제목과 본문을 분석하여, 검색 유입이 잘 될 수 있는 핵심 키워드 해시태그를 정확히 6개 생성해 주세요. "
+            f"반드시 '#키워드' 형식으로 띄어쓰기로 구분하여 한 줄로 출력해 주세요. 다른 설명은 일체 쓰지 마세요.\n\n"
             f"제목: {title}\n본문: {text[:800]}"
         )
         response = client.models.generate_content(
@@ -216,7 +218,7 @@ def generate_smart_tags(text, title=""):
     except Exception:
         pass
     
-    return "#시사투데이 #지역뉴스 #이슈분석 #트렌드 #인사이트 #사회동향"
+    return "#시사투데이 #이슈분석 #트렌드리포트 #실시간뉴스 #핵심인사이트 #종합분석"
 
 def clean_and_format_content(text, category_name="종합", title=""):
     text = text.replace('**', '').replace('__', '')
@@ -230,12 +232,10 @@ def clean_and_format_content(text, category_name="종합", title=""):
         if not p_str:
             continue
         
-        # 1. 제목 중복 방지
         p_text_pure = re.sub(r'^[#|\s]+', '', p_str).replace('제목:', '').strip()
         if clean_title_str and p_text_pure == clean_title_str:
             continue
 
-        # 2. 이미지 컨테이너 및 HTML 태그 보존
         if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure'):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
@@ -351,27 +351,66 @@ def delete_article_from_db(article_id):
         conn.close()
 
 # ==========================================================
-# 실시간 최신 이슈 기반 AI 기사 생성 엔진
+# 🎯 카테고리별 맞춤형 실시간 정밀 취재 로직 (핵심 반영)
 # ==========================================================
 def generate_ai_article(category_name):
-    # 1. 실시간 실제 뉴스 속보 토픽 확보
+    # 1. 실시간 구글 뉴스 피드로부터 현재 핫이슈 확보
     news_title, news_desc = get_latest_realtime_news(category_name)
     
-    current_topic_context = ""
+    ref_issue = ""
     if news_title:
-        current_topic_context = f"현재 {category_name} 관련 실시간 주요 속보 현안은 다음과 같습니다: [속보 제목: {news_title} / 주요 내용: {news_desc}]. 이 실시간 이슈를 심층적으로 반영하여 독자들의 궁금증을 해소하고 검색 유입을 극대화할 수 있는 심층 칼럼으로 작성하세요."
+        ref_issue = f"\n[현재 실시간 포털 주요 속보]: {news_title}\n[세부 내용 요약]: {news_desc}\n위 실시간 현안을 기사의 도입부 및 핵심 배경으로 반드시 심층 반영하세요."
 
-    strict_editorial = (
-        "당신은 정론직필을 추구하는 유력 언론사 수석 논설위원입니다. "
-        "포털 사이트 검색 최적화(SEO)와 독자의 높은 주목도를 이끌어낼 수 있는 정밀하고 매력적인 기사를 작성해야 합니다.\n"
-        "1. 첫 번째 줄에는 따옴표나 특수문자 없이 클릭을 부르는 강렬하고 매력적인 [기사 제목]을 한 줄로만 작성하세요.\n"
-        "2. 두 번째 줄은 반드시 빈 줄로 두고, 세 번째 줄부터 본문을 시작하세요.\n"
-        "3. 본문은 최소 4개 문단 이상의 탄탄한 분량으로 작성하고, 각 주요 단락 앞에는 반드시 '### 소제목' 형태로 소제목을 붙이세요.\n"
-        "4. 본문 시작 시 제목을 반복하지 마세요. 표준적인 한국어 격식체(~다)로 명확하게 서술하세요."
+    # 2. 카테고리별 전문 편집 지침
+    CATEGORY_DIRECTIVES = {
+        "AI/테크": (
+            "제미니(Gemini), 클로드(Claude), 챗GPT(ChatGPT), 코파일럿(Copilot), 마누스(Manus), 딥시크(DeepSeek) 등 핵심 생성형 AI 모델의 "
+            "성능 비교, 실무 활용법, 최신 모델 업데이트, AI 기업 동향 등 독자들이 가장 궁금해하는 실용적이고 흥미진진한 테크 전문 뉴스로 작성하세요."
+        ),
+        "경제/주식": (
+            "오늘의 주식시장 동향, 시장을 이끄는 테마주 및 주도 종목 분석, 금리·환율·원자재 등 민감한 거시경제 지표와 "
+            "일반 투자자 및 독자가 알아야 할 실전 경제 상식을 알기 쉽게 풀어서 전문성 있게 작성하세요."
+        ),
+        "정치/시사": (
+            "현재 실시간으로 가장 뜨거운 국회 및 정치권 핫이슈, 주요 입법 동향, 핵심 정치 인물의 발언과 행보, "
+            "여야 간의 치열한 쟁점 분석을 객관적이고 균형 잡힌 시각의 심층 시사 칼럼으로 작성하세요."
+        ),
+        "연예계뉴스": (
+            "실시간으로 가장 뜨거운 대중문화계 이슈, 화제의 방송 프로그램 및 영화/드라마 트렌드, "
+            "주목받는 연예계 인물 포커스와 팬덤 및 문화적 파급 효과를 생생하게 분석하여 작성하세요."
+        ),
+        "스포츠": (
+            "실시간 주요 경기 결과와 승부처 하이라이트 분석, 화제의 선수(인물 포커스), 팀별 전술 변화, "
+            "향후 리그 판도 전망을 역동적이고 긴장감 넘치는 스포츠 전문 기사로 작성하세요."
+        ),
+        "지역창": (
+            "강원도 및 속초를 비롯한 지역 사회의 실시간 소식, 소중한 문화재 탐방기, 계절별 지역 축제 현장, "
+            "숨은 로컬 맛집 탐방, 실속 관광 및 생활 밀착형 로컬 정보를 정감 있고 알차게 작성하세요."
+        ),
+        "세상이야기": (
+            "우리 이웃들의 따뜻한 미담과 감동적인 사연, 사회적 연대와 나눔, 건강한 사회 트렌드를 조명하는 따뜻한 휴먼 스토리 기사로 작성하세요."
+        ),
+        "건강/복지": (
+            "시니어 및 중장년 세대를 위한 실전 건강 관리법, 만성질환 예방 식습관, 최신 정부 복지 혜택과 지원금 신청 가이드를 꼼꼼히 정리해 주세요."
+        ),
+        "생활정보": (
+            "일상에서 바로 써먹는 실속 생활 상식, 부동산 세무·절세 체크리스트, 에너지 절약 꿀팁 등 실생활에 돈이 되는 알짜 정보로 작성하세요."
+        )
+    }
+
+    directive = CATEGORY_DIRECTIVES.get(category_name, "신뢰할 수 있는 최신 종합 뉴스를 작성하세요.")
+
+    editorial_rule = (
+        "당신은 포털 뉴스 검색 유입을 이끄는 베테랑 수석 논설위원입니다.\n"
+        "1. [기사 제목]: 첫 번째 줄에 특수문자나 따옴표 없이, 포털 이용자의 클릭을 유도하는 매력적이고 간결한 제목을 한 줄로만 작성하세요.\n"
+        "2. [공백 줄]: 두 번째 줄은 반드시 빈 줄로 비워 두세요.\n"
+        "3. [본문 전개]: 세 번째 줄부터 최소 4개 이상의 문단으로 구성된 충실한 본문을 작성하세요.\n"
+        "4. [소제목]: 각 핵심 단락 시작 전에는 반드시 '### 소제목' 형태로 소제목을 붙이세요.\n"
+        "5. [본문 규칙]: 본문 서두에 제목을 반복하지 마세요. 마크다운 특수기호(*, _)를 남발하지 말고 격조 높은 한국어 보도체(~다)로 작성하세요."
     )
 
-    prompt = f"{strict_editorial}\n\n[분야]: {category_name}\n{current_topic_context}\n\n{category_name}의 핵심 쟁점과 사회·경제적 파급 효과, 향후 전망을 다루는 전문적이고 심층적인 기사를 완성해 주세요."
-    
+    prompt = f"{editorial_rule}\n\n[취재 분야]: {category_name}\n[취재 지침]: {directive}\n{ref_issue}"
+
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
@@ -386,7 +425,7 @@ def generate_ai_article(category_name):
         art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
         body_content = split_lines[1].strip()
     else:
-        art_title = f"{category_name} 실시간 쟁점 심층 리포트"
+        art_title = f"{category_name} 실시간 심층 포커스"
         body_content = raw_content
 
     img_url, author_name = fetch_bulletproof_image(category_name)
@@ -896,21 +935,21 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 최신 속보 자동 반영)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 맞춤형 핫이슈 취재)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
-                    <option value="정치/시사">정치/시사</option>
-                    <option value="경제/주식">경제/주식</option>
-                    <option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option>
-                    <option value="건강/복지">건강/복지</option>
-                    <option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option>
-                    <option value="스포츠">스포츠</option>
-                    <option value="지역창">지역창</option>
+                    <option value="정치/시사">정치/시사 (실시간 핫이슈·인물·쟁점)</option>
+                    <option value="경제/주식">경제/주식 (증시동향·테마주·민감경제·상식)</option>
+                    <option value="세상이야기">세상이야기 (훈훈한 미담·휴먼스토리)</option>
+                    <option value="AI/테크">AI/테크 (제미니·클로드·챗GPT·마누스·딥시크 비교·사용법)</option>
+                    <option value="건강/복지">건강/복지 (시니어 건강·정부 복지 혜택)</option>
+                    <option value="생활정보">생활정보 (부동산·절세·실속 꿀팁)</option>
+                    <option value="연예계뉴스">연예계뉴스 (실시간 핫이슈·화제인물·트렌드)</option>
+                    <option value="스포츠">스포츠 (경기결과·승부처분석·선수포커스)</option>
+                    <option value="지역창">지역창 (실시간지역뉴스·문화재·축제·맛집·관광)</option>
                 </select>
-                <button type="submit">🚀 실시간 이슈 기사 즉시 자동 발행하기</button>
+                <button type="submit">🚀 타깃 맞춤형 실시간 기사 자동 발행</button>
             </form>
         </div>
 
@@ -1015,7 +1054,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     </div>
                 </div>
 
-                <textarea name="prompt" id="expandPrompt" placeholder="예: 속초 지역의 가을 축제와 지역 경제 활성화 방안에 대해 전문적인 기사로 상세히 작성해줘." required></textarea>
+                <textarea name="prompt" id="expandPrompt" placeholder="예: 챗GPT와 제미니의 최신 기능 비교 및 직장인 실무 활용 꿀팁을 알기 쉽게 정리해줘." required></textarea>
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
         </div>
