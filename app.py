@@ -50,22 +50,22 @@ wcs_do();
 """
 
 # ==========================================================
-# 카테고리별 실시간 구글 속보 RSS
+# 카테고리별 실시간 구글 속보 RSS (최근 24~48시간 필터 적용)
 # ==========================================================
 NEWS_FEEDS = {
-    "정치/시사": "https://news.google.com/rss/search?q=정치+시사+국회+이슈&hl=ko&gl=KR&ceid=KR:ko",
-    "경제/주식": "https://news.google.com/rss/search?q=증시+주식+테마주+코스피+환율+금리&hl=ko&gl=KR&ceid=KR:ko",
-    "세상이야기": "https://news.google.com/rss/search?q=사회+사건+사고+훈훈한+미담&hl=ko&gl=KR&ceid=KR:ko",
-    "AI/테크": "https://news.google.com/rss/search?q=생성형AI+챗GPT+제미니+클로드+딥시크+코파일럿&hl=ko&gl=KR&ceid=KR:ko",
-    "건강/복지": "https://news.google.com/rss/search?q=시니어+건강+의료+기초연금+복지혜택&hl=ko&gl=KR&ceid=KR:ko",
-    "생활정보": "https://news.google.com/rss/search?q=생활정보+부동산+물가+절세+지원금&hl=ko&gl=KR&ceid=KR:ko",
-    "연예계뉴스": "https://news.google.com/rss/search?q=방송+연예+드라마+영화+화제인물&hl=ko&gl=KR&ceid=KR:ko",
-    "스포츠": "https://news.google.com/rss/search?q=스포츠+경기결과+하이라이트+선수&hl=ko&gl=KR&ceid=KR:ko",
-    "지역창": "https://news.google.com/rss/search?q=속초+강원+축제+맛집+관광+문화재&hl=ko&gl=KR&ceid=KR:ko"
+    "정치/시사": "https://news.google.com/rss/search?q=정치+시사+국회+이슈+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+    "경제/주식": "https://news.google.com/rss/search?q=증시+주식+코스피+금리+환율+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+    "세상이야기": "https://news.google.com/rss/search?q=사회+사건+이슈+미담+사람들+when:3d&hl=ko&gl=KR&ceid=KR:ko",
+    "AI/테크": "https://news.google.com/rss/search?q=인공지능+AI+생성형AI+챗GPT+제미니+클로드+when:2d&hl=ko&gl=KR&ceid=KR:ko",
+    "건강/복지": "https://news.google.com/rss/search?q=건강+의료+복지+시니어+연금+when:3d&hl=ko&gl=KR&ceid=KR:ko",
+    "생활정보": "https://news.google.com/rss/search?q=생활정보+부동산+물가+절세+지원금+when:2d&hl=ko&gl=KR&ceid=KR:ko",
+    "연예계뉴스": "https://news.google.com/rss/search?q=연예+방송+드라마+영화+화제인물+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+    "스포츠": "https://news.google.com/rss/search?q=스포츠+프로야구+축구+경기결과+손흥민+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+    "지역창": "https://news.google.com/rss/search?q=속초+강원+축제+관광+맛집+문화재+when:3d&hl=ko&gl=KR&ceid=KR:ko"
 }
 
 def get_latest_realtime_news(category_name):
-    """카테고리별 실시간 뉴스 헤드라인과 요약 수집"""
+    """최근 24~48시간 이내의 실시간 속보 헤드라인 수집"""
     feed_url = NEWS_FEEDS.get(category_name, NEWS_FEEDS["세상이야기"])
     try:
         req = urllib.request.Request(feed_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -77,11 +77,12 @@ def get_latest_realtime_news(category_name):
             chosen = random.choice(items[:5])
             title = chosen.findtext('title') or ''
             desc = chosen.findtext('description') or ''
+            pub_date = chosen.findtext('pubDate') or ''
             clean_desc = re.sub(r'<[^>]+>', '', desc).strip()
-            return title.strip(), clean_desc
+            return title.strip(), clean_desc, pub_date.strip()
     except Exception as e:
         print(f"[실시간 뉴스 수집 알림]: {e}")
-    return "", ""
+    return "", "", ""
 
 def init_db():
     if supabase:
@@ -155,10 +156,10 @@ def fetch_bulletproof_image(category_name):
             ("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4", "Unsplash")
         ],
         "스포츠": [
+            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
             ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
             ("https://images.unsplash.com/photo-1517649763962-0c623066013b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash"),
-            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash")
+            ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash")
         ],
         "지역창": [
             ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
@@ -178,7 +179,7 @@ def fetch_bulletproof_image(category_name):
             "건강/복지": "peaceful nature park scenery wide",
             "생활정보": "lifestyle interior cozy modern wide",
             "연예계뉴스": "empty concert stage lights background wide",
-            "스포츠": "empty stadium sports arena field wide",
+            "스포츠": "empty soccer stadium arena night wide",
             "지역창": "korean travel coastal ocean mountain landscape wide"
         }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
@@ -240,11 +241,13 @@ def clean_and_format_content(text, category_name="종합", title=""):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
             title_text = p_str.replace('###', '').strip()
-            # 혹시 남아있을 수 있는 구조 라벨 자동 제거 방어
+            # [기], [승], [전], [결] 라벨 영구 차단
             title_text = re.sub(r'^\[(기|승|전|결)(:\s*[^\]]+)?\]\s*', '', title_text).strip()
+            title_text = re.sub(r'^(기|승|전|결):\s*', '', title_text).strip()
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
         elif len(p_str) < 42 and not p_str.endswith(('.', '?', '!')) and not p_str.startswith('<'):
             sub_title = re.sub(r'^\[(기|승|전|결)(:\s*[^\]]+)?\]\s*', '', p_str).strip()
+            sub_title = re.sub(r'^(기|승|전|결):\s*', '', sub_title).strip()
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{sub_title}</h3>')
         else:
             processed_lines.append(f'<p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{p_str}</p>')
@@ -354,84 +357,117 @@ def delete_article_from_db(article_id):
         conn.close()
 
 # ==========================================================
-# 🎯 육하원칙(5W1H) 기반 세련된 저널리즘 기사 생성 엔진
+# 🎯 카테고리별 맞춤형 기사 생성 로직 (세상이야기 제외 육하원칙+기승전결)
 # ==========================================================
 def generate_ai_article(category_name):
-    news_title, news_desc = get_latest_realtime_news(category_name)
+    # 1. 24~48시간 이내 실시간 실제 속보 데이터 확보
+    news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
     
     ref_fact_context = ""
     if news_title:
         ref_fact_context = f"""
-[실시간 실제 보도 헤드라인]: {news_title}
-[실시간 보도 요약 내용]: {news_desc}
-* 중요: 위 보도 내용에 나타난 구체적인 사실(실제 인물명, 소속 팀/기관, 대회/행사명, 사건 장소, 정확한 수치 등)을 핵심 뼈대로 사용하여 기사를 작성하세요. 절대 구체적 이름 없이 '어느 팀', '에이스 선수', '관계자' 같은 모호한 표현으로 때우지 마세요.
+[실시간 보도 헤드라인]: {news_title}
+[실시간 보도 요약]: {news_desc}
+[보도 시점]: {pub_date}
+* 중요 취재 메모: 위 실시간 보도 내용에 나타난 구체적인 고유명사(인물명, 소속 기관/팀, 법안명, 수치 데이터, 경기 스코어 등)를 기사의 핵심 뼈대로 사용하여 작성하세요.
 """
 
+    # 2. 카테고리별 특화 취재 가이드라인
     CATEGORY_DIRECTIVES = {
-        "스포츠": (
-            "반드시 실제 특정 종목, 팀명, 선수 이름, 대회명/리그명, 경기 일자나 스코어 등 '구체적인 고유명사'를 명확히 밝히세요. "
-            "경기 전후반의 결정적 승부처, 선수의 구체적인 활약상, 감독의 전술적 승부수를 육하원칙에 맞추어 생생하게 전달하세요. "
-            "추상적인 미사여구만 늘어놓는 것을 엄격히 금지합니다."
-        ),
-        "AI/테크": (
-            "제미니(Gemini), 클로드(Claude), 챗GPT(ChatGPT), 코파일럿(Copilot), 마누스(Manus), 딥시크(DeepSeek) 등 구체적인 AI 모델명과 "
-            "버전, 실제 벤치마크 점수나 기능적 차이점, 직장인/일반인의 실전 프롬프트 사용법 및 테크 기업의 발표 내용을 팩트 위주로 비교 분석하세요."
+        "정치/시사": (
+            "[정치/시사 전문 지침]:\n"
+            "- 현재 국회와 정가에서 가장 뜨거운 의안, 관련 정당 및 핵심 정치인의 실명과 발언을 육하원칙으로 정리하세요.\n"
+            "- 찬반 대립 구도와 여야의 쟁점, 향후 본회의 통과 전망 등 입법적 파장을 논리적 기승전결로 분석하세요."
         ),
         "경제/주식": (
-            "실제 시장을 흔드는 특정 테마 업종과 대표 관련 종목명, 코스피/코스닥 지수 흐름, 금리, 환율 수치 등 "
-            "민감한 거시경제 지표를 제시하고, 일반 투자자가 알아야 할 실전 재테크 상식을 명확한 데이터와 함께 설명하세요."
+            "[경제/주식 전문 지침]:\n"
+            "- 오늘의 주식시장 주도 테마주와 대표 관련 종목명, 코스피/코스닥 지수 흐름, 금리·환율 수치를 육하원칙에 맞추어 명시하세요.\n"
+            "- 수치에 기반한 시장 분석과 함께, 일반 독자가 알아야 할 실전 재테크 상식 및 투자 유의점을 기승전결로 설명하세요."
         ),
-        "정치/시사": (
-            "현재 실시간으로 가장 뜨거운 국회 의안, 주요 정당과 핵심 정치인의 실명, 공식 발언 내용, 여야 간의 찬반 쟁점을 "
-            "누가, 언제, 어디서, 왜 주장했는지 육하원칙에 입각하여 균형 잡힌 정론 보도로 작성하세요."
-        ),
-        "연예계뉴스": (
-            "실제 화제가 되고 있는 스타의 이름, 방송 프로그램명, 작품명, 차트 순위나 흥행 지표 등 "
-            "구체적 사실을 바탕으로 대중문화계의 최신 트렌드와 팬덤 반응을 품격 있게 조명하세요."
-        ),
-        "지역창": (
-            "강원도 속초 및 영동 지역을 중심으로, 실제 지명, 축제명, 문화재 명칭, 로컬 명소와 맛집의 구체적 특징, "
-            "방문 정보(교통, 일정, 추천 코스)를 생생하고 정확하게 취재하듯 서술하세요."
-        ),
-        "세상이야기": (
-            "실제 사건/사고 현장 또는 감동적인 미담의 주인공, 발생 시점과 장소, 구체적인 선행 및 사건 경위를 육하원칙에 따라 따뜻하고 설득력 있게 전달하세요."
+        "AI/테크": (
+            "[AI/테크 전문 지침]:\n"
+            "- 제미니(Gemini), 클로드(Claude), 챗GPT(ChatGPT), 코파일럿(Copilot), 마누스(Manus), 딥시크(DeepSeek) 등 구체적 AI 모델명을 반드시 명시하세요.\n"
+            "- 실제 벤치마크 점수나 세부 기능 차이점, 직장인 실무 프롬프트 활용법 및 테크 기업의 발표 팩트를 육하원칙 기반으로 비교 분석하세요."
         ),
         "건강/복지": (
-            "공신력 있는 기관의 최신 지침, 질환의 정확한 의학적 명칭, 정부 복지 혜택의 구체적인 신청 자격 요건과 소득 기준액을 명확히 밝히세요."
+            "[건강/복지 전문 지침]:\n"
+            "- 보건복지부, 질병관리청 등 공신력 있는 기관의 최신 지침, 의학적 질환명, 시니어 복지 혜택을 다루세요.\n"
+            "- 기초연금 등 정부 지원금의 선정기준액 수치, 소득인정액 공제 요건, 신청 절차를 육하원칙에 따라 정확히 전달하세요."
         ),
         "생활정보": (
-            "정부 지원금, 부동산 절세 체크리스트, 에너지 절약법 등 일상에서 즉시 활용할 수 있는 법령 기준, 세액 감면 수치, 신청 사이트를 꼼꼼하게 명시하세요."
+            "[생활정보 전문 지침]:\n"
+            "- 부동산 비과세 요건, 절세 꿀팁, 공과금 절감액 등 실생활에 돈이 되는 구체적 수치와 법령 기준을 밝히세요.\n"
+            "- 독자가 즉시 신청하거나 활용할 수 있는 공식 사이트와 절차를 육하원칙과 기승전결로 정리하세요."
+        ),
+        "연예계뉴스": (
+            "[연예계뉴스 전문 지침]:\n"
+            "- 실시간 화제 스타의 실명, 방송 프로그램명, 영화/드라마 작품명, 음원/흥행 차트 순위를 명확히 밝히세요.\n"
+            "- 대중문화계의 구조적 변화와 팬덤의 반응, 문화적 파급 효과를 육하원칙과 품격 있는 문체로 보도하세요."
+        ),
+        "스포츠": (
+            "[스포츠 전문 지침]:\n"
+            "- 반드시 어제나 오늘 열린 최신 경기 결과여야 합니다. (과거 경기 조작 엄격 금지)\n"
+            "- 실제 종목, 팀명, 선수 실명, 경기 스코어와 결정적 승부처(골/홈런/전술)를 시간 순으로 생생하게 육하원칙 중계하듯 서술하세요."
+        ),
+        "지역창": (
+            "[지역창 전문 지침]:\n"
+            "- 강원도 속초 및 영동 지역을 중심으로, 실제 지명, 축제명, 문화재 명칭, 로컬 맛집의 구체적 특징을 취재하세요.\n"
+            "- 일정, 방문 경로, 추천 코스 등 지역 주민과 여행객에게 유익한 팩트를 육하원칙에 맞추어 전달하세요."
+        ),
+        "세상이야기": (
+            "[세상이야기 전문 지침]:\n"
+            "- 우리 이웃들의 따뜻한 미담, 훈훈한 감동 스토리, 사회적 연대와 나눔을 전하는 따뜻한 휴먼 르포 기사로 작성하세요.\n"
+            "- 딱딱한 육하원칙 틀 대신, 이야기의 감동과 삶의 교훈이 독자의 가슴에 와닿도록 정감 있고 유려한 문체로 서술하세요."
         )
     }
 
     directive = CATEGORY_DIRECTIVES.get(category_name, "정확한 팩트에 기반한 정론 기사를 작성하세요.")
 
-    journalism_directive = f"""
-당신은 대한민국 최고 정론지의 20년 차 베테랑 수석 기자입니다.
-기사는 논리적 흐름(핵심 리드문 → 구체적 경위 및 수치 → 심층 분석 및 쟁점 → 향후 전망)을 갖추어야 합니다.
+    # 3. 세상이야기를 제외한 모든 카테고리에 육하원칙 + 기승전결 강제
+    if category_name == "세상이야기":
+        editorial_prompt = f"""
+당신은 대한민국 대표 감성 휴먼 저널리스트입니다.
+따뜻한 감동과 삶의 위로를 주는 세상 사는 이야기 기사를 작성하세요.
 
-[작성 절대 원칙]:
-1. **첫 번째 줄**: 따옴표나 특수문자 없이, 독자의 시선을 사로잡는 핵심 팩트 기반의 [기사 제목]을 한 줄로만 작성하세요.
+[작성 원칙]:
+1. 첫 번째 줄: 마음에 깊은 울림을 주는 매력적인 [기사 제목]을 한 줄로만 작성하세요. (특수문자 제외)
+2. 두 번째 줄: 빈 줄로 비워 두세요.
+3. 세 번째 줄부터: 정감 있고 유려한 문체로 3~4개의 문단으로 작성하세요.
+4. 각 주요 단락 앞에는 '### 소제목' 형태로 세련된 소제목을 붙이세요. (구조 설명용 라벨 일체 금지)
+5. 본문 첫머리에 제목을 반복하지 마세요.
+
+[취재 분야]: {category_name}
+{directive}
+{ref_fact_context}
+"""
+    else:
+        editorial_prompt = f"""
+당신은 대한민국 최고 정론지의 20년 차 베테랑 수석 논설위원입니다.
+오늘은 **2026년 9월 11일**입니다.
+과거의 묵은 사건을 오늘 발생한 것처럼 조작하는 행위를 엄격히 금지하며, 반드시 오늘 시점의 최신 팩트에 기반하여 작성하세요.
+
+[기사 작성 5대 철칙 (필수 준수)]:
+1. **첫 번째 줄 (제목)**: 따옴표나 특수문자 없이, 독자의 시선을 사로잡는 팩트 중심의 [기사 제목]을 한 줄로만 작성하세요.
 2. **두 번째 줄**: 반드시 빈 줄로 남겨 두세요.
-3. **세 번째 줄 (종합 리드문)**: 
-   - 기사 서두 첫 문단에서 **[누가, 언제, 어디서, 무엇을, 어떻게, 왜]** 사건이 일어났는지 핵심 팩트를 두괄식으로 완벽히 요약하세요. (모호한 표현 절대 금지, 고유명사 필수)
-4. **본문 및 소제목 규칙 (절대 준수)**:
-   - 본문은 3~4개의 문단으로 구성하고, 각 문단 시작 전에는 반드시 '### 소제목'을 붙이세요.
-   - **절대 소제목에 '[기]', '[승]', '[전]', '[결]', '기:', '승:', '전:', '결:' 같은 구조 설명용 단어나 한자 라벨을 쓰지 마세요.**
-   - 실제 메이저 신문 기사처럼 세련되고 자연스러운 핵심 요약 소제목을 붙이세요. (예: '### 27분의 1 비용 혁신... 벤치마크로 입증된 추론 성능')
+3. **세 번째 줄 (서두 리드문 - 기: 起)**: 
+   - 기사 서두 첫 문단에서 **[누가, 언제, 어디서, 무엇을, 어떻게, 왜]** 사건이 발생했는지 핵심 팩트를 두괄식으로 완벽히 요약하세요. (고유명사, 실명, 수치 필수)
+4. **본문 전개 (논리적 기승전결 3~4단락)**:
+   - 각 문단 시작 전에는 반드시 '### 소제목'을 붙이세요.
+   - **절대 소제목에 '[기]', '[승]', '[전]', '[결]', '기:', '승:', '전:', '결:' 같은 구조 설명용 라벨을 붙이지 마세요.** 실제 메이저 신문처럼 세련된 요약 소제목을 작성하세요.
+   - 단락 순서: 구체적 경위 및 수치 데이터(승) → 핵심 쟁점 및 당사자/전문가 분석(전) → 향후 전망 및 사회적 영향(결)
 5. **금지 사항**:
-   - 모호한 표현이나 얼버무리는 허위 서술 금지.
-   - 본문 첫머리에 제목을 반복하지 마세요. 표준적인 한국어 보도체(~다)로 명료하게 작성하세요.
+   - 모호하고 추상적인 미사여구로 때우는 행위 금지.
+   - 본문 첫머리에 제목을 반복하지 마세요. 격조 높은 한국어 보도체(~다)로 명료하게 작성하세요.
 
 [취재 대상 카테고리]: {category_name}
-[카테고리별 전문 가이드]: {directive}
+{directive}
 {ref_fact_context}
 """
 
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
-            contents=journalism_directive,
+            contents=editorial_prompt,
         )
         raw_content = response.text.strip()
     except Exception as e:
@@ -773,18 +809,18 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
             .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
-            img {{ max-width: 100% !important; height: auto !important; }}
-            .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
-        </style>
-    </head>
-    <body>
-        <div class="header-flex">
-            <div class="logo-title">
-                시사투데이&nbsp;<span class="logo-chang">창</span>
+                img {{ max-width: 100% !important; height: auto !important; }}
+                .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
+            </style>
+        </head>
+        <body>
+            <div class="header-flex">
+                <div class="logo-title">
+                    시사투데이&nbsp;<span class="logo-chang">창</span>
+                </div>
             </div>
-        </div>
-        <div class="nav-tabs">
-    """
+            <div class="nav-tabs">
+        """
     
     for cat in categories:
         active_class = "active" if (not category and cat == "전체") or (category == cat) else ""
@@ -952,21 +988,21 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 맞춤형 핫이슈 취재)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 24시간 속보 & 특성별 맞춤)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사 (국회·실명인물·법안·여야 쟁점)</option>
                     <option value="경제/주식">경제/주식 (주도 테마주·코스피·금리·실전상식)</option>
-                    <option value="세상이야기">세상이야기 (구체적 사건경위·감동 미담 팩트)</option>
+                    <option value="세상이야기">세상이야기 (감동 미담·훈훈한 휴먼스토리)</option>
                     <option value="AI/테크">AI/테크 (제미니·클로드·챗GPT·딥시크 비교분석)</option>
                     <option value="건강/복지">건강/복지 (정부 복지 수혜 자격·의학적 지침)</option>
                     <option value="생활정보">생활정보 (부동산 절세 기준·알짜 생활 꿀팁)</option>
                     <option value="연예계뉴스">연예계뉴스 (화제의 인물 실명·프로그램·트렌드)</option>
-                    <option value="스포츠">스포츠 (팀명·선수실명·스코어·결정적 승부처)</option>
+                    <option value="스포츠">스포츠 (오늘/어제 경기결과·팀명·선수실명)</option>
                     <option value="지역창">지역창 (속초·강원 명소·축제·맛집 구체정보)</option>
                 </select>
-                <button type="submit">🚀 타깃 맞춤형 실시간 기사 자동 발행</button>
+                <button type="submit">🚀 최신 속보 기반 정밀 기사 발행</button>
             </form>
         </div>
 
