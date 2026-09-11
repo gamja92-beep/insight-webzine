@@ -50,18 +50,18 @@ wcs_do();
 """
 
 # ==========================================================
-# 카테고리별 실시간 구글 속보 RSS (최근 24~48시간 필터)
+# 구글 공식 최신 토픽별 실시간 RSS (과거 기사 수집 원천 차단)
 # ==========================================================
 NEWS_FEEDS = {
-    "정치/시사": "https://news.google.com/rss/search?q=정치+시사+국회+이슈+when:1d&hl=ko&gl=KR&ceid=KR:ko",
-    "경제/주식": "https://news.google.com/rss/search?q=증시+주식+코스피+금리+환율+when:1d&hl=ko&gl=KR&ceid=KR:ko",
-    "세상이야기": "https://news.google.com/rss/search?q=사회+사건+이슈+미담+사람들+when:3d&hl=ko&gl=KR&ceid=KR:ko",
-    "AI/테크": "https://news.google.com/rss/search?q=인공지능+AI+생성형AI+챗GPT+제미니+클로드+when:2d&hl=ko&gl=KR&ceid=KR:ko",
-    "건강/복지": "https://news.google.com/rss/search?q=건강+의료+복지+시니어+연금+when:3d&hl=ko&gl=KR&ceid=KR:ko",
-    "생활정보": "https://news.google.com/rss/search?q=생활정보+부동산+물가+절세+지원금+when:2d&hl=ko&gl=KR&ceid=KR:ko",
-    "연예계뉴스": "https://news.google.com/rss/search?q=연예+방송+드라마+영화+화제인물+when:1d&hl=ko&gl=KR&ceid=KR:ko",
-    "스포츠": "https://news.google.com/rss/search?q=프로야구+KBO+축구+손흥민+경기결과+when:1d&hl=ko&gl=KR&ceid=KR:ko",
-    "지역창": "https://news.google.com/rss/search?q=속초+강원+축제+관광+맛집+문화재+when:3d&hl=ko&gl=KR&ceid=KR:ko"
+    "정치/시사": "https://news.google.com/rss/headlines/section/topic/POLITICS?hl=ko&gl=KR&ceid=KR:ko",
+    "경제/주식": "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ko&gl=KR&ceid=KR:ko",
+    "세상이야기": "https://news.google.com/rss/headlines/section/topic/NATION?hl=ko&gl=KR&ceid=KR:ko",
+    "AI/테크": "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=ko&gl=KR&ceid=KR:ko",
+    "건강/복지": "https://news.google.com/rss/search?q=건강+복지+시니어+의료&hl=ko&gl=KR&ceid=KR:ko",
+    "생활정보": "https://news.google.com/rss/search?q=부동산+물가+생활정보+지원금&hl=ko&gl=KR&ceid=KR:ko",
+    "연예계뉴스": "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=ko&gl=KR&ceid=KR:ko",
+    "스포츠": "https://news.google.com/rss/headlines/section/topic/SPORTS?hl=ko&gl=KR&ceid=KR:ko",
+    "지역창": "https://news.google.com/rss/search?q=강원+속초+축제+관광+소식&hl=ko&gl=KR&ceid=KR:ko"
 }
 
 def get_latest_realtime_news(category_name):
@@ -73,7 +73,7 @@ def get_latest_realtime_news(category_name):
         root = ET.fromstring(xml_data)
         items = root.findall('./channel/item')
         if items:
-            chosen = random.choice(items[:5])
+            chosen = random.choice(items[:4])
             title = chosen.findtext('title') or ''
             desc = chosen.findtext('description') or ''
             pub_date = chosen.findtext('pubDate') or ''
@@ -106,72 +106,76 @@ def init_db():
 init_db()
 
 # ==========================================================
-# 기사 제목과 종목에 일치하는 정밀 이미지 매칭 엔진
+# 엑박 없는 확실한 고화질 이미지 매칭 엔진
 # ==========================================================
+FALLBACK_POOL = {
+    "야구": "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop",
+    "축구": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop",
+    "스포츠": "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&auto=format&fit=crop",
+    "정치/시사": "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop",
+    "경제/주식": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop",
+    "AI/테크": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop",
+    "건강/복지": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop",
+    "생활정보": "https://images.unsplash.com/photo-1484807352052-23338990c6c8?w=800&auto=format&fit=crop",
+    "연예계뉴스": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&auto=format&fit=crop",
+    "지역창": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop",
+    "세상이야기": "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=800&auto=format&fit=crop"
+}
+
 def fetch_bulletproof_image(category_name, article_title=""):
     title_lower = (article_title + " " + category_name).lower()
     
     if category_name == "스포츠":
-        if any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "이닝", "안타", "김도영"]):
-            search_query = "baseball stadium field ball bat wide"
-        elif any(k in title_lower for k in ["축구", "골", "손흥민", "epl", "득점", "k리그", "챔스"]):
-            search_query = "soccer football stadium match field wide"
-        elif any(k in title_lower for k in ["농구", "nba", "덩크", "3점"]):
-            search_query = "basketball court arena indoor wide"
-        elif any(k in title_lower for k in ["골프", "홀인원", "버디", "파크골프"]):
-            search_query = "golf course green field wide"
-        elif any(k in title_lower for k in ["배구", "스파이크"]):
-            search_query = "volleyball court indoor wide"
+        if any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "안타", "김도영"]):
+            keyword = "baseball"
+            default_url = FALLBACK_POOL["야구"]
+        elif any(k in title_lower for k in ["축구", "손흥민", "골", "epl", "k리그"]):
+            keyword = "soccer"
+            default_url = FALLBACK_POOL["축구"]
         else:
-            search_query = "sports stadium athletic field wide"
+            keyword = "stadium"
+            default_url = FALLBACK_POOL["스포츠"]
     elif category_name == "AI/테크":
-        search_query = "artificial intelligence futuristic technology modern data wide"
+        keyword = "technology"
+        default_url = FALLBACK_POOL["AI/테크"]
     elif category_name == "경제/주식":
-        search_query = "stock market exchange trading graph skyscraper modern city wide"
+        keyword = "finance"
+        default_url = FALLBACK_POOL["경제/주식"]
     elif category_name == "정치/시사":
-        search_query = "national parliament government building architecture wide"
+        keyword = "capitol"
+        default_url = FALLBACK_POOL["정치/시사"]
     elif category_name == "연예계뉴스":
-        search_query = "concert performance stage lights entertainment wide"
+        keyword = "concert"
+        default_url = FALLBACK_POOL["연예계뉴스"]
     elif category_name == "지역창":
-        search_query = "korea coastal beach mountain travel scenery wide"
+        keyword = "korea scenery"
+        default_url = FALLBACK_POOL["지역창"]
     elif category_name == "건강/복지":
-        search_query = "peaceful green nature park morning walk wellness wide"
+        keyword = "wellness"
+        default_url = FALLBACK_POOL["건강/복지"]
     elif category_name == "생활정보":
-        search_query = "modern apartment cozy interior home living wide"
+        keyword = "interior"
+        default_url = FALLBACK_POOL["생활정보"]
     else:
-        search_query = "peaceful nature landscape calm scenery wide"
+        keyword = "nature"
+        default_url = FALLBACK_POOL["세상이야기"]
 
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": search_query, "orientation": "landscape", "page": random.randint(1, 15)}
-        response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
-        if response.status_code == 200:
-            data = response.json()
-            results = data.get("results", [])
+        params = {"query": keyword, "orientation": "landscape", "page": random.randint(1, 10)}
+        res = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
             if results:
-                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people'])]
-                if not safe_results:
-                    safe_results = results
-                item = random.choice(safe_results)
-                return item["urls"]["regular"], item["user"]["name"]
+                item = random.choice(results)
+                img_url = item["urls"].get("regular") or item["urls"].get("small")
+                author = item.get("user", {}).get("name", "Unsplash")
+                if img_url:
+                    return img_url, author
     except Exception as e:
         print(f"[이미지 API 경고]: {e}")
 
-    fallback_pools = {
-        "야구": ("https://images.unsplash.com/photo-1508344928928-7165b67de128", "Unsplash"),
-        "축구": ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
-        "스포츠": ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
-        "경제/주식": ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
-        "AI/테크": ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
-        "기본": ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash")
-    }
-    if "야구" in title_lower or "홈런" in title_lower or "kbo" in title_lower:
-        chosen = fallback_pools["야구"]
-    elif "축구" in title_lower or "손흥민" in title_lower:
-        chosen = fallback_pools["축구"]
-    else:
-        chosen = fallback_pools.get(category_name, fallback_pools["기본"])
-    return chosen[0], chosen[1]
+    return default_url, "Unsplash"
 
 def generate_smart_tags(text, title=""):
     try:
@@ -327,7 +331,7 @@ def delete_article_from_db(article_id):
         conn.close()
 
 # ==========================================================
-# 🎯 팩트체크 기반 맞춤형 기사 생성 로직 (gemini-3.6-flash 연동)
+# 🎯 팩트체크 기반 맞춤형 기사 생성 로직
 # ==========================================================
 def generate_ai_article(category_name):
     news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
@@ -335,40 +339,22 @@ def generate_ai_article(category_name):
     ref_fact_context = ""
     if news_title:
         ref_fact_context = f"""
-[실시간 보도 헤드라인]: {news_title}
-[실시간 보도 요약]: {news_desc}
-[보도 시점]: {pub_date}
-* 중요 팩트 지침: 위 보도 내용의 고유명사(인물명, 소속 팀, 경기 스코어, 정확한 수치)를 기사의 핵심 사실로 반영하세요. 낡은 과거 기록(예: 38홈런 등)을 현재 수치로 조작하지 마세요.
+[실시간 속보 헤드라인]: {news_title}
+[세부 보도 요약]: {news_desc}
+[보도 일시]: {pub_date}
+* 중요 팩트 지침: 위 보도 내용의 고유명사(인물명, 소속 팀, 경기 스코어, 정확한 수치)를 기사의 핵심 사실로 반영하세요. 과거 낡은 기록을 섞지 마세요.
 """
 
     CATEGORY_DIRECTIVES = {
-        "정치/시사": (
-            "국회와 정가의 최신 발언, 정당 실명, 의안명을 확인해 육하원칙에 맞춘 정론 보도로 작성하세요."
-        ),
-        "경제/주식": (
-            "오늘 주식시장 코스피/코스닥 지수, 환율, 금리 및 주도 테마주 종목명을 바탕으로 정확한 수치 데이터로 보도하세요."
-        ),
-        "AI/테크": (
-            "제미니, 클로드, 챗GPT, 딥시크, 코파일럿, 마누스의 최신 버전과 기능, 실제 성능 지표를 팩트 위주로 비교 분석하세요."
-        ),
-        "건강/복지": (
-            "보건복지부 최신 지침, 질환명, 복지 지원금의 정확한 수치 기준액을 명시하세요."
-        ),
-        "생활정보": (
-            "부동산 세법, 지원금 감면액 등 실생활에 돈이 되는 공식 수치와 사이트를 명시하세요."
-        ),
-        "연예계뉴스": (
-            "스타 실명, 최신 작품/방송명, 차트 순위를 정확한 팩트로 확인하여 품격 있게 작성하세요."
-        ),
-        "스포츠": (
-            "프로야구(KBO), 해외축구 등 최근 경기 결과를 다룰 때, 선수의 현재 정확한 기록(예: 김도영의 정확한 홈런/도루 기록, 손흥민의 현재 경기 스코어)을 단 1개의 수치 오차도 없이 팩트 위주로 작성하세요."
-        ),
-        "지역창": (
-            "강원도 및 속초의 축제명, 명소 지명, 로컬 정보의 실제 날짜와 일정을 정확히 확인해 보도하세요."
-        ),
-        "세상이야기": (
-            "따뜻한 미담과 이웃들의 감동 스토리를 정감 있고 유려한 문체로 전하세요."
-        )
+        "정치/시사": "국회와 정가의 최신 발언, 정당 실명, 의안명을 확인해 육하원칙에 맞춘 정론 보도로 작성하세요.",
+        "경제/주식": "오늘 주식시장 코스피/코스닥 지수 흐름, 금리·환율, 테마주 종목명을 데이터에 기반해 객관적으로 보도하세요.",
+        "AI/테크": "제미니, 클로드, 챗GPT, 딥시크 등 최신 모델명과 기능, 실무 활용법을 팩트 위주로 비교하세요.",
+        "건강/복지": "공신력 있는 최신 지침, 복지 지원금 자격 요건과 구체적 수치를 명시하세요.",
+        "생활정보": "부동산 세법, 에너지 절약 등 실생활에 바로 돈이 되는 팁을 명확히 전달하세요.",
+        "연예계뉴스": "화제의 스타 실명, 작품/방송명, 흥행 지표를 바탕으로 품격 있게 서술하세요.",
+        "스포츠": "어제/오늘 열린 경기 결과와 스코어, 활약한 선수의 실명을 정확히 밝혀 사실 위주로 역동감 있게 서술하세요.",
+        "지역창": "강원도 속초 지역을 중심으로 축제, 명소, 맛집 정보를 생생하게 취재하듯 전달하세요.",
+        "세상이야기": "따뜻한 감동과 삶의 교훈을 주는 이웃들의 미담 스토리를 정감 있게 서술하세요."
     }
 
     directive = CATEGORY_DIRECTIVES.get(category_name, "정확한 팩트에 기반한 정론 기사를 작성하세요.")
@@ -421,7 +407,6 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 실시간 현장 심층 리포트"
         body_content = raw_content
 
-    # 종목과 제목에 정확히 일치하는 사진 매칭
     img_url, author_name = fetch_bulletproof_image(category_name, art_title)
     formatted_content = clean_and_format_content(body_content, category_name, art_title)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
@@ -485,7 +470,7 @@ def rss_feed():
     articles = get_all_articles()
     base_url = "https://insight-webzine.onrender.com"
     
-    rss_content = '<?xml version="2.0" encoding="UTF-8" ?>\n'
+    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n'
     rss_content += '<rss version="2.0">\n<channel>\n'
     rss_content += '  <title>시사투데이 창</title>\n'
     rss_content += f'  <link>{base_url}/</link>\n'
@@ -631,11 +616,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     featured_html = ""
     for art in featured_articles:
         cat_name = art['category'] if art['category'] else '종합'
-        img_url = art['image_url'] if art['image_url'] else "https://images.unsplash.com/photo-1451187580459-43490279c0fa"
+        img_url = art['image_url'] if art['image_url'] else FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
         featured_html += f"""
         <div class="featured-card">
             <div class="featured-img-wrap">
-                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img"></a>
+                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img" onerror="this.src='{FALLBACK_POOL.get(cat_name, FALLBACK_POOL['세상이야기'])}'"></a>
             </div>
             <div class="featured-body">
                 <span class="badge">{cat_name}</span>
@@ -929,7 +914,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 팩트체크 & 종목별 매칭)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (구글 1면 최신 속보 전용)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -940,7 +925,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="건강/복지">건강/복지 (정부 복지 수혜 자격·의학적 지침)</option>
                     <option value="생활정보">생활정보 (부동산 절세 기준·알짜 생활 꿀팁)</option>
                     <option value="연예계뉴스">연예계뉴스 (화제의 인물 실명·프로그램·트렌드)</option>
-                    <option value="스포츠">스포츠 (오늘/어제 최신 경기결과·정확한 기록)</option>
+                    <option value="스포츠">스포츠 (오늘 최신 경기결과·팀명·선수실명)</option>
                     <option value="지역창">지역창 (속초·강원 명소·축제·맛집 구체정보)</option>
                 </select>
                 <button type="submit">🚀 최신 속보 기반 정밀 기사 발행</button>
@@ -1104,276 +1089,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     }}
                 }} catch (err) {{
                     alert("업로드 오류: " + err);
-                }}
-                input.value = "";
-            }}
-        }}
-
-        function injectHtmlTag(elementId, imgUrl, sourceText) {{
-            let captionHtml = "";
-            let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {{
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
-                    cleanSource = "Photo by " + cleanSource;
-                }}
-                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
-            }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
-            
-            const textarea = document.getElementById(elementId);
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-            textarea.focus();
-        }}
-
-        function insertImageWithSource(elementId, sourceInputId) {{
-            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {{
-                const source = document.getElementById(sourceInputId).value;
-                injectHtmlTag(elementId, url, source);
-                document.getElementById(sourceInputId).value = "";
-            }}
-        }}
-
-        async function uploadImageWithSource(input, elementId, sourceInputId) {{
-            if (input.files && input.files[0]) {{
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                
-                try {{
-                    const response = await fetch("/admin/upload-image", {{
-                        method: "POST",
-                        body: formData
-                    }});
-                    const data = await response.json();
-                    if (data.url) {{
-                        const source = document.getElementById(sourceInputId).value;
-                        injectHtmlTag(elementId, data.url, source);
-                        document.getElementById(sourceInputId).value = "";
-                        alert("사진과 출처가 성공적으로 본문에 삽입되었습니다!");
-                    }} else {{
-                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
-                    }}
-                }} catch (err) {{
-                    alert("사진 업로드 중 오류 발생: " + err);
-                }}
-                input.value = "";
-            }}
-        }}
-        </script>
-    </body>
-    </html>
-    """
-
-@app.post("/admin/create-auto")
-def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    generate_ai_article(category)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.post("/admin/create-manual")
-def create_manual(
-    category: str = Form(...), 
-    title: str = Form(...), 
-    content: str = Form(...), 
-    use_unsplash: str = Form(None),
-    custom_image_url: str = Form(None),
-    custom_image_author: str = Form(None),
-    admin_auth: str = Cookie(None)
-):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
-    
-    if not use_unsplash and custom_image_url and custom_image_url.strip():
-        img_url = custom_image_url.strip()
-        author_name = custom_image_author.strip() if custom_image_author else ""
-    else:
-        img_url, author_name = fetch_bulletproof_image(category, clean_title)
-    
-    formatted_content = clean_and_format_content(content, category, clean_title)
-    save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.post("/admin/create-ai-expand")
-def create_ai_expand(
-    category: str = Form(...), 
-    title: str = Form(...), 
-    prompt: str = Form(...), 
-    use_unsplash: str = Form(None),
-    custom_image_url: str = Form(None),
-    custom_image_author: str = Form(None),
-    admin_auth: str = Cookie(None)
-):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
-    system_directive = (
-        "당신은 전문 수석 언론사 기자입니다. "
-        "사용자가 제공한 [기사 제목]과 [핵심 취재 메모]를 바탕으로 완성도 높은 정식 뉴스 기사 본문을 작성하세요.\n"
-        "1. 서론에서 육하원칙(누가, 언제, 어디서, 무엇을, 어떻게, 왜)을 분명히 서술하고, 최소 4개 이상의 문단으로 구성하세요.\n"
-        "2. 각 문단 앞에는 '### 소제목' 형태로 세련된 소제목을 붙이되, '[기]', '[승]', '[전]', '[결]' 같은 설명용 라벨은 절대 쓰지 마세요.\n"
-        "3. 만약 사용자의 취재 메모 안에 <div class=\"article-img-box\"나 <img 등 HTML 태그가 있다면 삭제하지 말고 본문 흐름에 맞게 그대로 포함하세요.\n"
-        "4. 본문 시작 부분에 기사 제목을 다시 적지 마세요. 바로 첫 단락의 내용으로 시작하세요.\n"
-        "5. 마크다운 특수기호(-, *, _)는 쓰지 말고 표준적인 한국어 보도체(~다)로 명확하게 서술하세요.\n"
-        "6. 본문 끝에 해시태그는 직접 작성하지 마세요."
-    )
-    
-    full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[핵심 취재 메모]: {prompt}"
-
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=full_query,
-        )
-        final_content = response.text.strip()
-    except Exception as e:
-        print(f"🚨 [Gemini 기사 확장 생성 에러]: {e}")
-        final_content = f"기사 본문 생성 중 API 오류가 발생했습니다: {e}\n\n취재 메모:\n{prompt}"
-
-    if not use_unsplash and custom_image_url and custom_image_url.strip():
-        img_url = custom_image_url.strip()
-        author_name = custom_image_author.strip() if custom_image_author else ""
-    else:
-        img_url, author_name = fetch_bulletproof_image(category, clean_title)
-
-    final_content = clean_and_format_content(final_content, category, clean_title)
-    save_article_to_db(category, clean_title, final_content, img_url, author_name)
-    return RedirectResponse(url="/admin/studio", status_code=303)
-
-@app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
-def edit_page(article_id: int, admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return RedirectResponse(url="/admin", status_code=303)
-
-    art = get_article_by_id(article_id)
-    if not art:
-        return RedirectResponse(url="/admin/studio", status_code=303)
-
-    current_img = art.get('image_url', '') or ''
-    current_author = art.get('image_author', '') or ''
-
-    return f"""
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>기사 수정하기</title>
-        <style>
-            body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f4f6f7; box-sizing: border-box; }}
-            h1 {{ color: #2c3e50; font-size: 1.5em; }}
-            .box {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
-            button {{ background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
-            button:hover {{ background: #d68910; }}
-            input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 15px; }}
-            textarea {{ height: 250px; resize: vertical; }}
-            label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
-            .back-link {{ display: inline-block; margin-bottom: 15px; color: #3498db; text-decoration: none; font-weight: bold; }}
-            .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
-            
-            .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
-            .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
-            .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
-            .img-tool-row input[type="text"] {{ margin-top: 0; margin-bottom: 0; }}
-            .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; white-space: nowrap; }}
-            
-            .header-img-box {{ background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
-        </style>
-    </head>
-    <body>
-        <a href="/admin/studio" class="back-link">← 관리자 스튜디오로 돌아가기</a>
-        <div class="box">
-            <h1>✏️ 기사 및 대표 이미지 수정하기</h1>
-            <form action="/admin/update/{art['id']}" method="post">
-                <label>카테고리</label>
-                <select name="category">
-                    <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
-                    <option value="경제/주식" {"selected" if art['category']=="경제/주식" else ""}>경제/주식</option>
-                    <option value="세상이야기" {"selected" if art['category']=="세상이야기" else ""}>세상이야기</option>
-                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
-                    <option value="건강/복지" {"selected" if art['category']=="건강/복지" else ""}>건강/복지</option>
-                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
-                    <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
-                    <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
-                    <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
-                </select>
-                
-                <label>기사 제목</label>
-                <input type="text" name="title" value="{art['title']}" required>
-                
-                <div class="header-img-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="font-weight: bold; color: #2c3e50; font-size: 14px;">🖼️ 기사 상단 대표 이미지 및 출처 설정</span>
-                        <button type="button" onclick="clearMainImage()" style="width: auto; background: #e74c3c; padding: 5px 12px; font-size: 12px; border-radius: 4px;">🗑️ 대표 이미지 완전 삭제</button>
-                    </div>
-
-                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 주소(URL)</label>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="main_img_url" name="image_url" value="{current_img}" placeholder="새로운 이미지 주소를 입력하세요" style="flex: 1; margin-bottom: 8px;">
-                        <button type="button" onclick="document.getElementById('main_img_file').click()" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;">📁 내 파일 올리기</button>
-                        <input type="file" id="main_img_file" style="display: none;" accept="image/*" onchange="uploadMainImageFile(this)">
-                    </div>
-
-                    <label style="margin-top: 5px; font-size: 13px;">대표 이미지 출처 표기</label>
-                    <input type="text" id="main_img_author" name="image_author" value="{current_author}" placeholder="출처를 입력하세요 (예: pexels, 연합뉴스, 기본소득당 제공 등)" style="margin-bottom: 8px;">
-                    
-                    <small style="color: #7f8c8d; display: block; margin-top: 4px;">현재 등록된 대표 이미지 미리보기:</small>
-                    <img id="main_img_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
-                </div>
-
-                <label>기사 내용 및 본문 추가 이미지</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처(Credit) 입력</div>
-                    <div class="img-tool-row">
-                        <input type="text" id="edit_source" placeholder="출처 표기 (예: pexels, 연합뉴스, 국회방송 캡처 등)" style="flex: 1;">
-                    </div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일 올리기</button>
-                        <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
-                    </div>
-                </div>
-
-                <textarea name="content" id="editContent" required>{art['content']}</textarea>
-                
-                <button type="submit">💾 수정 사항 저장하기</button>
-            </form>
-        </div>
-
-        <script>
-        function clearMainImage() {{
-            document.getElementById('main_img_url').value = '';
-            document.getElementById('main_img_author').value = '';
-            const preview = document.getElementById('main_img_preview');
-            preview.src = '';
-            preview.style.display = 'none';
-            alert("대표 이미지와 출처가 삭제되었습니다. 하단의 [수정 사항 저장하기]를 누르면 완전히 반영됩니다.");
-        }}
-
-        async function uploadMainImageFile(input) {{
-            if (input.files && input.files[0]) {{
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{
-                        method: "POST",
-                        body: formData
-                    }});
-                    const data = await response.json();
-                    if (data.url) {{
-                        document.getElementById('main_img_url').value = data.url;
-                        const preview = document.getElementById('main_img_preview');
-                        preview.src = data.url;
-                        preview.style.display = 'block';
-                        alert("대표 이미지가 업로드되었습니다. 아래 출처 입력란에 출처를 적어주세요.");
-                    }} else {{
-                        alert("업로드 실패: " + (data.error || "알 수 없는 오류"));
-                    }}
-                }} catch (err) {{
-                    alert("사진 업로드 중 오류 발생: " + err);
                 }}
                 input.value = "";
             }}
