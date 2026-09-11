@@ -21,7 +21,7 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
 
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 ADMIN_PASSWORD = "1234"
@@ -50,7 +50,7 @@ wcs_do();
 """
 
 # ==========================================================
-# 카테고리별 실시간 구글 속보 RSS (최근 24~48시간)
+# 카테고리별 실시간 구글 속보 RSS (최근 24~48시간 필터)
 # ==========================================================
 NEWS_FEEDS = {
     "정치/시사": "https://news.google.com/rss/search?q=정치+시사+국회+이슈+when:1d&hl=ko&gl=KR&ceid=KR:ko",
@@ -65,7 +65,6 @@ NEWS_FEEDS = {
 }
 
 def get_latest_realtime_news(category_name):
-    """최근 24~48시간 이내의 실시간 속보 헤드라인 수집"""
     feed_url = NEWS_FEEDS.get(category_name, NEWS_FEEDS["세상이야기"])
     try:
         req = urllib.request.Request(feed_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -112,7 +111,6 @@ init_db()
 def fetch_bulletproof_image(category_name, article_title=""):
     title_lower = (article_title + " " + category_name).lower()
     
-    # 1. 스포츠 종목별 정밀 쿼리 분기
     if category_name == "스포츠":
         if any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "이닝", "안타", "김도영"]):
             search_query = "baseball stadium field ball bat wide"
@@ -143,7 +141,6 @@ def fetch_bulletproof_image(category_name, article_title=""):
     else:
         search_query = "peaceful nature landscape calm scenery wide"
 
-    # 2. Unsplash API 호출
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
         params = {"query": search_query, "orientation": "landscape", "page": random.randint(1, 15)}
@@ -160,7 +157,6 @@ def fetch_bulletproof_image(category_name, article_title=""):
     except Exception as e:
         print(f"[이미지 API 경고]: {e}")
 
-    # 백업 이미지 풀
     fallback_pools = {
         "야구": ("https://images.unsplash.com/photo-1508344928928-7165b67de128", "Unsplash"),
         "축구": ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
@@ -331,10 +327,9 @@ def delete_article_from_db(article_id):
         conn.close()
 
 # ==========================================================
-# 🎯 구글 실시간 검색 팩트체크(Grounding) 탑재 AI 기사 작성
+# 🎯 팩트체크 기반 맞춤형 기사 생성 로직 (gemini-3.6-flash 연동)
 # ==========================================================
 def generate_ai_article(category_name):
-    # 1. 24~48시간 이내 실시간 실제 속보 데이터 확보
     news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
     
     ref_fact_context = ""
@@ -343,33 +338,33 @@ def generate_ai_article(category_name):
 [실시간 보도 헤드라인]: {news_title}
 [실시간 보도 요약]: {news_desc}
 [보도 시점]: {pub_date}
-* 핵심 지침: 위 헤드라인과 관련된 가장 최신의 정확한 사실(홈런 수, 스코어, 경기 날짜, 법안명, 수치 등)을 반드시 구글 실시간 검색으로 재확인(팩트체크)하여 정확한 수치로만 작성하세요. 과거의 낡은 수치나 허위 수치를 절대 쓰지 마세요.
+* 중요 팩트 지침: 위 보도 내용의 고유명사(인물명, 소속 팀, 경기 스코어, 정확한 수치)를 기사의 핵심 사실로 반영하세요. 낡은 과거 기록(예: 38홈런 등)을 현재 수치로 조작하지 마세요.
 """
 
     CATEGORY_DIRECTIVES = {
-        "스포츠": (
-            "프로야구(KBO), 해외축구 등 최근 경기 결과를 다룰 때, 선수의 현재 정확한 기록(예: 김도영의 정확한 홈런/도루 기록, 손흥민의 현재 경기 스코어)을 실시간 검색으로 반드시 확인해 단 1개의 수치 오차도 없이 팩트 위주로 작성하세요."
+        "정치/시사": (
+            "국회와 정가의 최신 발언, 정당 실명, 의안명을 확인해 육하원칙에 맞춘 정론 보도로 작성하세요."
         ),
         "경제/주식": (
-            "오늘 주식시장 코스피/코스닥 지수, 환율, 금리 및 주도 테마주 종목명을 구글 실시간 검색으로 확인하여 정확한 수치 데이터로 보도하세요."
+            "오늘 주식시장 코스피/코스닥 지수, 환율, 금리 및 주도 테마주 종목명을 바탕으로 정확한 수치 데이터로 보도하세요."
         ),
         "AI/테크": (
             "제미니, 클로드, 챗GPT, 딥시크, 코파일럿, 마누스의 최신 버전과 기능, 실제 성능 지표를 팩트 위주로 비교 분석하세요."
-        ),
-        "정치/시사": (
-            "국회와 정가의 최신 발언, 정당 실명, 의안명을 구글 검색으로 확인해 육하원칙에 맞춘 정론 보도로 작성하세요."
-        ),
-        "연예계뉴스": (
-            "스타 실명, 최신 작품/방송명, 차트 순위를 정확한 팩트로 확인하여 품격 있게 작성하세요."
-        ),
-        "지역창": (
-            "강원도 및 속초의 축제명, 명소 지명, 로컬 정보의 실제 날짜와 일정을 정확히 확인해 보도하세요."
         ),
         "건강/복지": (
             "보건복지부 최신 지침, 질환명, 복지 지원금의 정확한 수치 기준액을 명시하세요."
         ),
         "생활정보": (
-            "부동산 세법, 지원금 감면액 등 실생활에 돈이 되는 공식 수치와 사이트를 팩트체크해 명시하세요."
+            "부동산 세법, 지원금 감면액 등 실생활에 돈이 되는 공식 수치와 사이트를 명시하세요."
+        ),
+        "연예계뉴스": (
+            "스타 실명, 최신 작품/방송명, 차트 순위를 정확한 팩트로 확인하여 품격 있게 작성하세요."
+        ),
+        "스포츠": (
+            "프로야구(KBO), 해외축구 등 최근 경기 결과를 다룰 때, 선수의 현재 정확한 기록(예: 김도영의 정확한 홈런/도루 기록, 손흥민의 현재 경기 스코어)을 단 1개의 수치 오차도 없이 팩트 위주로 작성하세요."
+        ),
+        "지역창": (
+            "강원도 및 속초의 축제명, 명소 지명, 로컬 정보의 실제 날짜와 일정을 정확히 확인해 보도하세요."
         ),
         "세상이야기": (
             "따뜻한 미담과 이웃들의 감동 스토리를 정감 있고 유려한 문체로 전하세요."
@@ -381,8 +376,8 @@ def generate_ai_article(category_name):
     if category_name == "세상이야기":
         editorial_prompt = f"""
 당신은 대한민국 대표 감성 휴먼 저널리스트입니다. 따뜻한 감동과 삶의 위로를 주는 세상 사는 이야기 기사를 작성하세요.
-1. 첫 번째 줄: 울림을 주는 매력적인 [기사 제목]을 한 줄로만 작성하세요.
-2. 두 번째 줄: 빈 줄.
+1. 첫 번째 줄: 울림을 주는 매력적인 [기사 제목]을 한 줄로만 작성하세요. (특수문자 제외)
+2. 두 번째 줄: 반드시 빈 줄로 남겨 두세요.
 3. 세 번째 줄부터: 3~4개의 문단으로 정감 있게 작성하며, 각 단락 앞에는 '### 소제목'을 붙이세요. (구조 라벨 금지)
 {directive}
 {ref_fact_context}
@@ -390,7 +385,8 @@ def generate_ai_article(category_name):
     else:
         editorial_prompt = f"""
 당신은 팩트를 생명으로 여기는 정론지의 수석 논설위원입니다.
-[구글 실시간 검색]을 활용해 실시간 팩트(선수 기록, 경기 스코어, 일자, 수치)를 철저히 검증한 후 작성하세요.
+오늘은 **2026년 9월 11일**입니다.
+선수 기록, 경기 스코어, 일자, 수치 등 실제 팩트를 철저히 검증한 후 작성하세요.
 
 [작성 5대 철칙]:
 1. **첫 번째 줄 (제목)**: 따옴표 없이, 검증된 팩트 기반의 강력한 [기사 제목] 한 줄만 작성.
@@ -408,25 +404,14 @@ def generate_ai_article(category_name):
 """
 
     try:
-        # Google Search Grounding 도구 적용 (실시간 팩트체크 활성화)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=editorial_prompt,
-            config={
-                "tools": [{"google_search": {}}]
-            }
         )
         raw_content = response.text.strip()
     except Exception as e:
-        print(f"🚨 [Search Grounding API 예외, 기본 모드로 전환]: {e}")
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME,
-                contents=editorial_prompt,
-            )
-            raw_content = response.text.strip()
-        except Exception as e2:
-            raw_content = f"기사 생성 오류: {e2}"
+        print(f"🚨 [기사 생성 API 에러]: {e}")
+        raw_content = f"기사 생성 오류: {e}"
 
     split_lines = raw_content.split("\n", 1)
     if len(split_lines) > 1 and len(split_lines[0].strip()) <= 60:
@@ -436,7 +421,7 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 실시간 현장 심층 리포트"
         body_content = raw_content
 
-    # 기사 제목과 종목에 맞춤화된 이미지 호출
+    # 종목과 제목에 정확히 일치하는 사진 매칭
     img_url, author_name = fetch_bulletproof_image(category_name, art_title)
     formatted_content = clean_and_format_content(body_content, category_name, art_title)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
@@ -944,7 +929,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (Google 실시간 검색 팩트체크 탑재)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 팩트체크 & 종목별 매칭)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -955,10 +940,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="건강/복지">건강/복지 (정부 복지 수혜 자격·의학적 지침)</option>
                     <option value="생활정보">생활정보 (부동산 절세 기준·알짜 생활 꿀팁)</option>
                     <option value="연예계뉴스">연예계뉴스 (화제의 인물 실명·프로그램·트렌드)</option>
-                    <option value="스포츠">스포츠 (실시간 최신 경기결과·정확한 스코어/기록)</option>
+                    <option value="스포츠">스포츠 (오늘/어제 최신 경기결과·정확한 기록)</option>
                     <option value="지역창">지역창 (속초·강원 명소·축제·맛집 구체정보)</option>
                 </select>
-                <button type="submit">🚀 실시간 검색 팩트체크 기사 자동 발행</button>
+                <button type="submit">🚀 최신 속보 기반 정밀 기사 발행</button>
             </form>
         </div>
 
@@ -1242,9 +1227,6 @@ def create_ai_expand(
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=full_query,
-            config={
-                "tools": [{"google_search": {}}]
-            }
         )
         final_content = response.text.strip()
     except Exception as e:
