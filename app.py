@@ -21,7 +21,7 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 API_KEY = os.environ.get("API_KEY", "")
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 ADMIN_PASSWORD = "1234"
@@ -50,7 +50,7 @@ wcs_do();
 """
 
 # ==========================================================
-# 카테고리별 실시간 구글 속보 RSS (최근 24~48시간 필터 적용)
+# 카테고리별 실시간 구글 속보 RSS (최근 24~48시간)
 # ==========================================================
 NEWS_FEEDS = {
     "정치/시사": "https://news.google.com/rss/search?q=정치+시사+국회+이슈+when:1d&hl=ko&gl=KR&ceid=KR:ko",
@@ -60,7 +60,7 @@ NEWS_FEEDS = {
     "건강/복지": "https://news.google.com/rss/search?q=건강+의료+복지+시니어+연금+when:3d&hl=ko&gl=KR&ceid=KR:ko",
     "생활정보": "https://news.google.com/rss/search?q=생활정보+부동산+물가+절세+지원금+when:2d&hl=ko&gl=KR&ceid=KR:ko",
     "연예계뉴스": "https://news.google.com/rss/search?q=연예+방송+드라마+영화+화제인물+when:1d&hl=ko&gl=KR&ceid=KR:ko",
-    "스포츠": "https://news.google.com/rss/search?q=스포츠+프로야구+축구+경기결과+손흥민+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+    "스포츠": "https://news.google.com/rss/search?q=프로야구+KBO+축구+손흥민+경기결과+when:1d&hl=ko&gl=KR&ceid=KR:ko",
     "지역창": "https://news.google.com/rss/search?q=속초+강원+축제+관광+맛집+문화재+when:3d&hl=ko&gl=KR&ceid=KR:ko"
 }
 
@@ -106,99 +106,75 @@ def init_db():
 
 init_db()
 
-def fetch_bulletproof_image(category_name):
-    direct_pools = {
-        "정치/시사": [
-            ("https://images.unsplash.com/photo-1541872703-74c5e44368f9", "Unsplash"),
-            ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620", "Unsplash"),
-            ("https://images.pexels.com/photos/6077326/pexels-photo-6077326.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/1550337/pexels-photo-1550337.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/696627/pexels-photo-696627.jpeg", "pexels"),
-            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash")
-        ],
-        "경제/주식": [
-            ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
-            ("https://images.pexels.com/photos/38375328/pexels-photo-38375328.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/5059930/pexels-photo-5059930.jpeg", "pexels"),
-            ("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f", "Unsplash"),
-            ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab", "Unsplash"),
-            ("https://images.unsplash.com/photo-1460925895917-afdab827c52f", "Unsplash")
-        ],
-        "세상이야기": [
-            ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
-            ("https://images.pexels.com/photos/5059930/pexels-photo-5059930.jpeg", "pexels"),
-            ("https://images.pexels.com/photos/36261996/pexels-photo-36261996.jpeg", "pexels"),
-            ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash"),
-            ("https://images.unsplash.com/photo-1469571486292-0ba58a3f068b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1506744038136-46273834b3fb", "Unsplash")
-        ],
-        "AI/테크": [
-            ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
-            ("https://images.unsplash.com/photo-1518770660439-4636190af475", "Unsplash"),
-            ("https://images.unsplash.com/photo-1531482615713-2afd69097998", "Unsplash"),
-            ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", "Unsplash")
-        ],
-        "건강/복지": [
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1501785888041-af3ef285b470", "Unsplash"),
-            ("https://images.unsplash.com/photo-1500648767791-00dcc994a43e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05", "Unsplash")
-        ],
-        "생활정보": [
-            ("https://images.unsplash.com/photo-1484807352052-23338990c6c8", "Unsplash"),
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1516321318423-f06f85e504b3", "Unsplash")
-        ],
-        "연예계뉴스": [
-            ("https://images.unsplash.com/photo-1492684223066-81342ee5ff30", "Unsplash"),
-            ("https://images.unsplash.com/photo-1470225620780-dba8ba36b745", "Unsplash"),
-            ("https://images.unsplash.com/photo-1514525253161-7a46d19cd819", "Unsplash"),
-            ("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4", "Unsplash")
-        ],
-        "스포츠": [
-            ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
-            ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
-            ("https://images.unsplash.com/photo-1517649763962-0c623066013b", "Unsplash"),
-            ("https://images.unsplash.com/photo-1574629810360-7efbbe195018", "Unsplash")
-        ],
-        "지역창": [
-            ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "Unsplash"),
-            ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash"),
-            ("https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "Unsplash")
-        ]
-    }
-
-    pool = direct_pools.get(category_name, direct_pools["세상이야기"])
+# ==========================================================
+# 기사 제목과 종목에 일치하는 정밀 이미지 매칭 엔진
+# ==========================================================
+def fetch_bulletproof_image(category_name, article_title=""):
+    title_lower = (article_title + " " + category_name).lower()
     
+    # 1. 스포츠 종목별 정밀 쿼리 분기
+    if category_name == "스포츠":
+        if any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "이닝", "안타", "김도영"]):
+            search_query = "baseball stadium field ball bat wide"
+        elif any(k in title_lower for k in ["축구", "골", "손흥민", "epl", "득점", "k리그", "챔스"]):
+            search_query = "soccer football stadium match field wide"
+        elif any(k in title_lower for k in ["농구", "nba", "덩크", "3점"]):
+            search_query = "basketball court arena indoor wide"
+        elif any(k in title_lower for k in ["골프", "홀인원", "버디", "파크골프"]):
+            search_query = "golf course green field wide"
+        elif any(k in title_lower for k in ["배구", "스파이크"]):
+            search_query = "volleyball court indoor wide"
+        else:
+            search_query = "sports stadium athletic field wide"
+    elif category_name == "AI/테크":
+        search_query = "artificial intelligence futuristic technology modern data wide"
+    elif category_name == "경제/주식":
+        search_query = "stock market exchange trading graph skyscraper modern city wide"
+    elif category_name == "정치/시사":
+        search_query = "national parliament government building architecture wide"
+    elif category_name == "연예계뉴스":
+        search_query = "concert performance stage lights entertainment wide"
+    elif category_name == "지역창":
+        search_query = "korea coastal beach mountain travel scenery wide"
+    elif category_name == "건강/복지":
+        search_query = "peaceful green nature park morning walk wellness wide"
+    elif category_name == "생활정보":
+        search_query = "modern apartment cozy interior home living wide"
+    else:
+        search_query = "peaceful nature landscape calm scenery wide"
+
+    # 2. Unsplash API 호출
     try:
-        search_queries = {
-            "정치/시사": "government building architecture wide",
-            "경제/주식": "modern city skyscraper architecture wide",
-            "세상이야기": "beautiful nature landscape sceneries wide",
-            "AI/테크": "futuristic technology abstract background wide",
-            "건강/복지": "peaceful nature park scenery wide",
-            "생활정보": "lifestyle interior cozy modern wide",
-            "연예계뉴스": "empty concert stage lights background wide",
-            "스포츠": "empty soccer stadium arena night wide",
-            "지역창": "korean travel coastal ocean mountain landscape wide"
-        }
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": search_queries.get(category_name, "landscape"), "orientation": "landscape", "page": random.randint(1, 50)}
+        params = {"query": search_query, "orientation": "landscape", "page": random.randint(1, 15)}
         response = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
-        
         if response.status_code == 200:
             data = response.json()
             results = data.get("results", [])
             if results:
-                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people', 'player', 'athlete'])]
+                safe_results = [r for r in results if not any(w in str(r.get('description','')).lower() or w in str(r.get('alt_description','')).lower() for w in ['portrait', 'face', 'person', 'woman', 'man', 'girl', 'boy', 'people'])]
                 if not safe_results:
                     safe_results = results
                 item = random.choice(safe_results)
                 return item["urls"]["regular"], item["user"]["name"]
     except Exception as e:
         print(f"[이미지 API 경고]: {e}")
-    
-    chosen = random.choice(pool)
+
+    # 백업 이미지 풀
+    fallback_pools = {
+        "야구": ("https://images.unsplash.com/photo-1508344928928-7165b67de128", "Unsplash"),
+        "축구": ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2", "Unsplash"),
+        "스포츠": ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211", "Unsplash"),
+        "경제/주식": ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3", "Unsplash"),
+        "AI/테크": ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5", "Unsplash"),
+        "기본": ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82", "Unsplash")
+    }
+    if "야구" in title_lower or "홈런" in title_lower or "kbo" in title_lower:
+        chosen = fallback_pools["야구"]
+    elif "축구" in title_lower or "손흥민" in title_lower:
+        chosen = fallback_pools["축구"]
+    else:
+        chosen = fallback_pools.get(category_name, fallback_pools["기본"])
     return chosen[0], chosen[1]
 
 def generate_smart_tags(text, title=""):
@@ -218,7 +194,6 @@ def generate_smart_tags(text, title=""):
             return " ".join(tags[:7])
     except Exception:
         pass
-    
     return "#시사투데이 #이슈분석 #트렌드리포트 #실시간뉴스 #핵심인사이트 #종합분석"
 
 def clean_and_format_content(text, category_name="종합", title=""):
@@ -241,7 +216,6 @@ def clean_and_format_content(text, category_name="종합", title=""):
             processed_lines.append(p_str)
         elif p_str.startswith('###'):
             title_text = p_str.replace('###', '').strip()
-            # [기], [승], [전], [결] 라벨 영구 차단
             title_text = re.sub(r'^\[(기|승|전|결)(:\s*[^\]]+)?\]\s*', '', title_text).strip()
             title_text = re.sub(r'^(기|승|전|결):\s*', '', title_text).strip()
             processed_lines.append(f'<h3 style="color: #1b4f72; border-left: 5px solid #2980b9; padding-left: 12px; margin-top: 32px; margin-bottom: 14px; font-size: 1.15em; font-weight: 800; letter-spacing: -0.5px;">{title_text}</h3>')
@@ -357,7 +331,7 @@ def delete_article_from_db(article_id):
         conn.close()
 
 # ==========================================================
-# 🎯 카테고리별 맞춤형 기사 생성 로직 (세상이야기 제외 육하원칙+기승전결)
+# 🎯 구글 실시간 검색 팩트체크(Grounding) 탑재 AI 기사 작성
 # ==========================================================
 def generate_ai_article(category_name):
     # 1. 24~48시간 이내 실시간 실제 속보 데이터 확보
@@ -369,109 +343,90 @@ def generate_ai_article(category_name):
 [실시간 보도 헤드라인]: {news_title}
 [실시간 보도 요약]: {news_desc}
 [보도 시점]: {pub_date}
-* 중요 취재 메모: 위 실시간 보도 내용에 나타난 구체적인 고유명사(인물명, 소속 기관/팀, 법안명, 수치 데이터, 경기 스코어 등)를 기사의 핵심 뼈대로 사용하여 작성하세요.
+* 핵심 지침: 위 헤드라인과 관련된 가장 최신의 정확한 사실(홈런 수, 스코어, 경기 날짜, 법안명, 수치 등)을 반드시 구글 실시간 검색으로 재확인(팩트체크)하여 정확한 수치로만 작성하세요. 과거의 낡은 수치나 허위 수치를 절대 쓰지 마세요.
 """
 
-    # 2. 카테고리별 특화 취재 가이드라인
     CATEGORY_DIRECTIVES = {
-        "정치/시사": (
-            "[정치/시사 전문 지침]:\n"
-            "- 현재 국회와 정가에서 가장 뜨거운 의안, 관련 정당 및 핵심 정치인의 실명과 발언을 육하원칙으로 정리하세요.\n"
-            "- 찬반 대립 구도와 여야의 쟁점, 향후 본회의 통과 전망 등 입법적 파장을 논리적 기승전결로 분석하세요."
+        "스포츠": (
+            "프로야구(KBO), 해외축구 등 최근 경기 결과를 다룰 때, 선수의 현재 정확한 기록(예: 김도영의 정확한 홈런/도루 기록, 손흥민의 현재 경기 스코어)을 실시간 검색으로 반드시 확인해 단 1개의 수치 오차도 없이 팩트 위주로 작성하세요."
         ),
         "경제/주식": (
-            "[경제/주식 전문 지침]:\n"
-            "- 오늘의 주식시장 주도 테마주와 대표 관련 종목명, 코스피/코스닥 지수 흐름, 금리·환율 수치를 육하원칙에 맞추어 명시하세요.\n"
-            "- 수치에 기반한 시장 분석과 함께, 일반 독자가 알아야 할 실전 재테크 상식 및 투자 유의점을 기승전결로 설명하세요."
+            "오늘 주식시장 코스피/코스닥 지수, 환율, 금리 및 주도 테마주 종목명을 구글 실시간 검색으로 확인하여 정확한 수치 데이터로 보도하세요."
         ),
         "AI/테크": (
-            "[AI/테크 전문 지침]:\n"
-            "- 제미니(Gemini), 클로드(Claude), 챗GPT(ChatGPT), 코파일럿(Copilot), 마누스(Manus), 딥시크(DeepSeek) 등 구체적 AI 모델명을 반드시 명시하세요.\n"
-            "- 실제 벤치마크 점수나 세부 기능 차이점, 직장인 실무 프롬프트 활용법 및 테크 기업의 발표 팩트를 육하원칙 기반으로 비교 분석하세요."
+            "제미니, 클로드, 챗GPT, 딥시크, 코파일럿, 마누스의 최신 버전과 기능, 실제 성능 지표를 팩트 위주로 비교 분석하세요."
         ),
-        "건강/복지": (
-            "[건강/복지 전문 지침]:\n"
-            "- 보건복지부, 질병관리청 등 공신력 있는 기관의 최신 지침, 의학적 질환명, 시니어 복지 혜택을 다루세요.\n"
-            "- 기초연금 등 정부 지원금의 선정기준액 수치, 소득인정액 공제 요건, 신청 절차를 육하원칙에 따라 정확히 전달하세요."
-        ),
-        "생활정보": (
-            "[생활정보 전문 지침]:\n"
-            "- 부동산 비과세 요건, 절세 꿀팁, 공과금 절감액 등 실생활에 돈이 되는 구체적 수치와 법령 기준을 밝히세요.\n"
-            "- 독자가 즉시 신청하거나 활용할 수 있는 공식 사이트와 절차를 육하원칙과 기승전결로 정리하세요."
+        "정치/시사": (
+            "국회와 정가의 최신 발언, 정당 실명, 의안명을 구글 검색으로 확인해 육하원칙에 맞춘 정론 보도로 작성하세요."
         ),
         "연예계뉴스": (
-            "[연예계뉴스 전문 지침]:\n"
-            "- 실시간 화제 스타의 실명, 방송 프로그램명, 영화/드라마 작품명, 음원/흥행 차트 순위를 명확히 밝히세요.\n"
-            "- 대중문화계의 구조적 변화와 팬덤의 반응, 문화적 파급 효과를 육하원칙과 품격 있는 문체로 보도하세요."
-        ),
-        "스포츠": (
-            "[스포츠 전문 지침]:\n"
-            "- 반드시 어제나 오늘 열린 최신 경기 결과여야 합니다. (과거 경기 조작 엄격 금지)\n"
-            "- 실제 종목, 팀명, 선수 실명, 경기 스코어와 결정적 승부처(골/홈런/전술)를 시간 순으로 생생하게 육하원칙 중계하듯 서술하세요."
+            "스타 실명, 최신 작품/방송명, 차트 순위를 정확한 팩트로 확인하여 품격 있게 작성하세요."
         ),
         "지역창": (
-            "[지역창 전문 지침]:\n"
-            "- 강원도 속초 및 영동 지역을 중심으로, 실제 지명, 축제명, 문화재 명칭, 로컬 맛집의 구체적 특징을 취재하세요.\n"
-            "- 일정, 방문 경로, 추천 코스 등 지역 주민과 여행객에게 유익한 팩트를 육하원칙에 맞추어 전달하세요."
+            "강원도 및 속초의 축제명, 명소 지명, 로컬 정보의 실제 날짜와 일정을 정확히 확인해 보도하세요."
+        ),
+        "건강/복지": (
+            "보건복지부 최신 지침, 질환명, 복지 지원금의 정확한 수치 기준액을 명시하세요."
+        ),
+        "생활정보": (
+            "부동산 세법, 지원금 감면액 등 실생활에 돈이 되는 공식 수치와 사이트를 팩트체크해 명시하세요."
         ),
         "세상이야기": (
-            "[세상이야기 전문 지침]:\n"
-            "- 우리 이웃들의 따뜻한 미담, 훈훈한 감동 스토리, 사회적 연대와 나눔을 전하는 따뜻한 휴먼 르포 기사로 작성하세요.\n"
-            "- 딱딱한 육하원칙 틀 대신, 이야기의 감동과 삶의 교훈이 독자의 가슴에 와닿도록 정감 있고 유려한 문체로 서술하세요."
+            "따뜻한 미담과 이웃들의 감동 스토리를 정감 있고 유려한 문체로 전하세요."
         )
     }
 
     directive = CATEGORY_DIRECTIVES.get(category_name, "정확한 팩트에 기반한 정론 기사를 작성하세요.")
 
-    # 3. 세상이야기를 제외한 모든 카테고리에 육하원칙 + 기승전결 강제
     if category_name == "세상이야기":
         editorial_prompt = f"""
-당신은 대한민국 대표 감성 휴먼 저널리스트입니다.
-따뜻한 감동과 삶의 위로를 주는 세상 사는 이야기 기사를 작성하세요.
-
-[작성 원칙]:
-1. 첫 번째 줄: 마음에 깊은 울림을 주는 매력적인 [기사 제목]을 한 줄로만 작성하세요. (특수문자 제외)
-2. 두 번째 줄: 빈 줄로 비워 두세요.
-3. 세 번째 줄부터: 정감 있고 유려한 문체로 3~4개의 문단으로 작성하세요.
-4. 각 주요 단락 앞에는 '### 소제목' 형태로 세련된 소제목을 붙이세요. (구조 설명용 라벨 일체 금지)
-5. 본문 첫머리에 제목을 반복하지 마세요.
-
-[취재 분야]: {category_name}
+당신은 대한민국 대표 감성 휴먼 저널리스트입니다. 따뜻한 감동과 삶의 위로를 주는 세상 사는 이야기 기사를 작성하세요.
+1. 첫 번째 줄: 울림을 주는 매력적인 [기사 제목]을 한 줄로만 작성하세요.
+2. 두 번째 줄: 빈 줄.
+3. 세 번째 줄부터: 3~4개의 문단으로 정감 있게 작성하며, 각 단락 앞에는 '### 소제목'을 붙이세요. (구조 라벨 금지)
 {directive}
 {ref_fact_context}
 """
     else:
         editorial_prompt = f"""
-당신은 대한민국 최고 정론지의 20년 차 베테랑 수석 논설위원입니다.
-오늘은 **2026년 9월 11일**입니다.
-과거의 묵은 사건을 오늘 발생한 것처럼 조작하는 행위를 엄격히 금지하며, 반드시 오늘 시점의 최신 팩트에 기반하여 작성하세요.
+당신은 팩트를 생명으로 여기는 정론지의 수석 논설위원입니다.
+[구글 실시간 검색]을 활용해 실시간 팩트(선수 기록, 경기 스코어, 일자, 수치)를 철저히 검증한 후 작성하세요.
 
-[기사 작성 5대 철칙 (필수 준수)]:
-1. **첫 번째 줄 (제목)**: 따옴표나 특수문자 없이, 독자의 시선을 사로잡는 팩트 중심의 [기사 제목]을 한 줄로만 작성하세요.
-2. **두 번째 줄**: 반드시 빈 줄로 남겨 두세요.
-3. **세 번째 줄 (서두 리드문 - 기: 起)**: 
-   - 기사 서두 첫 문단에서 **[누가, 언제, 어디서, 무엇을, 어떻게, 왜]** 사건이 발생했는지 핵심 팩트를 두괄식으로 완벽히 요약하세요. (고유명사, 실명, 수치 필수)
-4. **본문 전개 (논리적 기승전결 3~4단락)**:
-   - 각 문단 시작 전에는 반드시 '### 소제목'을 붙이세요.
-   - **절대 소제목에 '[기]', '[승]', '[전]', '[결]', '기:', '승:', '전:', '결:' 같은 구조 설명용 라벨을 붙이지 마세요.** 실제 메이저 신문처럼 세련된 요약 소제목을 작성하세요.
-   - 단락 순서: 구체적 경위 및 수치 데이터(승) → 핵심 쟁점 및 당사자/전문가 분석(전) → 향후 전망 및 사회적 영향(결)
-5. **금지 사항**:
-   - 모호하고 추상적인 미사여구로 때우는 행위 금지.
-   - 본문 첫머리에 제목을 반복하지 마세요. 격조 높은 한국어 보도체(~다)로 명료하게 작성하세요.
+[작성 5대 철칙]:
+1. **첫 번째 줄 (제목)**: 따옴표 없이, 검증된 팩트 기반의 강력한 [기사 제목] 한 줄만 작성.
+2. **두 번째 줄**: 반드시 빈 줄.
+3. **세 번째 줄 (서두 리드문)**: 첫 문단에서 **[누가, 언제, 어디서, 무엇을, 어떻게, 왜]** 핵심 팩트(실명, 정확한 최신 수치)를 두괄식으로 완벽히 요약.
+4. **본문 전개 (3~4단락)**:
+   - 각 문단 시작 전 반드시 '### 소제목'을 붙이세요.
+   - **소제목에 '[기]', '[승]', '[전]', '[결]', '승:', '전:' 등 구조 라벨 일체 금지.**
+   - 신문다운 세련된 핵심 소제목 작성.
+5. **금지 사항**: 허위 수치나 과거 기록을 현재 기록으로 둔갑시키는 행위 절대 금지. 본문 서두에 제목 반복 금지. 표준 보도체(~다) 사용.
 
-[취재 대상 카테고리]: {category_name}
+[취재 분야]: {category_name}
 {directive}
 {ref_fact_context}
 """
 
     try:
+        # Google Search Grounding 도구 적용 (실시간 팩트체크 활성화)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=editorial_prompt,
+            config={
+                "tools": [{"google_search": {}}]
+            }
         )
         raw_content = response.text.strip()
     except Exception as e:
-        raw_content = f"기사 생성 오류: {e}"
+        print(f"🚨 [Search Grounding API 예외, 기본 모드로 전환]: {e}")
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=editorial_prompt,
+            )
+            raw_content = response.text.strip()
+        except Exception as e2:
+            raw_content = f"기사 생성 오류: {e2}"
 
     split_lines = raw_content.split("\n", 1)
     if len(split_lines) > 1 and len(split_lines[0].strip()) <= 60:
@@ -481,7 +436,8 @@ def generate_ai_article(category_name):
         art_title = f"{category_name} 실시간 현장 심층 리포트"
         body_content = raw_content
 
-    img_url, author_name = fetch_bulletproof_image(category_name)
+    # 기사 제목과 종목에 맞춤화된 이미지 호출
+    img_url, author_name = fetch_bulletproof_image(category_name, art_title)
     formatted_content = clean_and_format_content(body_content, category_name, art_title)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
@@ -809,17 +765,17 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
             .sub-icon {{ width: 14px; height: 14px; color: #555; }}
 
-                img {{ max-width: 100% !important; height: auto !important; }}
-                .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
-            </style>
-        </head>
-        <body>
-            <div class="header-flex">
-                <div class="logo-title">
-                    시사투데이&nbsp;<span class="logo-chang">창</span>
-                </div>
+            img {{ max-width: 100% !important; height: auto !important; }}
+            .article-img-box {{ margin: 25px auto !important; text-align: left !important; display: block !important; }}
+        </style>
+    </head>
+    <body>
+        <div class="header-flex">
+            <div class="logo-title">
+                시사투데이&nbsp;<span class="logo-chang">창</span>
             </div>
-            <div class="nav-tabs">
+        </div>
+        <div class="nav-tabs">
         """
     
     for cat in categories:
@@ -988,7 +944,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (실시간 24시간 속보 & 특성별 맞춤)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (Google 실시간 검색 팩트체크 탑재)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -999,10 +955,10 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <option value="건강/복지">건강/복지 (정부 복지 수혜 자격·의학적 지침)</option>
                     <option value="생활정보">생활정보 (부동산 절세 기준·알짜 생활 꿀팁)</option>
                     <option value="연예계뉴스">연예계뉴스 (화제의 인물 실명·프로그램·트렌드)</option>
-                    <option value="스포츠">스포츠 (오늘/어제 경기결과·팀명·선수실명)</option>
+                    <option value="스포츠">스포츠 (실시간 최신 경기결과·정확한 스코어/기록)</option>
                     <option value="지역창">지역창 (속초·강원 명소·축제·맛집 구체정보)</option>
                 </select>
-                <button type="submit">🚀 최신 속보 기반 정밀 기사 발행</button>
+                <button type="submit">🚀 실시간 검색 팩트체크 기사 자동 발행</button>
             </form>
         </div>
 
@@ -1250,7 +1206,7 @@ def create_manual(
         img_url = custom_image_url.strip()
         author_name = custom_image_author.strip() if custom_image_author else ""
     else:
-        img_url, author_name = fetch_bulletproof_image(category)
+        img_url, author_name = fetch_bulletproof_image(category, clean_title)
     
     formatted_content = clean_and_format_content(content, category, clean_title)
     save_article_to_db(category, clean_title, formatted_content, img_url, author_name)
@@ -1286,6 +1242,9 @@ def create_ai_expand(
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=full_query,
+            config={
+                "tools": [{"google_search": {}}]
+            }
         )
         final_content = response.text.strip()
     except Exception as e:
@@ -1296,7 +1255,7 @@ def create_ai_expand(
         img_url = custom_image_url.strip()
         author_name = custom_image_author.strip() if custom_image_author else ""
     else:
-        img_url, author_name = fetch_bulletproof_image(category)
+        img_url, author_name = fetch_bulletproof_image(category, clean_title)
 
     final_content = clean_and_format_content(final_content, category, clean_title)
     save_article_to_db(category, clean_title, final_content, img_url, author_name)
