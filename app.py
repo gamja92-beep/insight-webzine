@@ -551,15 +551,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:description" content="{art_desc_clean}">
             <meta property="og:image" content="{art_img}">
             <meta property="og:url" content="{art_link}">
-        <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-LE89BB179K');
-</script>
             <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
             {NAVER_ANALYTICS_SCRIPT}
             <style>
