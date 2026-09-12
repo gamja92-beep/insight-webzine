@@ -486,6 +486,7 @@ def ads_txt():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None, q: str = None):
+    # 🛠️ 구독 카드 스타일 클래스 정의 및 flex 정렬 강제 적용
     subscribe_card_html = """
     <div class="author-subscribe-card">
         <div class="author-name">시사투데이 창 <span class="author-arrow">›</span></div>
@@ -526,6 +527,14 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .img-source {{ font-size: 0.85em; color: #95a5a6; margin-bottom: 30px; font-style: italic; }}
                 .content {{ font-size: 1.02em; color: #111; }}
                 .content p {{ margin-bottom: 24px; }}
+                
+                /* 🛠️ 상세 페이지 구독 카드 전용 필수 스타일 */
+                .author-subscribe-card {{ display: flex !important; justify-content: space-between !important; align-items: center !important; background: white !important; border: 1px solid #e5e8ec !important; border-radius: 10px !important; padding: 14px 20px !important; margin-top: 25px !important; box-shadow: 0 2px 6px rgba(0,0,0,0.02) !important; box-sizing: border-box !important; }}
+                .author-name {{ font-size: 15px !important; font-weight: bold !important; color: #2c3e50 !important; display: flex !important; align-items: center !important; gap: 5px !important; }}
+                .author-arrow {{ color: #aaa !important; font-size: 14px !important; font-weight: normal !important; }}
+                .btn-subscribe {{ display: inline-flex !important; align-items: center !important; gap: 6px !important; background: #ffffff !important; color: #333333 !important; border: 1px solid #cfd4d9 !important; border-radius: 4px !important; padding: 7px 14px !important; font-size: 13px !important; font-weight: 500 !important; cursor: pointer !important; white-space: nowrap !important; }}
+                .btn-subscribe:hover {{ background: #f8f9fa !important; border-color: #aeb6bf !important; color: #111 !important; }}
+                .sub-icon {{ width: 14px !important; height: 14px !important; color: #555 !important; }}
             </style>
         </head>
         <body>
@@ -536,7 +545,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 {img_block}
                 <div class="content">{art['content']}</div>
             </div>
-            {subscribe_card_html}{subscribe_js}
+            {subscribe_card_html}
+            {subscribe_js}
         </body>
         </html>
         """
