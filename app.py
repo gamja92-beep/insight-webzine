@@ -543,6 +543,15 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <!DOCTYPE html>
         <html lang="ko">
         <head>
+            <!-- Google tag (gtag.js) -->
+           <script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
+           <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-LE89BB179K');
+            </script>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art_title_clean} - 시사투데이 창</title>
