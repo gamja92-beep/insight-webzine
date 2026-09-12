@@ -36,7 +36,7 @@ if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ==========================================================
-# 네이버 애널리틱스 추적 스크립트
+# 애널리틱스 분석 추적 스크립트
 # ==========================================================
 NAVER_ANALYTICS_SCRIPT = """
 <script type="text/javascript" src="//wcs.pstatic.net/wcslog.js"></script>
@@ -46,6 +46,19 @@ wcs_add["wa"] = "25f06e1fad42a20";
 if(window.wcs) {
 wcs_do();
 }
+</script>
+"""
+
+# 구글 애널리틱스 (GA4) - G-LE89BB179K 적용 완료
+GOOGLE_ANALYTICS_SCRIPT = """
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-LE89BB179K');
 </script>
 """
 
@@ -553,6 +566,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:url" content="{art_link}">
             <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
             {NAVER_ANALYTICS_SCRIPT}
+            {GOOGLE_ANALYTICS_SCRIPT}
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; width: 100%; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111111; line-height: 1.8; box-sizing: border-box; }}
                 .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
@@ -696,6 +710,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
         {NAVER_ANALYTICS_SCRIPT}
+        {GOOGLE_ANALYTICS_SCRIPT}
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; width: 100%; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; box-sizing: border-box; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; padding-bottom: 15px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 10px; }}
@@ -1158,9 +1173,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     </html>
     """
 
-# ==========================================================
-# 기사 수정 기능 라우터 추가
-# ==========================================================
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     if admin_auth != "authenticated":
