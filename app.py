@@ -611,7 +611,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
             
-            /* 📱 모바일 최적화: 모바일에서는 세로로 한 줄씩 꽉 차게 정렬 */
             .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px; }}
             .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
             .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
@@ -709,7 +708,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     rows = get_all_articles()
     articles_list_html = ""
     for r in rows:
-        # 🛠️ 수정 버튼과 삭제 버튼을 시각적으로 확실하게 분리하고 간격을 넓힘
         articles_list_html += f"""
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 12px 10px; font-size: 0.9em; color: #555;">{r['category']}</td>
@@ -981,6 +979,10 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         button {{ background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
         .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
         .header-img-box {{ background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
+        .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; }}
+        .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
+        .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
+        .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
     </style></head>
     <body>
         <a href="/admin/studio" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 관리자 스튜디오로</a>
@@ -1001,18 +1003,106 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" value="{art['title']}" required>
+                
                 <div class="header-img-box">
-                    <label>대표 이미지 주소(URL)</label>
-                    <input type="text" id="main_img_url" name="image_url" value="{current_img}">
+                    <label style="font-weight: bold; color: #2c3e50; margin-bottom: 8px; display: block;">🖼️ 대표 이미지 설정</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" id="edit_main_img_url" name="image_url" value="{current_img}" placeholder="대표 이미지 주소(URL)" style="margin-bottom: 0; flex: 1;">
+                        <button type="button" class="btn-action" style="background: #16a085; height: 42px;" onclick="document.getElementById('edit_main_file').click()">📁 내 기기 파일</button>
+                        <input type="file" id="edit_main_file" style="display: none;" accept="image/*" onchange="uploadEditMainImage(this)">
+                    </div>
                     <label>대표 이미지 출처 표기</label>
-                    <input type="text" name="image_author" value="{current_author}">
-                    <img id="main_img_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
+                    <input type="text" name="image_author" value="{current_author}" placeholder="출처 입력 (예: 연합뉴스)">
+                    <img id="edit_main_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
                 </div>
-                <label>기사 내용</label>
-                <textarea name="content" required>{art['content']}</textarea>
+
+                <label>기사 내용 및 본문 추가 이미지 삽입</label>
+                <div class="img-tool-box">
+                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
+                    <div class="img-tool-row"><input type="text" id="edit_source" placeholder="출처 표기" style="flex: 1;"></div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
+                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일</button>
+                        <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
+                    </div>
+                </div>
+
+                <textarea name="content" id="editContent" required>{art['content']}</textarea>
                 <button type="submit">💾 수정 사항 저장하기</button>
             </form>
-        </div></body></html>
+        </div>
+
+        <script>
+        async function uploadEditMainImage(input) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                try {{
+                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        document.getElementById('edit_main_img_url').value = data.url;
+                        const preview = document.getElementById('edit_main_preview');
+                        preview.src = data.url;
+                        preview.style.display = 'block';
+                        alert("대표 이미지가 성공적으로 업로드되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "오류"));
+                    }}
+                }} catch (err) {{
+                    alert("업로드 오류: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+
+        function injectHtmlTag(elementId, imgUrl, sourceText) {{
+            let captionHtml = "";
+            let cleanSource = sourceText ? sourceText.trim() : "";
+            if (cleanSource !== "") {{
+                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
+                    cleanSource = "Photo by " + cleanSource;
+                }}
+                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+            }}
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            const textarea = document.getElementById(elementId);
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+            textarea.focus();
+        }}
+        function insertImageWithSource(elementId, sourceInputId) {{
+            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+            if (url) {{
+                const source = document.getElementById(sourceInputId).value;
+                injectHtmlTag(elementId, url, source);
+                document.getElementById(sourceInputId).value = "";
+            }}
+        }}
+        async function uploadImageWithSource(input, elementId, sourceInputId) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                try {{
+                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        const source = document.getElementById(sourceInputId).value;
+                        injectHtmlTag(elementId, data.url, source);
+                        document.getElementById(sourceInputId).value = "";
+                        alert("사진이 성공적으로 삽입되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "오류"));
+                    }}
+                }} catch (err) {{
+                    alert("업로드 오류: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+        </script>
+    </body></html>
     """
 
 @app.post("/admin/update/{article_id}")
