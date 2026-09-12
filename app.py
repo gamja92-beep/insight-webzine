@@ -542,15 +542,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         detail_html = f"""
         <!DOCTYPE html>
         <html lang="ko">
-        <head><!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-LE89BB179K');
-</script>
+        <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art_title_clean} - 시사투데이 창</title>
@@ -559,6 +551,15 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             <meta property="og:description" content="{art_desc_clean}">
             <meta property="og:image" content="{art_img}">
             <meta property="og:url" content="{art_link}">
+        <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-LE89BB179K"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-LE89BB179K');
+</script>
             <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0517985818592419" crossorigin="anonymous"></script>
             {NAVER_ANALYTICS_SCRIPT}
             <style>
