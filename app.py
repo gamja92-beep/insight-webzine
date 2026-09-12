@@ -35,9 +35,6 @@ supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ==========================================================
-# 분석 추적 스크립트
-# ==========================================================
 NAVER_ANALYTICS_SCRIPT = """
 <script type="text/javascript" src="//wcs.pstatic.net/wcslog.js"></script>
 <script type="text/javascript">
@@ -203,6 +200,9 @@ def generate_smart_tags(text, title=""):
     return "#시사투데이 #이슈분석 #트렌드리포트 #실시간뉴스 #핵심인사이트 #종합분석"
 
 def clean_and_format_content(text, category_name="종합", title="", use_subtitles=True):
+    text = re.sub(r'^\s*\[?(기사\s*)?제목\]?\s*[:：]\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^\s*\[?본문\]?\s*[:：]?\s*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    
     text = text.replace('**', '').replace('__', '')
     clean_title_str = title.replace('**', '').replace('*', '').strip()
 
@@ -547,16 +547,54 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         articles = [a for a in articles if kw in a['title'].lower() or kw in a['content'].lower()]
 
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-    
+
+    # 상단 대표 카드 2개 생성
+    featured_articles = articles[:2] if articles else []
+    featured_html = ""
+    for art in featured_articles:
+        cat_name = art['category'] if art['category'] else '종합'
+        img_url = art['image_url'] if art['image_url'] else FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
+        featured_html += f"""
+        <div class="featured-card">
+            <div class="featured-img-wrap">
+                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img" onerror="this.src='{FALLBACK_POOL.get(cat_name, FALLBACK_POOL['세상이야기'])}'"></a>
+            </div>
+            <div class="featured-body">
+                <span class="badge">{cat_name}</span>
+                <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
+                <div class="card-date">발행 | {art['created_at']}</div>
+            </div>
+        </div>
+        """
+
     list_html = ""
-    display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-    for cat in display_cats:
-        cat_arts = [a for a in articles if a.get('category') == cat][:5]
-        if cat_arts:
-            list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
-            for art in cat_arts:
-                list_html += f'<div class="news-list-item"><a href="/?view={art["id"]}" class="list-title">{art["title"]}</a><span class="list-date">{art["created_at"].split()[0]}</span></div>'
+    if category and category != "전체":
+        cat_articles = articles
+        chunked_list = [cat_articles[i:i+5] for i in range(0, len(cat_articles), 5)]
+        for chunk in chunked_list:
+            list_html += f'<div class="news-section-box"><div class="section-header">📌 {category} 최신 리포트</div>'
+            for art in chunk:
+                list_html += f"""
+                <div class="news-list-item">
+                    <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                    <span class="list-date">{art['created_at'].split()[0]}</span>
+                </div>
+                """
             list_html += '</div>'
+    else:
+        display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
+        for cat in display_cats:
+            cat_arts = [a for a in articles if a.get('category') == cat][:5]
+            if cat_arts:
+                list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
+                for art in cat_arts:
+                    list_html += f"""
+                    <div class="news-list-item">
+                        <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                        <span class="list-date">{art['created_at'].split()[0]}</span>
+                    </div>
+                    """
+                list_html += '</div>'
 
     html = f"""
     <!DOCTYPE html>
@@ -568,22 +606,44 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         {NAVER_ANALYTICS_SCRIPT}{GOOGLE_ANALYTICS_SCRIPT}
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; }}
-            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; background: white; padding: 20px; border-radius: 10px; }}
+            .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }}
             .logo-title {{ font-family: 'Gowun Batang', serif; font-size: 1.6em; font-weight: 700; color: #1a252f; display: flex; align-items: center; gap: 8px; }}
-            .logo-chang {{ display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 4px 16px; border-radius: 6px; transform: rotate(5deg); }}
-            .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; }}
+            .logo-chang {{ display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 4px 16px; border-radius: 6px; transform: rotate(5deg); box-shadow: 3px 3px 6px rgba(0,0,0,0.12); }}
+            .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
+            
+            .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
+            .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
+            .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
+            .featured-card:hover .featured-img {{ transform: scale(1.03); }}
+            .featured-body {{ padding: 15px; display: flex; flex-direction: column; flex-grow: 1; }}
+            .badge {{ display: inline-block; padding: 3px 8px; background: #ebf5fb; color: #2980b9; border-radius: 4px; font-size: 0.75em; font-weight: bold; margin-bottom: 8px; width: fit-content; }}
+            .featured-title {{ font-size: 1.1em; color: #2c3e50; margin: 0 0 10px 0; line-height: 1.4; font-weight: 700; }}
+            .featured-title a {{ color: inherit; text-decoration: none; }}
+            .featured-title a:hover {{ color: #2980b9; }}
+            .card-date {{ font-size: 0.75em; color: #95a5a6; margin-top: auto; padding-top: 10px; border-top: 1px solid #f1f2f6; }}
+
             .news-section-box {{ background: white; border-radius: 10px; padding: 15px 20px; margin-bottom: 15px; box-shadow: 0 3px 10px rgba(0,0,0,0.04); }}
             .section-header {{ font-size: 1.05em; font-weight: bold; color: #1b4f72; border-bottom: 2px solid #ebf5fb; padding-bottom: 8px; margin-bottom: 10px; }}
             .news-list-item {{ display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f8f9fa; }}
+            .news-list-item:last-child {{ border-bottom: none; }}
             .list-title {{ flex-grow: 1; font-size: 0.96em; color: #2c3e50; text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 15px; }}
             .list-title:hover {{ color: #2980b9; text-decoration: underline; }}
             .list-date {{ font-size: 0.78em; color: #95a5a6; white-space: nowrap; }}
-            .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; margin-top: 20px; text-align: center; }}
+
+            .footer-search-box {{ background: white; padding: 18px 20px; border-radius: 10px; margin-top: 20px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.04); }}
             .search-form {{ display: flex; gap: 8px; justify-content: center; max-width: 400px; margin: 0 auto; }}
             .search-input {{ padding: 10px 15px; border: 1px solid #ccc; border-radius: 20px; flex-grow: 1; outline: none; }}
             .search-btn {{ padding: 10px 20px; background: #1b4f72; color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; }}
+            
+            .author-subscribe-card {{ display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e5e8ec; border-radius: 10px; padding: 14px 20px; margin-top: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }}
+            .author-name {{ font-size: 15px; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 5px; }}
+            .author-arrow {{ color: #aaa; font-size: 14px; font-weight: normal; }}
+            .btn-subscribe {{ display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #333333; border: 1px solid #cfd4d9; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }}
+            .btn-subscribe:hover {{ background: #f8f9fa; border-color: #aeb6bf; color: #111; }}
+            .sub-icon {{ width: 14px; height: 14px; color: #555; }}
         </style>
     </head>
     <body>
@@ -599,17 +659,20 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     if not articles:
         html += "<p style='text-align:center; color:#777; margin-top:80px;'>등록된 기사가 없습니다.</p>"
     else:
+        if not category and featured_html:
+            html += f'<div class="featured-grid">{featured_html}</div>'
         html += list_html
 
     html += f"""
         <div class="footer-search-box">
             <form action="/" method="get" class="search-form">
                 {"<input type='hidden' name='category' value='" + category + "'>" if category else ""}
-                <input type="text" name="q" class="search-input" placeholder="🔍 기사 검색..." value="{q if q else ''}">
+                <input type="text" name="q" class="search-input" placeholder="🔍 기사 제목 또는 내용 검색..." value="{q if q else ''}">
                 <button type="submit" class="search-btn">검색</button>
             </form>
         </div>
-        {subscribe_card_html}{subscribe_js}
+        {subscribe_card_html}
+        {subscribe_js}
     </body>
     </html>
     """
@@ -767,7 +830,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
+                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목 입력" required>
