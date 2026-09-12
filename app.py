@@ -724,18 +724,24 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="custom-head-box">
                     <label class="checkbox-label">
                         <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
-                        <span>🖼️ 언스플래시 자동 대표 이미지 사용하기</span>
+                        <span>🖼️ 언스플래시 자동 대표 이미지 사용하기 (체크 해제 시 직접 지정)</span>
                     </label>
                     <div id="manual_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
-                        <input type="text" name="custom_image_url" id="manual_head_url" placeholder="직접 넣을 대표 이미지 주소(URL)" style="margin-bottom: 8px;">
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기" style="margin-bottom: 4px;">
+                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" name="custom_image_url" id="manual_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
+                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('manual_head_file').click()">📁 내 기기 파일</button>
+                            <input type="file" id="manual_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'manual_head_url', 'manual_head_preview')">
+                        </div>
+                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
+                        <img id="manual_head_preview" class="preview-box-img">
                     </div>
                 </div>
 
                 <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
                     <label class="checkbox-label" style="color:#2c3e50;">
                         <input type="checkbox" name="use_subtitles" value="yes" checked>
-                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기 (체크 해제 시 본문만 평문으로 출력)</span>
+                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
                     </label>
                 </div>
 
@@ -761,8 +767,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목 입력" required>
@@ -770,18 +775,24 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="custom-head-box">
                     <label class="checkbox-label">
                         <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
-                        <span>🖼️ 언스플래시 자동 대표 이미지 사용하기</span>
+                        <span>🖼️ 언스플래시 자동 대표 이미지 사용하기 (체크 해제 시 직접 지정)</span>
                     </label>
                     <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
-                        <input type="text" name="custom_image_url" id="expand_head_url" placeholder="직접 넣을 대표 이미지 주소(URL)" style="margin-bottom: 8px;">
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기" style="margin-bottom: 4px;">
+                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" name="custom_image_url" id="expand_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
+                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
+                            <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
+                        </div>
+                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
+                        <img id="expand_head_preview" class="preview-box-img">
                     </div>
                 </div>
 
                 <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
                     <label class="checkbox-label" style="color:#2c3e50;">
                         <input type="checkbox" name="use_subtitles" value="yes" checked>
-                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기 (체크 해제 시 본문만 평문으로 출력)</span>
+                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
                     </label>
                 </div>
 
@@ -813,6 +824,30 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             const wrap = document.getElementById(type + '_custom_head_wrap');
             wrap.style.display = chk.checked ? 'none' : 'block';
         }}
+
+        async function uploadDirectHeadImage(input, urlInputId, previewImgId) {{
+            if (input.files && input.files[0]) {{
+                const formData = new FormData();
+                formData.append("file", input.files[0]);
+                try {{
+                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                    const data = await response.json();
+                    if (data.url) {{
+                        document.getElementById(urlInputId).value = data.url;
+                        const preview = document.getElementById(previewImgId);
+                        preview.src = data.url;
+                        preview.style.display = 'block';
+                        alert("대표 이미지가 성공적으로 업로드되었습니다!");
+                    }} else {{
+                        alert("업로드 실패: " + (data.error || "오류"));
+                    }}
+                }} catch (err) {{
+                    alert("업로드 오류: " + err);
+                }}
+                input.value = "";
+            }}
+        }}
+
         function injectHtmlTag(elementId, imgUrl, sourceText) {{
             let captionHtml = "";
             let cleanSource = sourceText ? sourceText.trim() : "";
