@@ -548,7 +548,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
 
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
-    # 대표 이미지 카드 생성 (전체보기일 땐 최신 2개, 특정 카테고리일 땐 해당 카테고리 최신 2개)
     featured_articles = articles[:2] if articles else []
     featured_html = ""
     for art in featured_articles:
@@ -569,7 +568,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
 
     list_html = ""
     if category and category != "전체":
-        # 특정 카테고리일 때: 상단에 대표카드 2개를 보여주고, 남은 기사들을 리스트로 출력
         remaining_articles = articles[2:] if len(articles) > 2 else []
         if remaining_articles:
             list_html += f'<div class="news-section-box"><div class="section-header">📌 {category} 이전 리포트</div>'
@@ -582,7 +580,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 """
             list_html += '</div>'
     else:
-        # 전체보기일 때: 카테고리별로 리스트 묶어서 출력
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
             cat_arts = [a for a in articles if a.get('category') == cat][:5]
@@ -614,7 +611,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; white-space: nowrap; }}
             .tab-item:hover, .tab-item.active {{ background: #1b4f72; color: white; }}
             
-            .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }}
+            /* 📱 모바일 최적화: 모바일에서는 세로로 한 줄씩 꽉 차게 정렬 */
+            .featured-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px; }}
             .featured-card {{ background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; }}
             .featured-img-wrap {{ width: 100%; height: 180px; overflow: hidden; background: #ddd; }}
             .featured-img {{ width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }}
@@ -711,14 +709,15 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     rows = get_all_articles()
     articles_list_html = ""
     for r in rows:
+        # 🛠️ 수정 버튼과 삭제 버튼을 시각적으로 확실하게 분리하고 간격을 넓힘
         articles_list_html += f"""
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 12px 10px; font-size: 0.9em; color: #555;">{r['category']}</td>
             <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
             <td style="padding: 12px 10px; font-size: 0.85em; color: #777;">{r['created_at']}</td>
-            <td style="padding: 12px 10px; text-align: right;">
-                <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 4px;">✏️ 수정</a>
-                <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;" onclick="return confirm('삭제하시겠습니까?');">🗑️ 삭제</a>
+            <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
+                <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 7px 14px; text-decoration: none; border-radius: 5px; font-size: 12.5px; font-weight: bold; margin-right: 8px; display: inline-block;">✏️ 수정</a>
+                <a href="/admin/delete/{r['id']}" style="background: #e74c3c; color: white; padding: 7px 14px; text-decoration: none; border-radius: 5px; font-size: 12.5px; font-weight: bold; display: inline-block;" onclick="return confirm('정말 이 기사를 삭제하시겠습니까?');">🗑️ 삭제</a>
             </td>
         </tr>
         """
@@ -832,8 +831,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목 입력" required>
