@@ -548,7 +548,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
 
     categories = ["전체", "정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
 
-    # 상단 대표 카드 2개 생성
+    # 대표 이미지 카드 생성 (전체보기일 땐 최신 2개, 특정 카테고리일 땐 해당 카테고리 최신 2개)
     featured_articles = articles[:2] if articles else []
     featured_html = ""
     for art in featured_articles:
@@ -569,11 +569,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
 
     list_html = ""
     if category and category != "전체":
-        cat_articles = articles
-        chunked_list = [cat_articles[i:i+5] for i in range(0, len(cat_articles), 5)]
-        for chunk in chunked_list:
-            list_html += f'<div class="news-section-box"><div class="section-header">📌 {category} 최신 리포트</div>'
-            for art in chunk:
+        # 특정 카테고리일 때: 상단에 대표카드 2개를 보여주고, 남은 기사들을 리스트로 출력
+        remaining_articles = articles[2:] if len(articles) > 2 else []
+        if remaining_articles:
+            list_html += f'<div class="news-section-box"><div class="section-header">📌 {category} 이전 리포트</div>'
+            for art in remaining_articles:
                 list_html += f"""
                 <div class="news-list-item">
                     <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
@@ -582,6 +582,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 """
             list_html += '</div>'
     else:
+        # 전체보기일 때: 카테고리별로 리스트 묶어서 출력
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
             cat_arts = [a for a in articles if a.get('category') == cat][:5]
@@ -659,9 +660,10 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     if not articles:
         html += "<p style='text-align:center; color:#777; margin-top:80px;'>등록된 기사가 없습니다.</p>"
     else:
-        if not category and featured_html:
+        if featured_html:
             html += f'<div class="featured-grid">{featured_html}</div>'
-        html += list_html
+        if list_html:
+            html += list_html
 
     html += f"""
         <div class="footer-search-box">
