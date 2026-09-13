@@ -111,7 +111,6 @@ def init_db():
 
 init_db()
 
-# 🛡️ 더욱 안전하고 확실한 고화질 예비 이미지 풀 (Unsplash 지연 시 즉시 대체)
 FALLBACK_POOL = {
     "야구": "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop",
     "축구": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop",
@@ -333,50 +332,58 @@ def delete_article_from_db(article_id):
         conn.commit()
         conn.close()
 
-def generate_ai_article(category_name):
+# 🤖 AI 자동 기사 발행 (최근 핫이슈 및 사건 심층보도 전용)
+def generate_ai_article(category_name, use_subtitles=True):
     news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
-    ref_fact_context = f"\n[속보 헤드라인]: {news_title}\n[요약]: {news_desc}\n" if news_title else ""
+    ref_fact_context = f"\n[실시간 핫이슈 헤드라인]: {news_title}\n[핵심 팩트 요약]: {news_desc}\n[보도 일시]: {pub_date}\n" if news_title else ""
     
     editorial_prompt = f"""
-당신은 팩트를 생명으로 여기는 정론지의 수석 논설위원입니다.
+당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
 오늘은 **2026년 9월 13일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
-1. 첫 번째 줄: 기사 제목 한 줄.
-2. 두 번째 줄: 빈 줄.
-3. 세 번째 줄부터: 3~4개 단락 본문.
+지침:
+1. 최근 발생한 가장 뜨거운 핫이슈와 사건 사고를 정밀하게 파고드는 심층보도 형태로 기사를 작성하세요.
+2. 첫 번째 줄: 검색 유입을 극대화하는 강력하고 객관적인 보도체 기사 제목 한 줄만 작성.
+3. 두 번째 줄: 빈 줄.
+4. 세 번째 줄부터: 4개 이상의 상세 문단으로 구성하고, 현장감 있는 팩트와 배경, 향후 파장까지 심도 있게 서술하세요.
 """
     try:
         response = client.models.generate_content(model=MODEL_NAME, contents=editorial_prompt)
         raw_content = response.text.strip()
     except Exception as e:
-        raw_content = f"오류: {e}"
+        raw_content = f"기사 생성 오류: {e}"
 
     split_lines = raw_content.split("\n", 1)
     if len(split_lines) > 1 and len(split_lines[0].strip()) <= 60:
         art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
         body_content = split_lines[1].strip()
     else:
-        art_title = f"{category_name} 실시간 현장 리포트"
+        art_title = f"{category_name} 긴급 현장 심층보도"
         body_content = raw_content
 
     img_url, author_name = fetch_bulletproof_image(category_name, art_title)
-    formatted_content = clean_and_format_content(body_content, category_name, art_title, use_subtitles=True)
+    formatted_content = clean_and_format_content(body_content, category_name, art_title, use_subtitles=use_subtitles)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
 def scheduled_job():
     categories = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-    generate_ai_article(random.choice(categories))
+    generate_ai_article(random.choice(categories), use_subtitles=True)
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(scheduled_job, 'interval', hours=6)
 scheduler.start()
 
 @app.post("/admin/create-auto")
-def create_auto(category: str = Form(...), admin_auth: str = Cookie(None)):
+def create_auto(
+    category: str = Form(...), 
+    use_subtitles: str = Form(None),
+    admin_auth: str = Cookie(None)
+):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
-    generate_ai_article(category)
+    sub_flag = True if use_subtitles == "yes" else False
+    generate_ai_article(category, use_subtitles=sub_flag)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/create-manual")
@@ -769,14 +776,23 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (최근 핫이슈 및 심층보도)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
+                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
-                <button type="submit">🚀 최신 속보 기반 기사 발행</button>
+
+                <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin: 12px 0;">
+                    <label class="checkbox-label" style="color:#2c3e50;">
+                        <input type="checkbox" name="use_subtitles" value="yes" checked>
+                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기 (체크 해제 시 평문 출력)</span>
+                    </label>
+                </div>
+
+                <button type="submit">🚀 최신 핫이슈 심층보도 기사 발행</button>
             </form>
         </div>
 
@@ -786,7 +802,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
+                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목 입력" required>
