@@ -111,6 +111,7 @@ def init_db():
 
 init_db()
 
+# 🛡️ 더욱 안전하고 확실한 고화질 예비 이미지 풀 (Unsplash 지연 시 즉시 대체)
 FALLBACK_POOL = {
     "야구": "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop",
     "축구": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop",
@@ -166,7 +167,7 @@ def fetch_bulletproof_image(category_name, article_title=""):
     try:
         headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
         params = {"query": keyword, "orientation": "landscape", "page": random.randint(1, 10)}
-        res = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=4)
+        res = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=3)
         if res.status_code == 200:
             results = res.json().get("results", [])
             if results:
@@ -176,7 +177,7 @@ def fetch_bulletproof_image(category_name, article_title=""):
                 if img_url:
                     return img_url, author
     except Exception as e:
-        print(f"[이미지 API 경고]: {e}")
+        print(f"[이미지 API 지연/경고 - 예비 이미지로 대체]: {e}")
 
     return default_url, "Unsplash"
 
@@ -338,7 +339,7 @@ def generate_ai_article(category_name):
     
     editorial_prompt = f"""
 당신은 팩트를 생명으로 여기는 정론지의 수석 논설위원입니다.
-오늘은 **2026년 9월 11일**입니다.
+오늘은 **2026년 9월 13일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 1. 첫 번째 줄: 기사 제목 한 줄.
@@ -486,7 +487,6 @@ def ads_txt():
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = None, view: int = None, q: str = None):
-    # 🛠️ 구독 카드 스타일 클래스 정의 및 flex 정렬 강제 적용
     subscribe_card_html = """
     <div class="author-subscribe-card">
         <div class="author-name">시사투데이 창 <span class="author-arrow">›</span></div>
@@ -508,7 +508,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art = get_article_by_id(view)
         if not art:
             return RedirectResponse(url="/", status_code=303)
-        img_block = f'<img src="{art["image_url"]}" class="article-img"><div class="img-source">📷 Photo by {art.get("image_author", "")}</div>' if art.get("image_url") else ""
+        img_block = f'<img src="{art["image_url"]}" class="article-img" onerror="this.onerror=null; this.src=\'{FALLBACK_POOL.get(art.get("category"), FALLBACK_POOL["세상이야기"])}\';"><div class="img-source">📷 Photo by {art.get("image_author", "")}</div>' if art.get("image_url") else ""
         return f"""
         <!DOCTYPE html>
         <html lang="ko">
@@ -528,7 +528,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 .content {{ font-size: 1.02em; color: #111; }}
                 .content p {{ margin-bottom: 24px; }}
                 
-                /* 🛠️ 상세 페이지 구독 카드 전용 필수 스타일 */
                 .author-subscribe-card {{ display: flex !important; justify-content: space-between !important; align-items: center !important; background: white !important; border: 1px solid #e5e8ec !important; border-radius: 10px !important; padding: 14px 20px !important; margin-top: 25px !important; box-shadow: 0 2px 6px rgba(0,0,0,0.02) !important; box-sizing: border-box !important; }}
                 .author-name {{ font-size: 15px !important; font-weight: bold !important; color: #2c3e50 !important; display: flex !important; align-items: center !important; gap: 5px !important; }}
                 .author-arrow {{ color: #aaa !important; font-size: 14px !important; font-weight: normal !important; }}
@@ -563,10 +562,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     for art in featured_articles:
         cat_name = art['category'] if art['category'] else '종합'
         img_url = art['image_url'] if art['image_url'] else FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
+        fallback_fallback = FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
         featured_html += f"""
         <div class="featured-card">
             <div class="featured-img-wrap">
-                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img" onerror="this.src='{FALLBACK_POOL.get(cat_name, FALLBACK_POOL['세상이야기'])}'"></a>
+                <a href="/?view={art['id']}"><img src="{img_url}" class="featured-img" onerror="this.onerror=null; this.src='{fallback_fallback}';"></a>
             </div>
             <div class="featured-body">
                 <span class="badge">{cat_name}</span>
@@ -774,8 +774,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <button type="submit">🚀 최신 속보 기반 기사 발행</button>
             </form>
@@ -787,8 +786,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목 입력" required>
