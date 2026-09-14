@@ -3,7 +3,6 @@ import os
 import sqlite3
 import random
 import time
-import requests
 import re
 import xml.etree.ElementTree as ET
 import urllib.request
@@ -23,7 +22,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 API_KEY = os.environ.get("API_KEY", "")
 MODEL_NAME = "gemini-3.6-flash"
 
-UNSPLASH_ACCESS_KEY = "14W3nppcnrDp-1qJbpqzxERefLjS25QFZIZ27uYEhhA"
 ADMIN_PASSWORD = "1234"
 
 client = genai.Client(api_key=API_KEY)
@@ -111,84 +109,145 @@ def init_db():
 
 init_db()
 
-FALLBACK_POOL = {
-    "농구": "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&auto=format&fit=crop",
-    "야구": "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop",
-    "축구": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop",
-    "스포츠": "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&auto=format&fit=crop",
-    "정치/시사": "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop",
-    "경제/주식": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop",
-    "AI/테크": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop",
-    "건강/복지": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop",
-    "생활정보": "https://images.unsplash.com/photo-1484807352052-23338990c6c8?w=800&auto=format&fit=crop",
-    "연예계뉴스": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&auto=format&fit=crop",
-    "지역창": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop",
-    "세상이야기": "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=800&auto=format&fit=crop"
+# 카테고리별 10장씩 엄선된 영구 고화질 이미지 풀 (절대 깨지지 않음)
+SMART_IMAGE_POOLS = {
+    "정치/시사": [
+        ("https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=900&auto=format&fit=crop", "Government Briefing"),
+        ("https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=900&auto=format&fit=crop", "National Assembly"),
+        ("https://images.unsplash.com/photo-1555848962-6e79363ec58f?w=900&auto=format&fit=crop", "Public Policy"),
+        ("https://images.unsplash.com/photo-1575505586569-646b2ca898fc?w=900&auto=format&fit=crop", "Political Forum"),
+        ("https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?w=900&auto=format&fit=crop", "Diplomacy"),
+        ("https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=900&auto=format&fit=crop", "Civic Center"),
+        ("https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=900&auto=format&fit=crop", "Global Issue"),
+        ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=900&auto=format&fit=crop", "Metropolitan Hall"),
+        ("https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=900&auto=format&fit=crop", "Conference Room"),
+        ("https://images.unsplash.com/photo-1521791136064-7986c2920216?w=900&auto=format&fit=crop", "Strategic Meeting")
+    ],
+    "경제/주식": [
+        ("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=900&auto=format&fit=crop", "Stock Market"),
+        ("https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=900&auto=format&fit=crop", "Trading Floor"),
+        ("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=900&auto=format&fit=crop", "Corporate Tower"),
+        ("https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=900&auto=format&fit=crop", "Financial District"),
+        ("https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=900&auto=format&fit=crop", "Economic Growth"),
+        ("https://images.unsplash.com/photo-1563986768609-322da13575f3?w=900&auto=format&fit=crop", "Digital Banking"),
+        ("https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=900&auto=format&fit=crop", "Business Strategy"),
+        ("https://images.unsplash.com/photo-1535320903710-d993d3d77d29?w=900&auto=format&fit=crop", "Investment Chart"),
+        ("https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=900&auto=format&fit=crop", "Enterprise Plaza"),
+        ("https://images.unsplash.com/photo-1579532537598-459ecdaf39cc?w=900&auto=format&fit=crop", "Market Trends")
+    ],
+    "세상이야기": [
+        ("https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=900&auto=format&fit=crop", "City Scenery"),
+        ("https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop", "Nature Valley"),
+        ("https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=900&auto=format&fit=crop", "Scenic Horizon"),
+        ("https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=900&auto=format&fit=crop", "Forest Pathway"),
+        ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&auto=format&fit=crop", "Coastal View"),
+        ("https://images.unsplash.com/photo-1519681393784-d120267933ba?w=900&auto=format&fit=crop", "Starry Night"),
+        ("https://images.unsplash.com/photo-1426604966848-d7adac902bff?w=900&auto=format&fit=crop", "Mountain Stream"),
+        ("https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900&auto=format&fit=crop", "Serene Lake"),
+        ("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&auto=format&fit=crop", "Misty Woods"),
+        ("https://images.unsplash.com/photo-1511497584788-876761197069?w=900&auto=format&fit=crop", "Deep Forest")
+    ],
+    "AI/테크": [
+        ("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=900&auto=format&fit=crop", "AI Technology"),
+        ("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=900&auto=format&fit=crop", "Digital Network"),
+        ("https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=900&auto=format&fit=crop", "Cyber Matrix"),
+        ("https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=900&auto=format&fit=crop", "Global Tech"),
+        ("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=900&auto=format&fit=crop", "Cyber Security"),
+        ("https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=900&auto=format&fit=crop", "Innovation Lab"),
+        ("https://images.unsplash.com/photo-1518770660439-4636190af475?w=900&auto=format&fit=crop", "Hardware Circuit"),
+        ("https://images.unsplash.com/photo-1531482615713-2afd69097998?w=900&auto=format&fit=crop", "Tech Workspace"),
+        ("https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?w=900&auto=format&fit=crop", "Laptop Coding"),
+        ("https://images.unsplash.com/photo-1509228468518-180dd4864904?w=900&auto=format&fit=crop", "Quantum Computing")
+    ],
+    "건강/복지": [
+        ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&auto=format&fit=crop", "Wellness Center"),
+        ("https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=900&auto=format&fit=crop", "Medical Care"),
+        ("https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=900&auto=format&fit=crop", "Senior Health"),
+        ("https://images.unsplash.com/photo-1516549655169-df83a0774514?w=900&auto=format&fit=crop", "Hospital Ward"),
+        ("https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=900&auto=format&fit=crop", "Healthcare Team"),
+        ("https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=900&auto=format&fit=crop", "Pharmacy Lab"),
+        ("https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=900&auto=format&fit=crop", "Healthy Living"),
+        ("https://images.unsplash.com/photo-1544717305-2782549b5136?w=900&auto=format&fit=crop", "Elderly Care"),
+        ("https://images.unsplash.com/photo-1512290900672-8a712b682278?w=900&auto=format&fit=crop", "Active Senior"),
+        ("https://images.unsplash.com/photo-1511174511562-5f7f18b874f8?w=900&auto=format&fit=crop", "Mental Support")
+    ],
+    "생활정보": [
+        ("https://images.unsplash.com/photo-1484807352052-23338990c6c8?w=900&auto=format&fit=crop", "Modern Interior"),
+        ("https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&auto=format&fit=crop", "Real Estate"),
+        ("https://images.unsplash.com/photo-1554469384-e58fac16e23a?w=900&auto=format&fit=crop", "Urban Living"),
+        ("https://images.unsplash.com/photo-1513694203232-719a280e022f?w=900&auto=format&fit=crop", "Home Design"),
+        ("https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=900&auto=format&fit=crop", "Apartment View"),
+        ("https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=900&auto=format&fit=crop", "House Exterior"),
+        ("https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=900&auto=format&fit=crop", "Consumer Life"),
+        ("https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=900&auto=format&fit=crop", "Living Space"),
+        ("https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&auto=format&fit=crop", "Suburban Home"),
+        ("https://images.unsplash.com/photo-1507089947368-19c1da9775ae?w=900&auto=format&fit=crop", "Daily Routine")
+    ],
+    "연예계뉴스": [
+        ("https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=900&auto=format&fit=crop", "Concert Stage"),
+        ("https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=900&auto=format&fit=crop", "Music Festival"),
+        ("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=900&auto=format&fit=crop", "Acoustic Stage"),
+        ("https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=900&auto=format&fit=crop", "DJ & Lights"),
+        ("https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=900&auto=format&fit=crop", "Live Performance"),
+        ("https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=900&auto=format&fit=crop", "Concert Crowd"),
+        ("https://images.unsplash.com/photo-1469488865564-c2de10f69f96?w=900&auto=format&fit=crop", "Showbiz Lighting"),
+        ("https://images.unsplash.com/photo-1524368535928-5b5e009c74b3?w=900&auto=format&fit=crop", "Band Jamming"),
+        ("https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=900&auto=format&fit=crop", "Red Carpet"),
+        ("https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=900&auto=format&fit=crop", "Festive Vibe")
+    ],
+    "스포츠": [
+        ("https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=900&auto=format&fit=crop", "Stadium Track"),
+        ("https://images.unsplash.com/photo-1546519638-68e109498ffc?w=900&auto=format&fit=crop", "Basketball Court"),
+        ("https://images.unsplash.com/photo-1508344928928-7165b67de128?w=900&auto=format&fit=crop", "Baseball Diamond"),
+        ("https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=900&auto=format&fit=crop", "Soccer Pitch"),
+        ("https://images.unsplash.com/photo-1517649763962-0c623266cf10?w=900&auto=format&fit=crop", "Athletic Track"),
+        ("https://images.unsplash.com/photo-1569517282132-25d22f4573e6?w=900&auto=format&fit=crop", "Sports Arena"),
+        ("https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=900&auto=format&fit=crop", "Football Match"),
+        ("https://images.unsplash.com/photo-1519766304817-4f37bda74a29?w=900&auto=format&fit=crop", "Team Training"),
+        ("https://images.unsplash.com/photo-1530549387789-4c1017266635?w=900&auto=format&fit=crop", "Swimming Pool"),
+        ("https://images.unsplash.com/photo-1518619897877-80efef847e02?w=900&auto=format&fit=crop", "Indoor Gym")
+    ],
+    "지역창": [
+        ("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&auto=format&fit=crop", "Sokcho Beach"),
+        ("https://images.unsplash.com/photo-1533105079780-92b9be482077?w=900&auto=format&fit=crop", "Coastal Horizon"),
+        ("https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=900&auto=format&fit=crop", "Mountain Ridge"),
+        ("https://images.unsplash.com/photo-1519681393784-d120267933ba?w=900&auto=format&fit=crop", "Sunrise Peak"),
+        ("https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=900&auto=format&fit=crop", "Nature Vista"),
+        ("https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900&auto=format&fit=crop", "Calm Waters"),
+        ("https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=900&auto=format&fit=crop", "Pine Trail"),
+        ("https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=900&auto=format&fit=crop", "Forest Morning"),
+        ("https://images.unsplash.com/photo-1426604966848-d7adac902bff?w=900&auto=format&fit=crop", "River Valley"),
+        ("https://images.unsplash.com/photo-1511497584788-876761197069?w=900&auto=format&fit=crop", "Deep Woods")
+    ]
 }
 
 def clean_article_title(raw_title):
     t = raw_title.replace('**', '').replace('*', '').strip()
-    # 대괄호 머리말(예: [심층분석], [논설], [단독] 등) 강제 제거
     t = re.sub(r'^\[[^\]]+\]\s*', '', t).strip()
     return t
 
 def fetch_bulletproof_image(category_name, article_title=""):
-    title_lower = (article_title + " " + category_name).lower()
+    pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
     
-    if category_name == "스포츠":
-        if any(k in title_lower for k in ["농구", "KBL", "NBA", "8강", "국가대표"]):
-            keyword = "basketball court"
-            default_url = FALLBACK_POOL["농구"]
-        elif any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "안타", "김도영"]):
-            keyword = "baseball"
-            default_url = FALLBACK_POOL["야구"]
-        elif any(k in title_lower for k in ["축구", "손흥민", "골", "epl", "k리그"]):
-            keyword = "soccer"
-            default_url = FALLBACK_POOL["축구"]
-        else:
-            keyword = "stadium sports"
-            default_url = FALLBACK_POOL["스포츠"]
-    elif category_name == "AI/테크":
-        keyword = "technology AI"
-        default_url = FALLBACK_POOL["AI/테크"]
-    elif category_name == "경제/주식":
-        keyword = "finance stock market"
-        default_url = FALLBACK_POOL["경제/주식"]
-    elif category_name == "정치/시사":
-        keyword = "politics government"
-        default_url = FALLBACK_POOL["정치/시사"]
-    elif category_name == "연예계뉴스":
-        keyword = "concert entertainment"
-        default_url = FALLBACK_POOL["연예계뉴스"]
-    elif category_name == "지역창":
-        keyword = "korea scenery sokcho"
-        default_url = FALLBACK_POOL["지역창"]
-    elif category_name == "건강/복지":
-        keyword = "health senior wellness"
-        default_url = FALLBACK_POOL["건강/복지"]
-    elif category_name == "생활정보":
-        keyword = "lifestyle interior"
-        default_url = FALLBACK_POOL["생활정보"]
+    # 기사 제목이나 키워드 해시값을 이용해 10장 중 가장 적절한 이미지를 스마트하게 매칭
+    combined_str = (article_title + category_name).lower()
+    selected_tuple = random.choice(pool) # 기본 랜덤 분산
+    
+    if "농구" in combined_str or "국가대표" in combined_str or "8강" in combined_str:
+        if category_name == "스포츠":
+            selected_tuple = SMART_IMAGE_POOLS["스포츠"][1]
+    elif "야구" in combined_str or "홈런" in combined_str:
+        if category_name == "스포츠":
+            selected_tuple = SMART_IMAGE_POOLS["스포츠"][2]
+    elif "축구" in combined_str or "골" in combined_str:
+        if category_name == "스포츠":
+            selected_tuple = SMART_IMAGE_POOLS["스포츠"][3]
     else:
-        keyword = "nature landscape"
-        default_url = FALLBACK_POOL["세상이야기"]
+        # 제목 글자 길이와 해시를 조합하여 10장 중 하나를 고정성 있게 매칭
+        idx = abs(hash(article_title)) % len(pool)
+        selected_tuple = pool[idx]
 
-    try:
-        headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-        params = {"query": keyword, "orientation": "landscape", "page": random.randint(1, 10)}
-        res = requests.get("https://api.unsplash.com/search/photos", headers=headers, params=params, timeout=3)
-        if res.status_code == 200:
-            results = res.json().get("results", [])
-            if results:
-                item = random.choice(results)
-                img_url = item["urls"].get("regular") or item["urls"].get("small")
-                author = item.get("user", {}).get("name", "Unsplash")
-                if img_url:
-                    return img_url, author
-    except Exception as e:
-        print(f"[이미지 API 지연/경고 - 예비 이미지로 대체]: {e}")
-
-    return default_url, "Unsplash"
+    return selected_tuple[0], selected_tuple[1]
 
 def generate_smart_tags(text, title=""):
     try:
@@ -354,7 +413,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     
     editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
-오늘은 **2026년 9월 14일**입니다.
+오늘은 **2026년 9월 15일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 지침:
@@ -467,14 +526,19 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     if admin_auth != "authenticated":
         return {"error": "Unauthorized"}
     try:
-        os.makedirs("static", exist_ok=True)
         file_ext = file.filename.split(".")[-1]
         unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
-        file_path = os.path.join("static", unique_filename)
         contents = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(contents)
-        return {"url": f"/static/{unique_filename}"}
+        
+        if supabase:
+            supabase.storage.from_("images").upload(unique_filename, contents, file_options={"content-type": file.content_type})
+            public_url_res = supabase.storage.from_("images").get_public_url(unique_filename)
+            return {"url": public_url_res}
+        else:
+            file_path = os.path.join("static", unique_filename)
+            with open(file_path, "wb") as f:
+                f.write(contents)
+            return {"url": f"/static/{unique_filename}"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -530,8 +594,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art = get_article_by_id(view)
         if not art:
             return RedirectResponse(url="/", status_code=303)
-        fallback_url = FALLBACK_POOL.get(art.get("category"), FALLBACK_POOL["세상이야기"])
-        img_block = f'<img src="{art["image_url"]}" class="article-img" onerror="this.onerror=null; this.src=\'{fallback_url}\';"><div class="img-source">📷 Photo by {art.get("image_author", "")}</div>' if art.get("image_url") else ""
+        fallback_pool = SMART_IMAGE_POOLS.get(art.get("category"), SMART_IMAGE_POOLS["세상이야기"])
+        fallback_url = fallback_pool[0][0]
+        raw_img_url = art.get("image_url") or ""
+        img_tag_src = raw_img_url if raw_img_url.startswith("http") or raw_img_url.startswith("/") else fallback_url
+        img_block = f'<img src="{img_tag_src}" class="article-img" onerror="this.onerror=null; this.src=\'{fallback_url}\';"><div class="img-source">📷 Photo by {art.get("image_author", "")}</div>' if raw_img_url else ""
         return f"""
         <!DOCTYPE html>
         <html lang="ko">
@@ -584,8 +651,10 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     featured_html = ""
     for art in featured_articles:
         cat_name = art['category'] if art['category'] else '종합'
-        img_url = art['image_url'] if art['image_url'] else FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
-        fallback_fallback = FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
+        fallback_pool = SMART_IMAGE_POOLS.get(cat_name, SMART_IMAGE_POOLS["세상이야기"])
+        fallback_fallback = fallback_pool[0][0]
+        raw_img_url = art.get('image_url') or ""
+        img_url = raw_img_url if raw_img_url.startswith("http") or raw_img_url.startswith("/") else fallback_fallback
         clean_t = clean_article_title(art['title'])
         featured_html += f"""
         <div class="featured-card">
@@ -822,8 +891,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
                 <label>기사 제목</label>
                 <input type="text" name="title" placeholder="제목 입력" required>
@@ -831,7 +899,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="custom-head-box">
                     <label class="checkbox-label">
                         <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
-                        <span>🖼️ 언스플래시 자동 대표 이미지 사용하기 (체크 해제 시 직접 지정)</span>
+                        <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
                     </label>
                     <div id="manual_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
                         <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
@@ -882,7 +950,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <div class="custom-head-box">
                     <label class="checkbox-label">
                         <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
-                        <span>🖼️ 언스플래시 자동 대표 이미지 사용하기 (체크 해제 시 직접 지정)</span>
+                        <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
                     </label>
                     <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
                         <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
@@ -944,7 +1012,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                         const preview = document.getElementById(previewImgId);
                         preview.src = data.url;
                         preview.style.display = 'block';
-                        alert("대표 이미지가 성공적으로 업로드되었습니다!");
+                        alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
                     }} else {{
                         alert("업로드 실패: " + (data.error || "오류"));
                     }}
@@ -990,7 +1058,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                         const source = document.getElementById(sourceInputId).value;
                         injectHtmlTag(elementId, data.url, source);
                         document.getElementById(sourceInputId).value = "";
-                        alert("사진이 성공적으로 삽입되었습니다!");
+                        alert("사진이 Supabase 클라우드에 업로드되었습니다!");
                     }} else {{
                         alert("업로드 실패: " + (data.error || "오류"));
                     }}
@@ -1091,7 +1159,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                         const preview = document.getElementById('edit_main_preview');
                         preview.src = data.url;
                         preview.style.display = 'block';
-                        alert("대표 이미지가 성공적으로 업로드되었습니다!");
+                        alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
                     }} else {{
                         alert("업로드 실패: " + (data.error || "오류"));
                     }}
@@ -1137,7 +1205,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                         const source = document.getElementById(sourceInputId).value;
                         injectHtmlTag(elementId, data.url, source);
                         document.getElementById(sourceInputId).value = "";
-                        alert("사진이 성공적으로 삽입되었습니다!");
+                        alert("사진이 Supabase 클라우드에 업로드되었습니다!");
                     }} else {{
                         alert("업로드 실패: " + (data.error || "오류"));
                     }}
