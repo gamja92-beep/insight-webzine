@@ -126,6 +126,12 @@ FALLBACK_POOL = {
     "세상이야기": "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=800&auto=format&fit=crop"
 }
 
+def clean_article_title(raw_title):
+    t = raw_title.replace('**', '').replace('*', '').strip()
+    # 대괄호 머리말(예: [심층분석], [논설], [단독] 등) 강제 제거
+    t = re.sub(r'^\[[^\]]+\]\s*', '', t).strip()
+    return t
+
 def fetch_bulletproof_image(category_name, article_title=""):
     title_lower = (article_title + " " + category_name).lower()
     
@@ -208,7 +214,7 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
     text = re.sub(r'^\s*\[?본문\]?\s*[:：]?\s*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
     
     text = text.replace('**', '').replace('__', '')
-    clean_title_str = title.replace('**', '').replace('*', '').strip()
+    clean_title_str = clean_article_title(title)
 
     lines_raw = text.split('\n')
     processed_lines = []
@@ -244,11 +250,12 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
 def save_article_to_db(category, title, content, image_url, image_author):
     kst = timezone(timedelta(hours=9))
     current_time_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
+    clean_t = clean_article_title(title)
     
     if supabase:
         supabase.table("articles").insert({
             "category": category,
-            "title": title,
+            "title": clean_t,
             "content": content,
             "image_url": image_url,
             "image_author": image_author,
@@ -259,7 +266,7 @@ def save_article_to_db(category, title, content, image_url, image_author):
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO articles (category, title, content, image_url, image_author, created_at) VALUES (?, ?, ?, ?, ?, ?)", 
-            (category, title, content, image_url, image_author, current_time_str)
+            (category, clean_t, content, image_url, image_author, current_time_str)
         )
         conn.commit()
         conn.close()
@@ -281,14 +288,18 @@ def get_all_articles(category=None):
         rows = cursor.fetchall()
         conn.close()
         return [{
-            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
+            "id": r[0], "category": r[1], "title": clean_article_title(r[2]), "content": r[3], 
             "image_url": r[4], "image_author": r[5], "created_at": r[6]
         } for r in rows]
 
 def get_article_by_id(article_id):
     if supabase:
         response = supabase.table("articles").select("*").eq("id", article_id).execute()
-        return response.data[0] if response.data else None
+        if response.data:
+            art = response.data[0]
+            art["title"] = clean_article_title(art["title"])
+            return art
+        return None
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
@@ -298,19 +309,20 @@ def get_article_by_id(article_id):
         if not r:
             return None
         return {
-            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
+            "id": r[0], "category": r[1], "title": clean_article_title(r[2]), "content": r[3], 
             "image_url": r[4], "image_author": r[5], "created_at": r[6]
         }
 
 def update_article_in_db(article_id, category, title, content, image_url, image_author):
-    formatted_content = clean_and_format_content(content, category, title, use_subtitles=True)
+    clean_t = clean_article_title(title)
+    formatted_content = clean_and_format_content(content, category, clean_t, use_subtitles=True)
     clean_url = image_url.strip() if image_url and image_url.strip() else ""
     clean_author = image_author.strip() if image_author and image_author.strip() else ""
     
     if supabase:
         update_data = {
             "category": category,
-            "title": title,
+            "title": clean_t,
             "content": formatted_content,
             "image_url": clean_url,
             "image_author": clean_author
@@ -321,7 +333,7 @@ def update_article_in_db(article_id, category, title, content, image_url, image_
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE articles SET category = ?, title = ?, content = ?, image_url = ?, image_author = ? WHERE id = ?", 
-            (category, title, formatted_content, clean_url, clean_author, article_id)
+            (category, clean_t, formatted_content, clean_url, clean_author, article_id)
         )
         conn.commit()
         conn.close()
@@ -347,7 +359,7 @@ def generate_ai_article(category_name, use_subtitles=True):
 {ref_fact_context}
 지침:
 1. 최근 발생한 가장 뜨거운 핫이슈와 사건 사고를 정밀하게 파고드는 심층보도 형태로 기사를 작성하세요.
-2. 첫 번째 줄: 검색 유입을 극대화하는 강력하고 객관적인 보도체 기사 제목 한 줄만 작성.
+2. 첫 번째 줄: 검색 유입을 극대화하는 강력하고 객관적인 보도체 기사 제목 한 줄만 작성. (절대 제목 앞에 [심층분석], [논설], [단독] 등의 대괄호 말머리나 수식어를 붙이지 마세요. 순수 제목만 작성할 것)
 3. 두 번째 줄: 빈 줄.
 4. 세 번째 줄부터: 4개 이상의 상세 문단으로 구성하고, 현장감 있는 팩트와 배경, 향후 파장까지 심도 있게 서술하세요.
 """
@@ -359,7 +371,7 @@ def generate_ai_article(category_name, use_subtitles=True):
 
     split_lines = raw_content.split("\n", 1)
     if len(split_lines) > 1 and len(split_lines[0].strip()) <= 60:
-        art_title = split_lines[0].replace("#", "").replace("제목:", "").replace("**", "").strip()
+        art_title = clean_article_title(split_lines[0])
         body_content = split_lines[1].strip()
     else:
         art_title = f"{category_name} 긴급 현장 심층보도"
@@ -402,7 +414,7 @@ def create_manual(
 ):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
+    clean_title = clean_article_title(title)
     
     if not use_unsplash and custom_image_url and custom_image_url.strip():
         img_url = custom_image_url.strip()
@@ -429,7 +441,7 @@ def create_ai_expand(
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     
-    clean_title = title.replace('**', '').replace('*', '').strip()
+    clean_title = clean_article_title(title)
     system_directive = "전문 수석 언론사 기자로서 완성도 높은 정식 뉴스 기사 본문을 표준 보도체(~다)로 작성하세요."
     full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[취재 메모]: {prompt}"
 
@@ -574,6 +586,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         cat_name = art['category'] if art['category'] else '종합'
         img_url = art['image_url'] if art['image_url'] else FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
         fallback_fallback = FALLBACK_POOL.get(cat_name, FALLBACK_POOL["세상이야기"])
+        clean_t = clean_article_title(art['title'])
         featured_html += f"""
         <div class="featured-card">
             <div class="featured-img-wrap">
@@ -581,7 +594,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             </div>
             <div class="featured-body">
                 <span class="badge">{cat_name}</span>
-                <h3 class="featured-title"><a href="/?view={art['id']}">{art['title']}</a></h3>
+                <h3 class="featured-title"><a href="/?view={art['id']}">{clean_t}</a></h3>
                 <div class="card-date">발행 | {art['created_at']}</div>
             </div>
         </div>
@@ -593,9 +606,10 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         if remaining_articles:
             list_html += f'<div class="news-section-box"><div class="section-header">📌 {category} 이전 리포트</div>'
             for art in remaining_articles:
+                clean_t = clean_article_title(art['title'])
                 list_html += f"""
                 <div class="news-list-item">
-                    <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                    <a href="/?view={art['id']}" class="list-title">{clean_t}</a>
                     <span class="list-date">{art['created_at'].split()[0]}</span>
                 </div>
                 """
@@ -607,9 +621,10 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
             if cat_arts:
                 list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
                 for art in cat_arts:
+                    clean_t = clean_article_title(art['title'])
                     list_html += f"""
                     <div class="news-list-item">
-                        <a href="/?view={art['id']}" class="list-title">{art['title']}</a>
+                        <a href="/?view={art['id']}" class="list-title">{clean_t}</a>
                         <span class="list-date">{art['created_at'].split()[0]}</span>
                     </div>
                     """
@@ -729,10 +744,11 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     rows = get_all_articles()
     articles_list_html = ""
     for r in rows:
+        clean_t = clean_article_title(r['title'])
         articles_list_html += f"""
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 12px 10px; font-size: 0.9em; color: #555;">{r['category']}</td>
-            <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{r['title']}</a></td>
+            <td style="padding: 12px 10px; font-weight: bold;"><a href="/?view={r['id']}" target="_blank" style="color: #2980b9; text-decoration: none;">{clean_t}</a></td>
             <td style="padding: 12px 10px; font-size: 0.85em; color: #777;">{r['created_at']}</td>
             <td style="padding: 12px 10px; text-align: right; white-space: nowrap;">
                 <a href="/admin/edit/{r['id']}" style="background: #f39c12; color: white; padding: 7px 14px; text-decoration: none; border-radius: 5px; font-size: 12.5px; font-weight: bold; margin-right: 8px; display: inline-block;">✏️ 수정</a>
@@ -997,6 +1013,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
         return RedirectResponse(url="/admin/studio", status_code=303)
     current_img = art.get('image_url', '') or ''
     current_author = art.get('image_author', '') or ''
+    clean_t = clean_article_title(art['title'])
 
     return f"""
     <!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>기사 수정하기</title>
@@ -1031,7 +1048,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
                 </select>
                 <label>기사 제목</label>
-                <input type="text" name="title" value="{art['title']}" required>
+                <input type="text" name="title" value="{clean_t}" required>
                 
                 <div class="header-img-box">
                     <label style="font-weight: bold; color: #2c3e50; margin-bottom: 8px; display: block;">🖼️ 대표 이미지 설정</label>
@@ -1146,8 +1163,8 @@ def update_article(
 ):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
-    clean_title = title.replace('**', '').replace('*', '').strip()
-    update_article_in_db(article_id, category, clean_title, content, image_url, image_author)
+    clean_t = clean_article_title(title)
+    update_article_in_db(article_id, category, clean_t, content, image_url, image_author)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/admin/delete/{article_id}")
