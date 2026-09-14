@@ -112,6 +112,7 @@ def init_db():
 init_db()
 
 FALLBACK_POOL = {
+    "농구": "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&auto=format&fit=crop",
     "야구": "https://images.unsplash.com/photo-1508344928928-7165b67de128?w=800&auto=format&fit=crop",
     "축구": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop",
     "스포츠": "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800&auto=format&fit=crop",
@@ -129,38 +130,41 @@ def fetch_bulletproof_image(category_name, article_title=""):
     title_lower = (article_title + " " + category_name).lower()
     
     if category_name == "스포츠":
-        if any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "안타", "김도영"]):
+        if any(k in title_lower for k in ["농구", "KBL", "NBA", "8강", "국가대표"]):
+            keyword = "basketball court"
+            default_url = FALLBACK_POOL["농구"]
+        elif any(k in title_lower for k in ["야구", "kbo", "홈런", "타자", "투수", "안타", "김도영"]):
             keyword = "baseball"
             default_url = FALLBACK_POOL["야구"]
         elif any(k in title_lower for k in ["축구", "손흥민", "골", "epl", "k리그"]):
             keyword = "soccer"
             default_url = FALLBACK_POOL["축구"]
         else:
-            keyword = "stadium"
+            keyword = "stadium sports"
             default_url = FALLBACK_POOL["스포츠"]
     elif category_name == "AI/테크":
-        keyword = "technology"
+        keyword = "technology AI"
         default_url = FALLBACK_POOL["AI/테크"]
     elif category_name == "경제/주식":
-        keyword = "finance"
+        keyword = "finance stock market"
         default_url = FALLBACK_POOL["경제/주식"]
     elif category_name == "정치/시사":
-        keyword = "capitol"
+        keyword = "politics government"
         default_url = FALLBACK_POOL["정치/시사"]
     elif category_name == "연예계뉴스":
-        keyword = "concert"
+        keyword = "concert entertainment"
         default_url = FALLBACK_POOL["연예계뉴스"]
     elif category_name == "지역창":
-        keyword = "korea scenery"
+        keyword = "korea scenery sokcho"
         default_url = FALLBACK_POOL["지역창"]
     elif category_name == "건강/복지":
-        keyword = "wellness"
+        keyword = "health senior wellness"
         default_url = FALLBACK_POOL["건강/복지"]
     elif category_name == "생활정보":
-        keyword = "interior"
+        keyword = "lifestyle interior"
         default_url = FALLBACK_POOL["생활정보"]
     else:
-        keyword = "nature"
+        keyword = "nature landscape"
         default_url = FALLBACK_POOL["세상이야기"]
 
     try:
@@ -332,14 +336,13 @@ def delete_article_from_db(article_id):
         conn.commit()
         conn.close()
 
-# 🤖 AI 자동 기사 발행 (최근 핫이슈 및 사건 심층보도 전용)
 def generate_ai_article(category_name, use_subtitles=True):
     news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
     ref_fact_context = f"\n[실시간 핫이슈 헤드라인]: {news_title}\n[핵심 팩트 요약]: {news_desc}\n[보도 일시]: {pub_date}\n" if news_title else ""
     
     editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
-오늘은 **2026년 9월 13일**입니다.
+오늘은 **2026년 9월 14일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 지침:
@@ -515,7 +518,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         art = get_article_by_id(view)
         if not art:
             return RedirectResponse(url="/", status_code=303)
-        img_block = f'<img src="{art["image_url"]}" class="article-img" onerror="this.onerror=null; this.src=\'{FALLBACK_POOL.get(art.get("category"), FALLBACK_POOL["세상이야기"])}\';"><div class="img-source">📷 Photo by {art.get("image_author", "")}</div>' if art.get("image_url") else ""
+        fallback_url = FALLBACK_POOL.get(art.get("category"), FALLBACK_POOL["세상이야기"])
+        img_block = f'<img src="{art["image_url"]}" class="article-img" onerror="this.onerror=null; this.src=\'{fallback_url}\';"><div class="img-source">📷 Photo by {art.get("image_author", "")}</div>' if art.get("image_url") else ""
         return f"""
         <!DOCTYPE html>
         <html lang="ko">
