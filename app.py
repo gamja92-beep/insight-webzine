@@ -245,6 +245,25 @@ def fetch_bulletproof_image(category_name, article_title=""):
 
     return selected_tuple[0], selected_tuple[1]
 
+# 🛡️ [실시간 동적 방어막]: DB 원본은 건드리지 않고, 죽은 링크나 빈 주소를 안전한 영구 풀 이미지로 실시간 교체
+def get_safe_image_url(raw_url, category_name, article_title=""):
+    if not raw_url or not raw_url.strip() or not (raw_url.startswith("http") or raw_url.startswith("/")):
+        fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
+        idx = abs(hash(article_title)) % len(fallback_pool)
+        return fallback_pool[idx][0]
+    # 외부 외부 API나 예전 죽은 서드파티 링크 형태일 경우 안전한 풀 이미지로 매칭 방어
+    if "unsplash.com/search" in raw_url or "api.unsplash.com" in raw_url:
+        fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
+        idx = abs(hash(article_title)) % len(fallback_pool)
+        return fallback_pool[idx][0]
+    return raw_url.strip()
+
+def get_safe_image_author(raw_author, category_name):
+    if not raw_author or not raw_author.strip():
+        fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
+        return fallback_pool[0][1]
+    return raw_author.strip()
+
 def generate_smart_tags(text, title=""):
     try:
         prompt = (
@@ -332,7 +351,7 @@ def get_all_articles(category=None):
         if category and category != "전체":
             query = query.eq("category", category)
         response = query.execute()
-        return response.data
+        rows = response.data
     else:
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
@@ -340,19 +359,41 @@ def get_all_articles(category=None):
             cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles WHERE category = ? ORDER BY id DESC", (category,))
         else:
             cursor.execute("SELECT id, category, title, content, image_url, image_author, created_at FROM articles ORDER BY id DESC")
-        rows = cursor.fetchall()
+        raw_rows = cursor.fetchall()
         conn.close()
-        return [{
-            "id": r[0], "category": r[1], "title": clean_article_title(r[2]), "content": r[3], 
+        rows = [{
+            "id": r[0], "category": r[1], "title": r[2], "content": r[3], 
             "image_url": r[4], "image_author": r[5], "created_at": r[6]
-        } for r in rows]
+        } for r in raw_rows]
+
+    # 실시간 방어막 적용
+    processed_rows = []
+    for r in rows:
+        cat = r.get("category") or "세상이야기"
+        t = clean_article_title(r.get("title") or "")
+        safe_img = get_safe_image_url(r.get("image_url"), cat, t)
+        safe_auth = get_safe_image_author(r.get("image_author"), cat)
+        processed_rows.append({
+            "id": r["id"],
+            "category": cat,
+            "title": t,
+            "content": r["content"],
+            "image_url": safe_img,
+            "image_author": safe_auth,
+            "created_at": r["created_at"]
+        })
+    return processed_rows
 
 def get_article_by_id(article_id):
     if supabase:
         response = supabase.table("articles").select("*").eq("id", article_id).execute()
         if response.data:
             art = response.data[0]
-            art["title"] = clean_article_title(art["title"])
+            cat = art.get("category") or "세상이야기"
+            t = clean_article_title(art.get("title") or "")
+            art["title"] = t
+            art["image_url"] = get_safe_image_url(art.get("image_url"), cat, t)
+            art["image_author"] = get_safe_image_author(art.get("image_author"), cat)
             return art
         return None
     else:
@@ -363,9 +404,13 @@ def get_article_by_id(article_id):
         conn.close()
         if not r:
             return None
+        cat = r[1] or "세상이야기"
+        t = clean_article_title(r[2] or "")
         return {
-            "id": r[0], "category": r[1], "title": clean_article_title(r[2]), "content": r[3], 
-            "image_url": r[4], "image_author": r[5], "created_at": r[6]
+            "id": r[0], "category": cat, "title": t, "content": r[3], 
+            "image_url": get_safe_image_url(r[4], cat, t), 
+            "image_author": get_safe_image_author(r[5], cat), 
+            "created_at": r[6]
         }
 
 def update_article_in_db(article_id, category, title, content, image_url, image_author):
@@ -1206,7 +1251,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 }}
                 captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
             }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.term + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
