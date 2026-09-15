@@ -109,7 +109,6 @@ def init_db():
 
 init_db()
 
-# 카테고리별 10장씩 엄선된 영구 고화질 이미지 풀 (절대 깨지지 않음)
 SMART_IMAGE_POOLS = {
     "정치/시사": [
         ("https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=900&auto=format&fit=crop", "Government Briefing"),
@@ -228,10 +227,8 @@ def clean_article_title(raw_title):
 
 def fetch_bulletproof_image(category_name, article_title=""):
     pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
-    
-    # 기사 제목이나 키워드 해시값을 이용해 10장 중 가장 적절한 이미지를 스마트하게 매칭
     combined_str = (article_title + category_name).lower()
-    selected_tuple = random.choice(pool) # 기본 랜덤 분산
+    selected_tuple = random.choice(pool)
     
     if "농구" in combined_str or "국가대표" in combined_str or "8강" in combined_str:
         if category_name == "스포츠":
@@ -243,7 +240,6 @@ def fetch_bulletproof_image(category_name, article_title=""):
         if category_name == "스포츠":
             selected_tuple = SMART_IMAGE_POOLS["스포츠"][3]
     else:
-        # 제목 글자 길이와 해시를 조합하여 10장 중 하나를 고정성 있게 매칭
         idx = abs(hash(article_title)) % len(pool)
         selected_tuple = pool[idx]
 
@@ -411,17 +407,44 @@ def generate_ai_article(category_name, use_subtitles=True):
     news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
     ref_fact_context = f"\n[실시간 핫이슈 헤드라인]: {news_title}\n[핵심 팩트 요약]: {news_desc}\n[보도 일시]: {pub_date}\n" if news_title else ""
     
-    editorial_prompt = f"""
+    # 카테고리별 철학에 맞춘 엄격하고 정교한 프롬프트 지침 분기
+    if category_name == "정치/시사":
+        editorial_prompt = f"""
+당신은 팩트를 최우선으로 다루는 정론지의 수석 시사보도 전문 기자입니다.
+오늘은 **2026년 9월 15일**입니다.
+[취재 분야]: 정치/시사 (국가 정책, 행정, 제도, 정국 주요 현안 중심)
+{ref_fact_context}
+지침:
+1. 최근 발생한 가장 뜨겁고 묵직한 정치/시사 핫이슈를 정밀하게 파고드는 심층보도 형태로 기사를 작성하세요.
+2. 첫 번째 줄: 검색 유입을 극대화하는 강력하고 객관적인 보도체 기사 제목 한 줄만 작성. (절대 제목 앞에 [심층분석], [단독] 등의 대괄호 말머리나 수식어를 붙이지 말 것)
+3. 두 번째 줄: 빈 줄.
+4. 세 번째 줄부터: 4개 이상의 상세 문단으로 구성하고, 정국에 미치는 영향과 향후 파장까지 객관적이고 깊이 있게 서술하세요.
+"""
+    elif category_name == "세상이야기":
+        editorial_prompt = f"""
+당신은 따뜻한 시선으로 세상을 관조하는 휴먼 다큐멘터리 전문 칼럼니스트입니다.
+오늘은 **2026년 9월 15일**입니다.
+[취재 분야]: 세상이야기 (이웃들의 진솔한 삶, 소외된 이웃들의 이야기, 인생 철학과 감동이 담긴 미담 중심)
+{ref_fact_context}
+지침:
+1. 각박한 세상 속에서 우리 주변 이웃들이 살아가는 진솔한 모습과 따뜻한 감동, 깊은 인생 철학이 담긴 휴먼 스토리 형식으로 기사를 작성하세요.
+2. 첫 번째 줄: 독자의 마음을 울리는 감성적이고 품격 있는 제목 한 줄만 작성. (대괄호 수식어 금지)
+3. 두 번째 줄: 빈 줄.
+4. 세 번째 줄부터: 4개 이상의 상세 문단으로 구성하고, 가슴 먹먹한 감동과 삶의 교훈을 전달할 수 있도록 서정적이고 깊이 있게 서술하세요.
+"""
+    else:
+        editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
 오늘은 **2026년 9월 15일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 지침:
-1. 최근 발생한 가장 뜨거운 핫이슈와 사건 사고를 정밀하게 파고드는 심층보도 형태로 기사를 작성하세요.
-2. 첫 번째 줄: 검색 유입을 극대화하는 강력하고 객관적인 보도체 기사 제목 한 줄만 작성. (절대 제목 앞에 [심층분석], [논설], [단독] 등의 대괄호 말머리나 수식어를 붙이지 마세요. 순수 제목만 작성할 것)
+1. 최근 발생한 가장 뜨거운 이슈를 정밀하게 파고드는 심층보도 형태로 기사를 작성하세요.
+2. 첫 번째 줄: 검색 유입을 극대화하는 강력하고 객관적인 보도체 기사 제목 한 줄만 작성. (대괄호 수식어 금지)
 3. 두 번째 줄: 빈 줄.
 4. 세 번째 줄부터: 4개 이상의 상세 문단으로 구성하고, 현장감 있는 팩트와 배경, 향후 파장까지 심도 있게 서술하세요.
 """
+
     try:
         response = client.models.generate_content(model=MODEL_NAME, contents=editorial_prompt)
         raw_content = response.text.strip()
@@ -501,7 +524,13 @@ def create_ai_expand(
         return RedirectResponse(url="/admin", status_code=303)
     
     clean_title = clean_article_title(title)
-    system_directive = "전문 수석 언론사 기자로서 완성도 높은 정식 뉴스 기사 본문을 표준 보도체(~다)로 작성하세요."
+    if category == "정치/시사":
+        system_directive = "당신은 정통 시사보도 전문 기자로서, 국가 정책과 정국 현안을 객관적이고 무겁게 다루는 표준 보도체(~다)로 기사를 작성하세요."
+    elif category == "세상이야기":
+        system_directive = "당신은 휴먼 칼럼니스트로서, 이웃들의 따뜻한 삶과 진솔한 인생 이야기를 서정적이고 감동적인 문체로 작성하세요."
+    else:
+        system_directive = "전문 수석 언론사 기자로서 완성도 높은 정식 뉴스 기사 본문을 표준 보도체(~다)로 작성하세요."
+
     full_query = f"{system_directive}\n\n[기사 제목]: {clean_title}\n[취재 메모]: {prompt}"
 
     try:
@@ -686,7 +715,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     else:
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category') == cat][:5]
+            cat_arts = [a for a in articles if a.get('category'] == cat][:5]
             if cat_arts:
                 list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
                 for art in cat_arts:
@@ -870,8 +899,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <label>카테고리 선택</label>
                 <select name="category">
                     <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option>
-                    <option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
                 </select>
 
                 <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin: 12px 0;">
