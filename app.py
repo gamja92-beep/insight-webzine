@@ -407,7 +407,6 @@ def generate_ai_article(category_name, use_subtitles=True):
     news_title, news_desc, pub_date = get_latest_realtime_news(category_name)
     ref_fact_context = f"\n[실시간 핫이슈 헤드라인]: {news_title}\n[핵심 팩트 요약]: {news_desc}\n[보도 일시]: {pub_date}\n" if news_title else ""
     
-    # 카테고리별 철학에 맞춘 엄격하고 정교한 프롬프트 지침 분기
     if category_name == "정치/시사":
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 시사보도 전문 기자입니다.
@@ -715,7 +714,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     else:
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category'] == cat][:5]
+            cat_arts = [a for a in articles if a.get('category') == cat][:5]
             if cat_arts:
                 list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
                 for art in cat_arts:
@@ -1207,7 +1206,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                 }}
                 captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
             }}
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.term + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
