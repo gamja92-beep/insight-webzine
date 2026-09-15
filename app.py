@@ -245,7 +245,6 @@ def fetch_bulletproof_image(category_name, article_title=""):
 
     return selected_tuple[0], selected_tuple[1]
 
-# 🛡️ [실시간 이미지 방어막]: 상단 대표 이미지 주소 정화
 def get_safe_image_url(raw_url, category_name, article_title=""):
     if not raw_url or not raw_url.strip() or not (raw_url.startswith("http") or raw_url.startswith("/")):
         fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
@@ -263,7 +262,6 @@ def get_safe_image_author(raw_author, category_name):
         return fallback_pool[0][1]
     return raw_author.strip()
 
-# 🛡️ [본문 이미지 정화 로직]: 본문 내부에 깨진 이미지나 죽은 링크가 있으면 안전한 영구 풀 이미지로 실시간 치환
 def purify_content_images(content_html, category_name, article_title=""):
     if not content_html:
         return ""
@@ -276,14 +274,12 @@ def purify_content_images(content_html, category_name, article_title=""):
             return full_tag
         current_src = img_src_match.group(1)
         
-        # 만약 본문 이미지 주소가 죽었거나 외부 검색 주소면 안전한 영구 풀 이미지로 교체
         if not current_src or not (current_src.startswith("http") or current_src.startswith("/")) or "unsplash.com/search" in current_src or "api.unsplash.com" in current_src:
             idx = abs(hash(article_title + current_src)) % len(fallback_pool)
             safe_url = fallback_pool[idx][0]
             return full_tag.replace(current_src, safe_url)
         return full_tag
 
-    # 본문 안의 모든 <img ...> 태그를 검사하여 정화
     purified_html = re.sub(r'<img\s+[^>]*>', replace_img_tag, content_html, flags=re.IGNORECASE)
     return purified_html
 
@@ -336,8 +332,6 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
             processed_lines.append(f'<p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">{p_str}</p>')
 
     final_html = "".join(processed_lines)
-    
-    # 본문 이미지 정화 적용
     final_html = purify_content_images(final_html, category_name, clean_title_str)
 
     if '#시사투데이' not in final_html and '#이슈분석' not in final_html and 'word-spacing: 5px;' not in final_html:
@@ -730,6 +724,13 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <body>
             <div class="top-bar"><a href="/" class="back-btn">← 메인 뉴스로 돌아가기</a></div>
             <div class="article-container">
+                <div style="border-bottom: 3px solid #1b4f72; padding-bottom: 12px; margin-bottom: 20px;">
+                    <a href="/" style="text-decoration: none; display: inline-block;">
+                        <div style="font-family: 'Gowun Batang', serif; font-size: 1.5em; font-weight: 700; color: #1a252f; display: flex; align-items: center; gap: 8px;">
+                            시사투데이&nbsp;<span style="display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 2px 12px; border-radius: 6px; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.12);">창</span>
+                        </div>
+                    </a>
+                </div>
                 <h1>{art['title']}</h1>
                 <div class="date">발행일시: {art['created_at']}</div>
                 {img_block}
@@ -811,7 +812,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <style>
             body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 0 auto; padding: 10px; background: #f0f3f4; color: #333; }}
             .header-flex {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #1b4f72; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }}
-            .logo-title {{ font-family: 'Gowun Batang', serif; font-size: 1.6em; font-weight: 700; color: #1a252f; display: flex; align-items: center; gap: 8px; }}
+            .logo-title {{ font-family: 'Gowun Batang', serif; font-size: 1.6em; font-weight: 700; color: #1a252f; display: flex; align-items: center; gap: 8px; text-decoration: none; }}
             .logo-chang {{ display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 4px 16px; border-radius: 6px; transform: rotate(5deg); box-shadow: 3px 3px 6px rgba(0,0,0,0.12); }}
             .nav-tabs {{ display: flex; gap: 5px; margin: 15px 0; flex-wrap: wrap; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }}
             .tab-item {{ flex: 1; min-width: 75px; text-align: center; padding: 6px 4px; background: #ecf0f1; color: #555; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; white-space: nowrap; }}
@@ -851,7 +852,11 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         </style>
     </head>
     <body>
-        <div class="header-flex"><div class="logo-title">시사투데이&nbsp;<span class="logo-chang">창</span></div></div>
+        <div class="header-flex">
+            <a href="/" style="text-decoration: none;">
+                <div class="logo-title">시사투데이&nbsp;<span class="logo-chang">창</span></div>
+            </a>
+        </div>
         <div class="nav-tabs">
     """
     for cat in categories:
