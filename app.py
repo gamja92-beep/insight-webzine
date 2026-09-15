@@ -245,13 +245,12 @@ def fetch_bulletproof_image(category_name, article_title=""):
 
     return selected_tuple[0], selected_tuple[1]
 
-# 🛡️ [실시간 동적 방어막]: DB 원본은 건드리지 않고, 죽은 링크나 빈 주소를 안전한 영구 풀 이미지로 실시간 교체
+# 🛡️ [실시간 이미지 방어막]: 상단 대표 이미지 주소 정화
 def get_safe_image_url(raw_url, category_name, article_title=""):
     if not raw_url or not raw_url.strip() or not (raw_url.startswith("http") or raw_url.startswith("/")):
         fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
         idx = abs(hash(article_title)) % len(fallback_pool)
         return fallback_pool[idx][0]
-    # 외부 외부 API나 예전 죽은 서드파티 링크 형태일 경우 안전한 풀 이미지로 매칭 방어
     if "unsplash.com/search" in raw_url or "api.unsplash.com" in raw_url:
         fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
         idx = abs(hash(article_title)) % len(fallback_pool)
@@ -263,6 +262,30 @@ def get_safe_image_author(raw_author, category_name):
         fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
         return fallback_pool[0][1]
     return raw_author.strip()
+
+# 🛡️ [본문 이미지 정화 로직]: 본문 내부에 깨진 이미지나 죽은 링크가 있으면 안전한 영구 풀 이미지로 실시간 치환
+def purify_content_images(content_html, category_name, article_title=""):
+    if not content_html:
+        return ""
+    fallback_pool = SMART_IMAGE_POOLS.get(category_name, SMART_IMAGE_POOLS["세상이야기"])
+    
+    def replace_img_tag(match):
+        full_tag = match.group(0)
+        img_src_match = re.search(r'src=["\']([^"\']+)["\']', full_tag, re.IGNORECASE)
+        if not img_src_match:
+            return full_tag
+        current_src = img_src_match.group(1)
+        
+        # 만약 본문 이미지 주소가 죽었거나 외부 검색 주소면 안전한 영구 풀 이미지로 교체
+        if not current_src or not (current_src.startswith("http") or current_src.startswith("/")) or "unsplash.com/search" in current_src or "api.unsplash.com" in current_src:
+            idx = abs(hash(article_title + current_src)) % len(fallback_pool)
+            safe_url = fallback_pool[idx][0]
+            return full_tag.replace(current_src, safe_url)
+        return full_tag
+
+    # 본문 안의 모든 <img ...> 태그를 검사하여 정화
+    purified_html = re.sub(r'<img\s+[^>]*>', replace_img_tag, content_html, flags=re.IGNORECASE)
+    return purified_html
 
 def generate_smart_tags(text, title=""):
     try:
@@ -302,7 +325,7 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
         if clean_title_str and p_text_pure == clean_title_str:
             continue
 
-        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure'):
+        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure') or p_str.startswith('<img'):
             processed_lines.append(p_str)
         elif use_subtitles and (p_str.startswith('###') or (len(p_str) < 42 and not p_str.endswith(('.', '?', '!')) and not p_str.startswith('<'))):
             title_text = p_str.replace('###', '').strip()
@@ -314,6 +337,9 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
 
     final_html = "".join(processed_lines)
     
+    # 본문 이미지 정화 적용
+    final_html = purify_content_images(final_html, category_name, clean_title_str)
+
     if '#시사투데이' not in final_html and '#이슈분석' not in final_html and 'word-spacing: 5px;' not in final_html:
         clean_tags_str = generate_smart_tags(text, title)
         tag_html = f"<div style='margin-top: 35px; padding-top: 15px; border-top: 1px solid #eaecee; color: #2980b9; font-weight: bold; font-size: 0.9em; word-spacing: 5px;'>{clean_tags_str}</div>"
@@ -366,18 +392,18 @@ def get_all_articles(category=None):
             "image_url": r[4], "image_author": r[5], "created_at": r[6]
         } for r in raw_rows]
 
-    # 실시간 방어막 적용
     processed_rows = []
     for r in rows:
         cat = r.get("category") or "세상이야기"
         t = clean_article_title(r.get("title") or "")
         safe_img = get_safe_image_url(r.get("image_url"), cat, t)
         safe_auth = get_safe_image_author(r.get("image_author"), cat)
+        safe_content = purify_content_images(r.get("content") or "", cat, t)
         processed_rows.append({
             "id": r["id"],
             "category": cat,
             "title": t,
-            "content": r["content"],
+            "content": safe_content,
             "image_url": safe_img,
             "image_author": safe_auth,
             "created_at": r["created_at"]
@@ -394,6 +420,7 @@ def get_article_by_id(article_id):
             art["title"] = t
             art["image_url"] = get_safe_image_url(art.get("image_url"), cat, t)
             art["image_author"] = get_safe_image_author(art.get("image_author"), cat)
+            art["content"] = purify_content_images(art.get("content") or "", cat, t)
             return art
         return None
     else:
@@ -407,7 +434,8 @@ def get_article_by_id(article_id):
         cat = r[1] or "세상이야기"
         t = clean_article_title(r[2] or "")
         return {
-            "id": r[0], "category": cat, "title": t, "content": r[3], 
+            "id": r[0], "category": cat, "title": t, 
+            "content": purify_content_images(r[3], cat, t), 
             "image_url": get_safe_image_url(r[4], cat, t), 
             "image_author": get_safe_image_author(r[5], cat), 
             "created_at": r[6]
