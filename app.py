@@ -4,8 +4,9 @@ import sqlite3
 import random
 import time
 import re
-import xml.etree.ElementTree as ET
+import json
 import urllib.request
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse
@@ -32,6 +33,31 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+BASE_SITE_URL = "https://insight-webzine.onrender.com"
+
+# 🚀 [IndexNow 자동 전송 함수]: 빙, 야후 등 글로벌 검색엔진에 실시간 색인 요청
+def ping_indexnow(url_path):
+    try:
+        target_url = f"{BASE_SITE_URL}{url_path}"
+        host_domain = "insight-webzine.onrender.com"
+        key_str = "siyatodaychangkey2026"
+        
+        payload = {
+            "host": host_domain,
+            "key": key_str,
+            "keyLocation": f"{BASE_SITE_URL}/{key_str}.txt",
+            "urlList": [target_url]
+        }
+        
+        req = urllib.request.Request(
+            "https://api.indexnow.org/indexnow",
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json; charset=utf-8', 'User-Agent': 'Mozilla/5.0'}
+        )
+        urllib.request.urlopen(req, timeout=3)
+    except Exception as e:
+        print(f"[IndexNow 알림 전송 실패]: {e}")
 
 NAVER_ANALYTICS_SCRIPT = """
 <script type="text/javascript" src="//wcs.pstatic.net/wcslog.js"></script>
@@ -347,7 +373,7 @@ def save_article_to_db(category, title, content, image_url, image_author):
     clean_t = clean_article_title(title)
     
     if supabase:
-        supabase.table("articles").insert({
+        res = supabase.table("articles").insert({
             "category": category,
             "title": clean_t,
             "content": content,
@@ -364,6 +390,9 @@ def save_article_to_db(category, title, content, image_url, image_author):
         )
         conn.commit()
         conn.close()
+    
+    # 🚀 기사 발행 즉시 빙/야후(IndexNow)에 자동 핑 전송
+    ping_indexnow("/")
 
 def get_all_articles(category=None):
     if supabase:
@@ -459,6 +488,9 @@ def update_article_in_db(article_id, category, title, content, image_url, image_
         )
         conn.commit()
         conn.close()
+    
+    # 🚀 기사 수정 즉시 IndexNow 자동 전송
+    ping_indexnow(f"/?view={article_id}")
 
 def delete_article_from_db(article_id):
     if supabase:
@@ -637,28 +669,31 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
+# 🚀 [IndexNow 인증 파일 엔드포인트]: 빙 및 야후 검색엔진 소유권 인증 자동 제공
+@app.get("/siyatodaychangkey2026.txt", response_class=PlainResponse)
+def indexnow_key_file():
+    return PlainResponse("siyatodaychangkey2026", media_type="text/plain")
+
 @app.get("/robots.txt", response_class=PlainResponse)
 def robots_txt():
-    return PlainResponse("User-agent: *\nAllow: /\nSitemap: https://insight-webzine.onrender.com/sitemap.xml", media_type="text/plain")
+    return PlainResponse(f"User-agent: *\nAllow: /\nSitemap: {BASE_SITE_URL}/sitemap.xml", media_type="text/plain")
 
 @app.get("/sitemap.xml", response_class=PlainResponse)
 def sitemap():
     articles = get_all_articles()
-    base_url = "https://insight-webzine.onrender.com"
     xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    xml_content += f"  <url><loc>{base_url}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n"
+    xml_content += f"  <url><loc>{BASE_SITE_URL}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n"
     for art in articles:
-        xml_content += f"  <url><loc>{base_url}/?view={art['id']}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n"
+        xml_content += f"  <url><loc>{BASE_SITE_URL}/?view={art['id']}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n"
     xml_content += '</urlset>'
     return PlainResponse(content=xml_content, media_type="application/xml")
 
 @app.get("/rss", response_class=PlainResponse)
 def rss_feed():
     articles = get_all_articles()
-    base_url = "https://insight-webzine.onrender.com"
-    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n<rss version="2.0">\n<channel>\n  <title>시사투데이 창</title>\n  <link>' + base_url + '/</link>\n  <description>프리미엄 시사투데이 창</description>\n'
+    rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n<rss version="2.0">\n<channel>\n  <title>시사투데이 창</title>\n  <link>' + BASE_SITE_URL + '/</link>\n  <description>프리미엄 시사투데이 창</description>\n'
     for art in articles:
-        rss_content += f"  <item>\n    <title>{art['title'].replace('&', '&amp;')}</title>\n    <link>{base_url}/?view={art['id']}</link>\n    <guid>{base_url}/?view={art['id']}</guid>\n    <pubDate>{art['created_at']}</pubDate>\n  </item>\n"
+        rss_content += f"  <item>\n    <title>{art['title'].replace('&', '&amp;')}</title>\n    <link>{BASE_SITE_URL}/?view={art['id']}</link>\n    <guid>{BASE_SITE_URL}/?view={art['id']}</guid>\n    <pubDate>{art['created_at']}</pubDate>\n  </item>\n"
     rss_content += '</channel>\n</rss>'
     return PlainResponse(content=rss_content, media_type="application/rss+xml")
 
@@ -700,6 +735,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <head>
             <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>{art['title']} - 시사투데이 창</title>
+            <meta name="description" content="{art['title']} - 프리미엄 시사투데이 창 실시간 뉴스 리포트">
+            <link rel="canonical" href="{BASE_SITE_URL}/?view={art['id']}">
             {NAVER_ANALYTICS_SCRIPT}{GOOGLE_ANALYTICS_SCRIPT}
             <style>
                 body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 0 auto; padding: 15px; background: #f8f9fa; color: #111; line-height: 1.8; }}
@@ -807,6 +844,8 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>시사투데이 창 - 프리미엄 미디어</title>
+        <meta name="description" content="시사투데이 창 - 정치, 경제, 세상이야기, AI테크, 건강복지, 생활정보 등 프리미엄 실시간 뉴스 미디어">
+        <link rel="canonical" href="{BASE_SITE_URL}/">
         <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&display=swap" rel="stylesheet">
         {NAVER_ANALYTICS_SCRIPT}{GOOGLE_ANALYTICS_SCRIPT}
         <style>
