@@ -12,7 +12,6 @@ from fastapi import FastAPI, Form, Request, Response, Cookie, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, Response as PlainResponse
 from fastapi.staticfiles import StaticFiles
 from google import genai
-from apscheduler.schedulers.background import BackgroundScheduler
 from supabase import create_client, Client
 
 app = FastAPI()
@@ -391,7 +390,6 @@ def save_article_to_db(category, title, content, image_url, image_author):
         conn.commit()
         conn.close()
     
-    # 🚀 기사 발행 즉시 빙/야후(IndexNow)에 자동 핑 전송
     ping_indexnow("/")
 
 def get_all_articles(category=None):
@@ -489,7 +487,6 @@ def update_article_in_db(article_id, category, title, content, image_url, image_
         conn.commit()
         conn.close()
     
-    # 🚀 기사 수정 즉시 IndexNow 자동 전송
     ping_indexnow(f"/?view={article_id}")
 
 def delete_article_from_db(article_id):
@@ -561,13 +558,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     formatted_content = clean_and_format_content(body_content, category_name, art_title, use_subtitles=use_subtitles)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
 
-def scheduled_job():
-    categories = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
-    generate_ai_article(random.choice(categories), use_subtitles=True)
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(scheduled_job, 'interval', hours=6)
-scheduler.start()
+# 🛑 [자동 발행 스케줄러 완전 중단]: 백그라운드 자동 기사 발행 로직을 제거했습니다.
 
 @app.post("/admin/create-auto")
 def create_auto(
@@ -669,7 +660,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# 🚀 [IndexNow 인증 파일 엔드포인트]: 빙 및 야후 검색엔진 소유권 인증 자동 제공
 @app.get("/siyatodaychangkey2026.txt", response_class=PlainResponse)
 def indexnow_key_file():
     return PlainResponse("siyatodaychangkey2026", media_type="text/plain")
@@ -825,7 +815,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     else:
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category') == cat][:5]
+            cat_arts = [a for a in articles if a.get('category'] == cat][:5]
             if cat_arts:
                 list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
                 for art in cat_arts:
@@ -1010,7 +1000,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (최근 핫이슈 및 심층보도)</h3>
+            <h3>🤖 1. 상단: AI 자동 기사 발행 (수동 일회성 발행만 가능)</h3>
             <form action="/admin/create-auto" method="post">
                 <label>카테고리 선택</label>
                 <select name="category">
@@ -1025,7 +1015,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     </label>
                 </div>
 
-                <button type="submit">🚀 최신 핫이슈 심층보도 기사 발행</button>
+                <button type="submit">🚀 최신 핫이슈 심층보도 기사 1회 발행</button>
             </form>
         </div>
 
