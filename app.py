@@ -35,7 +35,6 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 BASE_SITE_URL = "https://insight-webzine.onrender.com"
 
-# 🚀 [IndexNow 자동 전송 함수]: 빙, 야후 등 글로벌 검색엔진에 실시간 색인 요청
 def ping_indexnow(url_path):
     try:
         target_url = f"{BASE_SITE_URL}{url_path}"
@@ -506,7 +505,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     if category_name == "정치/시사":
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 시사보도 전문 기자입니다.
-오늘은 **2026년 9월 15일**입니다.
+오늘은 **2026년 9월 16일**입니다.
 [취재 분야]: 정치/시사 (국가 정책, 행정, 제도, 정국 주요 현안 중심)
 {ref_fact_context}
 지침:
@@ -518,7 +517,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     elif category_name == "세상이야기":
         editorial_prompt = f"""
 당신은 따뜻한 시선으로 세상을 관조하는 휴먼 다큐멘터리 전문 칼럼니스트입니다.
-오늘은 **2026년 9월 15일**입니다.
+오늘은 **2026년 9월 16일**입니다.
 [취재 분야]: 세상이야기 (이웃들의 진솔한 삶, 소외된 이웃들의 이야기, 인생 철학과 감동이 담긴 미담 중심)
 {ref_fact_context}
 지침:
@@ -530,7 +529,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     else:
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
-오늘은 **2026년 9월 15일**입니다.
+오늘은 **2026년 9월 16일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 지침:
@@ -557,8 +556,6 @@ def generate_ai_article(category_name, use_subtitles=True):
     img_url, author_name = fetch_bulletproof_image(category_name, art_title)
     formatted_content = clean_and_format_content(body_content, category_name, art_title, use_subtitles=use_subtitles)
     save_article_to_db(category_name, art_title, formatted_content, img_url, author_name)
-
-# 🛑 [자동 발행 스케줄러 완전 중단]: 백그라운드 자동 기사 발행 로직을 제거했습니다.
 
 @app.post("/admin/create-auto")
 def create_auto(
@@ -815,7 +812,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     else:
         display_cats = ["정치/시사", "경제/주식", "세상이야기", "AI/테크", "건강/복지", "생활정보", "연예계뉴스", "스포츠", "지역창"]
         for cat in display_cats:
-            cat_arts = [a for a in articles if a.get('category'] == cat][:5]
+            cat_arts = [a for a in articles if a.get('category') == cat][:5]
             if cat_arts:
                 list_html += f'<div class="news-section-box"><div class="section-header">📂 {cat} 최신 소식</div>'
                 for art in cat_arts:
@@ -1086,7 +1083,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                         <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
                         <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
                     </label>
-                    <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
+                    <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1.5px dashed #e59866; padding-top: 10px;">
                         <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" name="custom_image_url" id="expand_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
