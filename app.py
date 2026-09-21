@@ -984,7 +984,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if not articles_list_html:
         articles_list_html = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: #777;'>등록된 기사가 없습니다.</td></tr>"
 
-    return """<!DOCTYPE html>
+    return HTMLResponse(content="""<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -1258,7 +1258,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     }
     </script>
 </body>
-</html>"""
+</html>""")
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
@@ -1271,161 +1271,165 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
     current_author = art.get('image_author', '') or ''
     clean_t = clean_article_title(art['title'])
 
-    return f"""
-    <!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>기사 수정하기</title>
+    return HTMLResponse(content="""<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>기사 수정하기</title>
     <style>
-        body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 0 auto; padding: 15px; background: #f4f6f7; }}
-        .box {{ background: white; padding: 20px; border-radius: 8px; }}
-        input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }}
-        textarea {{ height: 250px; resize: vertical; }}
-        button {{ background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
-        .preview-img {{ max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }}
-        .header-img-box {{ background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
-        .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; }}
-        .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
-        .img-tool-title {{ font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }}
-        .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
-    </style></head>
-    <body>
-        <a href="/admin/studio" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 관리자 스튜디오로</a>
-        <div class="box">
-            <h1>✏️ 기사 및 대표 이미지 수정하기</h1>
-            <form action="/admin/update/{art['id']}" method="post">
-                <label>카테고리</label>
-                <select name="category">
-                    <option value="정치/시사" {"selected" if art['category']=="정치/시사" else ""}>정치/시사</option>
-                    <option value="경제/주식" {"selected" if art['category']=="경제/주식" else ""}>경제/주식</option>
-                    <option value="세상이야기" {"selected" if art['category']=="세상이야기" else ""}>세상이야기</option>
-                    <option value="AI/테크" {"selected" if art['category']=="AI/테크" else ""}>AI/테크</option>
-                    <option value="건강/복지" {"selected" if art['category']=="건강/복지" else ""}>건강/복지</option>
-                    <option value="생활정보" {"selected" if art['category']=="생활정보" else ""}>생활정보</option>
-                    <option value="연예계뉴스" {"selected" if art['category']=="연예계뉴스" else ""}>연예계뉴스</option>
-                    <option value="스포츠" {"selected" if art['category']=="스포츠" else ""}>스포츠</option>
-                    <option value="지역창" {"selected" if art['category']=="지역창" else ""}>지역창</option>
-                </select>
-                <label>기사 제목</label>
-                <input type="text" name="title" value="{clean_t}" required>
-                
-                <div class="header-img-box">
-                    <label style="font-weight: bold; color: #2c3e50; margin-bottom: 8px; display: block;">🖼️ 대표 이미지 설정</label>
-                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                        <input type="text" id="edit_main_img_url" name="image_url" value="{current_img}" placeholder="대표 이미지 주소(URL)" style="margin-bottom: 0; flex: 1;">
-                        <button type="button" class="btn-action" style="background: #16a085; height: 42px;" onclick="document.getElementById('edit_main_file').click()">📁 내 기기 파일</button>
-                        <input type="file" id="edit_main_file" style="display: none;" accept="image/*" onchange="uploadEditMainImage(this)">
-                    </div>
-                    <label>대표 이미지 출처 표기</label>
-                    <input type="text" name="image_author" value="{current_author}" placeholder="출처 입력 (예: 연합뉴스)">
-                    <img id="edit_main_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
+        body { font-family: 'Malgun Gothic', sans-serif; max-width: 800px; margin: 0 auto; padding: 15px; background: #f4f6f7; }
+        .box { background: white; padding: 20px; border-radius: 8px; }
+        input[type="text"], select, textarea { width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 250px; resize: vertical; }
+        button { background: #f39c12; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        .preview-img { max-width: 200px; max-height: 120px; border-radius: 6px; margin-top: 5px; display: block; }
+        .header-img-box { background: #f8f9fa; border: 1.5px dashed #bdc3c7; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+        .btn-action { width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; }
+        .img-tool-box { background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .img-tool-title { font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px; }
+        .img-tool-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <a href="/admin/studio" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 관리자 스튜디오로</a>
+    <div class="box">
+        <h1>✏️ 기사 및 대표 이미지 수정하기</h1>
+        <form action="/admin/update/""" + str(art['id']) + """" method="post">
+            <label>카테고리</label>
+            <select name="category">
+                <option value="정치/시사" """ + ("selected" if art['category']=="정치/시사" else "") + """>정치/시사</option>
+                <option value="경제/주식" """ + ("selected" if art['category']=="경제/주식" else "") + """>경제/주식</option>
+                <option value="세상이야기" """ + ("selected" if art['category']=="세상이야기" else "") + """>세상이야기</option>
+                <option value="AI/테크" """ + ("selected" if art['category']=="AI/테크" else "") + """>AI/테크</option>
+                <option value="건강/복지" """ + ("selected" if art['category']=="건강/복지" else "") + """>건강/복지</option>
+                <option value="생활정보" """ + ("selected" if art['category']=="생활정보" else "") + """>생활정보</option>
+                <option value="연예계뉴스" """ + ("selected" if art['category']=="연예계뉴스" else "") + """>연예계뉴스</option>
+                <option value="스포츠" """ + ("selected" if art['category']=="스포츠" else "") + """>스포츠</option>
+                <option value="지역창" """ + ("selected" if art['category']=="지역창" else "") + """>지역창</option>
+            </select>
+            <label>기사 제목</label>
+            <input type="text" name="title" value=\"""" + clean_t + """" required>
+            
+            <div class="header-img-box">
+                <label style="font-weight: bold; color: #2c3e50; margin-bottom: 8px; display: block;">🖼️ 대표 이미지 설정</label>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" id="edit_main_img_url" name="image_url" value=\"""" + current_img + """" placeholder="대표 이미지 주소(URL)" style="margin-bottom: 0; flex: 1;">
+                    <button type="button" class="btn-action" style="background: #16a085; height: 42px;" onclick="document.getElementById('edit_main_file').click()">📁 내 기기 파일</button>
+                    <input type="file" id="edit_main_file" style="display: none;" accept="image/*" onchange="uploadEditMainImage(this)">
                 </div>
+                <label>대표 이미지 출처 표기</label>
+                <input type="text" name="image_author" value=\"""" + current_author + """" placeholder="출처 입력 (예: 연합뉴스)">
+                <img id="edit_main_preview" src=\"""" + current_img + """" class="preview-img" onerror="this.style.display='none'">
+            </div>
 
-                <label>기사 내용 및 미디어 삽입</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
-                    <div class="img-tool-row"><input type="text" id="edit_source" placeholder="출처 표기" style="flex: 1;"></div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일</button>
-                        <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
-                    </div>
+            <label>기사 내용 및 미디어 삽입</label>
+            <div class="img-tool-box">
+                <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
+                <div class="img-tool-row"><input type="text" id="edit_source" placeholder="출처 표기" style="flex: 1;"></div>
+                <div class="img-tool-row">
+                    <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
+                    <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('edit_file_input').click()">📁 내 기기 파일</button>
+                    <input type="file" id="edit_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'editContent', 'edit_source')">
                 </div>
+            </div>
 
-                <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
-                    <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('editContent')">▶️ 유튜브 영상 넣기</button>
-                    </div>
+            <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
+                <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
+                <div class="img-tool-row">
+                    <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('editContent')">▶️ 유튜브 영상 넣기</button>
                 </div>
+            </div>
 
-                <textarea name="content" id="editContent" required>{art['content']}</textarea>
-                <button type="submit">💾 수정 사항 저장하기</button>
-            </form>
-        </div>
+            <textarea name="content" id="editContent" required>""" + art['content'] + """</textarea>
+            <button type="submit">💾 수정 사항 저장하기</button>
+        </form>
+    </div>
 
-        <script>
-        async function uploadEditMainImage(input) {
-            if (input.files && input.files[0]) {
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {
-                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
-                    const data = await response.json();
-                    if (data.url) {
-                        document.getElementById('edit_main_img_url').value = data.url;
-                        const preview = document.getElementById('edit_main_preview');
-                        preview.src = data.url;
-                        preview.style.display = 'block';
-                        alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
-                    } else {
-                        alert("업로드 실패: " + (data.error || "오류"));
-                    }
-                } catch (err) {
-                    alert("업로드 오류: " + err);
+    <script>
+    async function uploadEditMainImage(input) {
+        if (input.files && input.files[0]) {
+            const formData = new FormData();
+            formData.append("file", input.files[0]);
+            try {
+                const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
+                const data = await response.json();
+                if (data.url) {
+                    document.getElementById('edit_main_img_url').value = data.url;
+                    const preview = document.getElementById('edit_main_preview');
+                    preview.src = data.url;
+                    preview.style.display = 'block';
+                    alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
+                } else {
+                    alert("업로드 실패: " + (data.error || "오류"));
                 }
-                input.value = "";
+            } catch (err) {
+                alert("업로드 오류: " + err);
             }
+            input.value = "";
         }
+    }
 
-        function injectHtmlTag(elementId, imgUrl, sourceText) {
-            let captionHtml = "";
-            let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
-                    cleanSource = "Photo by " + cleanSource;
-                }
-                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+    function injectHtmlTag(elementId, imgUrl, sourceText) {
+        let captionHtml = "";
+        let cleanSource = sourceText ? sourceText.trim() : "";
+        if (cleanSource !== "") {
+            if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
+                cleanSource = "Photo by " + cleanSource;
             }
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+        }
+        const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+        const textarea = document.getElementById(elementId);
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+        textarea.focus();
+    }
+    function insertImageWithSource(elementId, sourceInputId) {
+        const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+        if (url) {
+            const source = document.getElementById(sourceInputId).value;
+            injectHtmlTag(elementId, url, source);
+            document.getElementById(sourceInputId).value = "";
+        }
+    }
+    async function uploadImageWithSource(input, elementId, sourceInputId) {
+        if (input.files && input.files[0]) {
+            const formData = new FormData();
+            formData.append("file", input.files[0]);
+            try {
+                const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
+                const data = await response.json();
+                if (data.url) {
+                    const source = document.getElementById(sourceInputId).value;
+                    injectHtmlTag(elementId, data.url, source);
+                    document.getElementById(sourceInputId).value = "";
+                    alert("사진이 Supabase 클라우드에 업로드되었습니다!");
+                } else {
+                    alert("업로드 실패: " + (data.error || "오류"));
+                }
+            } catch (err) {
+                alert("업로드 오류: " + err);
+            }
+            input.value = "";
+        }
+    }
+
+    function insertYouTubeVideo(elementId) {
+        const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
+        if (ytUrl && ytUrl.trim() !== "") {
+            const tag = '\\n[YOUTUBE:' + ytUrl.trim() + ']\\n';
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
             textarea.focus();
+            alert("유튜브 동영상 삽입 코드가 추가되었습니다!");
         }
-        function insertImageWithSource(elementId, sourceInputId) {
-            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {
-                const source = document.getElementById(sourceInputId).value;
-                injectHtmlTag(elementId, url, source);
-                document.getElementById(sourceInputId).value = "";
-            }
-        }
-        async function uploadImageWithSource(input, elementId, sourceInputId) {
-            if (input.files && input.files[0]) {
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {
-                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
-                    const data = await response.json();
-                    if (data.url) {
-                        const source = document.getElementById(sourceInputId).value;
-                        injectHtmlTag(elementId, data.url, source);
-                        document.getElementById(sourceInputId).value = "";
-                        alert("사진이 Supabase 클라우드에 업로드되었습니다!");
-                    } else {
-                        alert("업로드 실패: " + (data.error || "오류"));
-                    }
-                } catch (err) {
-                    alert("업로드 오류: " + err);
-                }
-                input.value = "";
-            }
-        }
-
-        function insertYouTubeVideo(elementId) {
-            const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
-            if (ytUrl && ytUrl.trim() !== "") {
-                const tag = '\\n[YOUTUBE:' + ytUrl.trim() + ']\\n';
-                const textarea = document.getElementById(elementId);
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                textarea.focus();
-                alert("유튜브 동영상 삽입 코드가 추가되었습니다!");
-            }
-        }
-        </script>
-    </body></html>
-    """
+    }
+    </script>
+</body>
+</html>""")
 
 @app.post("/admin/update/{article_id}")
 def update_article(
