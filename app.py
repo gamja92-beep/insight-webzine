@@ -98,6 +98,7 @@ def get_latest_realtime_news(category_name):
         req = urllib.request.Request(feed_url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=4) as response:
             xml_data = response.read()
+        import xml.etree.ElementTree as ET
         root = ET.fromstring(xml_data)
         items = root.findall('./channel/item')
         if items:
@@ -333,6 +334,30 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
     text = text.replace('**', '').replace('__', '')
     clean_title_str = clean_article_title(title)
 
+    # 유튜브 태그 처리 함수
+    def replace_youtube_tag(match):
+        yt_url = match.group(1)
+        video_id = ""
+        if "youtu.be/" in yt_url:
+            video_id = yt_url.split("youtu.be/")[1].split("?")[0]
+        elif "watch?v=" in yt_url:
+            video_id = yt_url.split("watch?v=")[1].split("&")[0]
+        elif "embed/" in yt_url:
+            video_id = yt_url.split("embed/")[1].split("?")[0]
+        else:
+            video_id = yt_url.strip()
+            
+        if not video_id:
+            return ""
+            
+        return f'''
+        <div style="position: relative; width: 100%; height: 0; padding-bottom: 56.25%; margin: 25px 0; border-radius: 8px; overflow: hidden; background: #000;">
+            <iframe src="https://www.youtube.com/embed/{video_id}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" allowfullscreen></iframe>
+        </div>
+        '''
+
+    text = re.sub(r'\[YOUTUBE:\s*([^\]]+)\]', replace_youtube_tag, text)
+
     lines_raw = text.split('\n')
     processed_lines = []
 
@@ -345,7 +370,7 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
         if clean_title_str and p_text_pure == clean_title_str:
             continue
 
-        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure') or p_str.startswith('<img'):
+        if p_str.startswith('<div class="article-img-box"') or p_str.startswith('<p') or p_str.startswith('<div') or p_str.startswith('<figure') or p_str.startswith('<img') or p_str.startswith('<iframe'):
             processed_lines.append(p_str)
         elif use_subtitles and (p_str.startswith('###') or (len(p_str) < 42 and not p_str.endswith(('.', '?', '!')) and not p_str.startswith('<'))):
             title_text = p_str.replace('###', '').strip()
@@ -371,7 +396,7 @@ def save_article_to_db(category, title, content, image_url, image_author):
     clean_t = clean_article_title(title)
     
     if supabase:
-        res = supabase.table("articles").insert({
+        supabase.table("articles").insert({
             "category": category,
             "title": clean_t,
             "content": content,
@@ -505,7 +530,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     if category_name == "정치/시사":
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 시사보도 전문 기자입니다.
-오늘은 **2026년 9월 16일**입니다.
+오늘은 **2026년 9월 21일**입니다.
 [취재 분야]: 정치/시사 (국가 정책, 행정, 제도, 정국 주요 현안 중심)
 {ref_fact_context}
 지침:
@@ -517,7 +542,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     elif category_name == "세상이야기":
         editorial_prompt = f"""
 당신은 따뜻한 시선으로 세상을 관조하는 휴먼 다큐멘터리 전문 칼럼니스트입니다.
-오늘은 **2026년 9월 16일**입니다.
+오늘은 **2026년 9월 21일**입니다.
 [취재 분야]: 세상이야기 (이웃들의 진솔한 삶, 소외된 이웃들의 이야기, 인생 철학과 감동이 담긴 미담 중심)
 {ref_fact_context}
 지침:
@@ -529,7 +554,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     else:
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
-오늘은 **2026년 9월 16일**입니다.
+오늘은 **2026년 9월 21일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 지침:
@@ -1051,7 +1076,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     </label>
                 </div>
 
-                <label>기사 본문 및 이미지 삽입</label>
+                <label>기사 본문 및 미디어 삽입</label>
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
                     <div class="img-tool-row"><input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스)" style="flex: 1;"></div>
@@ -1059,6 +1084,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                         <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
                         <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('manual_file_input').click()">📁 내 기기 파일</button>
                         <input type="file" id="manual_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'manualContent', 'manual_source')">
+                    </div>
+                </div>
+                
+                <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
+                    <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('manualContent')">▶️ 유튜브 영상 넣기</button>
+                        <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
                     </div>
                 </div>
 
@@ -1113,6 +1146,14 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     </div>
                 </div>
 
+                <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
+                    <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('expandPrompt')">▶️ 유튜브 영상 넣기</button>
+                        <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
+                    </div>
+                </div>
+
                 <textarea name="prompt" id="expandPrompt" placeholder="AI에게 전달할 취재 메모나 프롬프트를 입력하세요..." required></textarea>
                 <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
             </form>
@@ -1125,80 +1166,94 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </div>
 
         <script>
-        function toggleHeadImgSection(type) {{
+        function toggleHeadImgSection(type) {
             const chk = document.getElementById(type + '_use_unsplash');
             const wrap = document.getElementById(type + '_custom_head_wrap');
             wrap.style.display = chk.checked ? 'none' : 'block';
-        }}
+        }
 
-        async function uploadDirectHeadImage(input, urlInputId, previewImgId) {{
-            if (input.files && input.files[0]) {{
+        async function uploadDirectHeadImage(input, urlInputId, previewImgId) {
+            if (input.files && input.files[0]) {
                 const formData = new FormData();
                 formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                try {
+                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
                     const data = await response.json();
-                    if (data.url) {{
+                    if (data.url) {
                         document.getElementById(urlInputId).value = data.url;
                         const preview = document.getElementById(previewImgId);
                         preview.src = data.url;
                         preview.style.display = 'block';
                         alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
-                    }} else {{
+                    } else {
                         alert("업로드 실패: " + (data.error || "오류"));
-                    }}
-                }} catch (err) {{
+                    }
+                } catch (err) {
                     alert("업로드 오류: " + err);
-                }}
+                }
                 input.value = "";
-            }}
-        }}
+            }
+        }
 
-        function injectHtmlTag(elementId, imgUrl, sourceText) {{
+        function injectHtmlTag(elementId, imgUrl, sourceText) {
             let captionHtml = "";
             let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {{
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
+            if (cleanSource !== "") {
+                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
                     cleanSource = "Photo by " + cleanSource;
-                }}
+                }
                 captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
-            }}
+            }
             const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
             textarea.focus();
-        }}
-        function insertImageWithSource(elementId, sourceInputId) {{
+        }
+        function insertImageWithSource(elementId, sourceInputId) {
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {{
+            if (url) {
                 const source = document.getElementById(sourceInputId).value;
                 injectHtmlTag(elementId, url, source);
                 document.getElementById(sourceInputId).value = "";
-            }}
-        }}
-        async function uploadImageWithSource(input, elementId, sourceInputId) {{
-            if (input.files && input.files[0]) {{
+            }
+        }
+        async function uploadImageWithSource(input, elementId, sourceInputId) {
+            if (input.files && input.files[0]) {
                 const formData = new FormData();
                 formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                try {
+                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
                     const data = await response.json();
-                    if (data.url) {{
+                    if (data.url) {
                         const source = document.getElementById(sourceInputId).value;
                         injectHtmlTag(elementId, data.url, source);
                         document.getElementById(sourceInputId).value = "";
                         alert("사진이 Supabase 클라우드에 업로드되었습니다!");
-                    }} else {{
+                    } else {
                         alert("업로드 실패: " + (data.error || "오류"));
-                    }}
-                }} catch (err) {{
+                    }
+                } catch (err) {
                     alert("업로드 오류: " + err);
-                }}
+                }
                 input.value = "";
-            }}
-        }}
+            }
+        }
+
+        // 유튜브 동영상 태그 삽입 자바스크립트 함수
+        function insertYouTubeVideo(elementId) {
+            const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
+            if (ytUrl && ytUrl.trim() !== "") {
+                const tag = '\\n[YOUTUBE:' + ytUrl.trim() + ']\\n';
+                const textarea = document.getElementById(elementId);
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                textarea.focus();
+                alert("유튜브 동영상 삽입 코드가 추가되었습니다!");
+            }
+        }
         </script>
     </body></html>
     """
@@ -1261,7 +1316,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     <img id="edit_main_preview" src="{current_img}" class="preview-img" onerror="this.style.display='none'">
                 </div>
 
-                <label>기사 내용 및 본문 추가 이미지 삽입</label>
+                <label>기사 내용 및 미디어 삽입</label>
                 <div class="img-tool-box">
                     <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
                     <div class="img-tool-row"><input type="text" id="edit_source" placeholder="출처 표기" style="flex: 1;"></div>
@@ -1272,80 +1327,100 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
                     </div>
                 </div>
 
+                <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
+                    <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
+                    <div class="img-tool-row">
+                        <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('editContent')">▶️ 유튜브 영상 넣기</button>
+                    </div>
+                </div>
+
                 <textarea name="content" id="editContent" required>{art['content']}</textarea>
                 <button type="submit">💾 수정 사항 저장하기</button>
             </form>
         </div>
 
         <script>
-        async function uploadEditMainImage(input) {{
-            if (input.files && input.files[0]) {{
+        async function uploadEditMainImage(input) {
+            if (input.files && input.files[0]) {
                 const formData = new FormData();
                 formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                try {
+                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
                     const data = await response.json();
-                    if (data.url) {{
+                    if (data.url) {
                         document.getElementById('edit_main_img_url').value = data.url;
                         const preview = document.getElementById('edit_main_preview');
                         preview.src = data.url;
                         preview.style.display = 'block';
                         alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
-                    }} else {{
+                    } else {
                         alert("업로드 실패: " + (data.error || "오류"));
-                    }}
-                }} catch (err) {{
+                    }
+                } catch (err) {
                     alert("업로드 오류: " + err);
-                }}
+                }
                 input.value = "";
-            }}
-        }}
+            }
+        }
 
-        function injectHtmlTag(elementId, imgUrl, sourceText) {{
+        function injectHtmlTag(elementId, imgUrl, sourceText) {
             let captionHtml = "";
             let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {{
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {{
+            if (cleanSource !== "") {
+                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
                     cleanSource = "Photo by " + cleanSource;
-                }}
+                }
                 captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
-            }}
+            }
             const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
             textarea.focus();
-        }}
-        function insertImageWithSource(elementId, sourceInputId) {{
+        }
+        function insertImageWithSource(elementId, sourceInputId) {
             const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {{
+            if (url) {
                 const source = document.getElementById(sourceInputId).value;
                 injectHtmlTag(elementId, url, source);
                 document.getElementById(sourceInputId).value = "";
-            }}
-        }}
-        async function uploadImageWithSource(input, elementId, sourceInputId) {{
-            if (input.files && input.files[0]) {{
+            }
+        }
+        async function uploadImageWithSource(input, elementId, sourceInputId) {
+            if (input.files && input.files[0]) {
                 const formData = new FormData();
                 formData.append("file", input.files[0]);
-                try {{
-                    const response = await fetch("/admin/upload-image", {{ method: "POST", body: formData }});
+                try {
+                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
                     const data = await response.json();
-                    if (data.url) {{
+                    if (data.url) {
                         const source = document.getElementById(sourceInputId).value;
                         injectHtmlTag(elementId, data.url, source);
                         document.getElementById(sourceInputId).value = "";
                         alert("사진이 Supabase 클라우드에 업로드되었습니다!");
-                    }} else {{
+                    } else {
                         alert("업로드 실패: " + (data.error || "오류"));
-                    }}
-                }} catch (err) {{
+                    }
+                } catch (err) {
                     alert("업로드 오류: " + err);
-                }}
+                }
                 input.value = "";
-            }}
-        }}
+            }
+        }
+
+        function insertYouTubeVideo(elementId) {
+            const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
+            if (ytUrl && ytUrl.trim() !== "") {
+                const tag = '\\n[YOUTUBE:' + ytUrl.trim() + ']\\n';
+                const textarea = document.getElementById(elementId);
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+                textarea.focus();
+                alert("유튜브 동영상 삽입 코드가 추가되었습니다!");
+            }
+        }
         </script>
     </body></html>
     """
