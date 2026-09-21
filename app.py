@@ -984,27 +984,27 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if not articles_list_html:
         articles_list_html = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: #777;'>등록된 기사가 없습니다.</td></tr>"
 
-    return f"""
+    return """
     <!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>관리자 스튜디오</title>
     <style>
-        body {{ font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 0 auto; padding: 15px; background: #f4f6f7; }}
-        h1 {{ color: #2c3e50; font-size: 1.5em; }}
-        .box {{ background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
-        button {{ background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }}
-        .manual-btn {{ background: #2980b9; }} .ai-expand-btn {{ background: #8e44ad; }}
-        input[type="text"], select, textarea {{ width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }}
-        textarea {{ height: 150px; resize: vertical; }}
-        label {{ font-weight: bold; color: #34495e; display: block; margin-top: 10px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-        .hub-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }}
-        .hub-btn {{ display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 13.5px; text-decoration: none; color: white; text-align: center; }}
-        .hub-btn-naver-a {{ background: #03c75a; }} .hub-btn-naver-s {{ background: #1f9c53; }} .hub-btn-google-gsc {{ background: #4285f4; }} .hub-btn-google-ga {{ background: #ea4335; }}
-        .img-tool-box {{ background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }}
-        .img-tool-row {{ display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }}
-        .btn-action {{ width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; }}
-        .custom-head-box {{ background: #fcf3cf; border: 1.5px solid #f39c12; border-radius: 6px; padding: 14px; margin-top: 10px; margin-bottom: 15px; }}
-        .checkbox-label {{ display: flex; align-items: center; gap: 8px; font-weight: bold; color: #7d6608; cursor: pointer; margin-top: 0; }}
-        .preview-box-img {{ max-width: 180px; max-height: 100px; border-radius: 4px; margin-top: 8px; display: none; }}
+        body { font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 0 auto; padding: 15px; background: #f4f6f7; }
+        h1 { color: #2c3e50; font-size: 1.5em; }
+        .box { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        button { background: #27ae60; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        .manual-btn { background: #2980b9; } .ai-expand-btn { background: #8e44ad; }
+        input[type="text"], select, textarea { width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 150px; resize: vertical; }
+        label { font-weight: bold; color: #34495e; display: block; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 12px; }
+        .hub-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 13.5px; text-decoration: none; color: white; text-align: center; }
+        .hub-btn-naver-a { background: #03c75a; } .hub-btn-naver-s { background: #1f9c53; } .hub-btn-google-gsc { background: #4285f4; } .hub-btn-google-ga { background: #ea4335; }
+        .img-tool-box { background: #fdfefe; border: 1px solid #d6dbdf; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .img-tool-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .btn-action { width: auto; padding: 8px 14px; font-size: 13px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; color: white; }
+        .custom-head-box { background: #fcf3cf; border: 1.5px solid #f39c12; border-radius: 6px; padding: 14px; margin-top: 10px; margin-bottom: 15px; }
+        .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #7d6608; cursor: pointer; margin-top: 0; }
+        .preview-box-img { max-width: 180px; max-height: 100px; border-radius: 4px; margin-top: 8px; display: none; }
     </style></head>
     <body>
         <a href="/" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 메인 페이지로</a>
@@ -1161,7 +1161,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         <div class="box" style="border-top: 5px solid #34495e;">
             <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
             <table><thead><tr style="border-bottom:2px solid #ccc; text-align:left;"><th style="padding:10px;">카테고리</th><th style="padding:10px;">제목</th><th style="padding:10px;">발행일시</th><th style="padding:10px; text-align:right;">관리</th></tr></thead>
-            <tbody>{articles_list_html}</tbody></table>
+            <tbody>""" + articles_list_html + """</tbody></table>
         </div>
 
         <script>
