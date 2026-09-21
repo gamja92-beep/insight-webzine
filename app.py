@@ -984,8 +984,11 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     if not articles_list_html:
         articles_list_html = "<tr><td colspan='4' style='padding: 20px; text-align: center; color: #777;'>등록된 기사가 없습니다.</td></tr>"
 
-    return """
-    <!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>관리자 스튜디오</title>
+    return """<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>관리자 스튜디오</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 900px; margin: 0 auto; padding: 15px; background: #f4f6f7; }
         h1 { color: #2c3e50; font-size: 1.5em; }
@@ -1005,256 +1008,257 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         .custom-head-box { background: #fcf3cf; border: 1.5px solid #f39c12; border-radius: 6px; padding: 14px; margin-top: 10px; margin-bottom: 15px; }
         .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #7d6608; cursor: pointer; margin-top: 0; }
         .preview-box-img { max-width: 180px; max-height: 100px; border-radius: 4px; margin-top: 8px; display: none; }
-    </style></head>
-    <body>
-        <a href="/" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 메인 페이지로</a>
-        <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
-        
-        <div class="box" style="border-top: 5px solid #2ecc71;">
-            <h3>📊 통계 분석 허브 센터</h3>
-            <div class="hub-grid">
-                <a href="https://analytics.naver.com/" target="_blank" class="hub-btn hub-btn-naver-a">🟢 네이버 애널리틱스</a>
-                <a href="https://searchadvisor.naver.com/" target="_blank" class="hub-btn hub-btn-naver-s">🟢 네이버 서치어드바이저</a>
-                <a href="https://search.google.com/search-console" target="_blank" class="hub-btn hub-btn-google-gsc">🔵 구글 서치 콘솔</a>
-                <a href="https://analytics.google.com/" target="_blank" class="hub-btn hub-btn-google-ga">🔴 구글 애널리틱스(GA4)</a>
+    </style>
+</head>
+<body>
+    <a href="/" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 메인 페이지로</a>
+    <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
+    
+    <div class="box" style="border-top: 5px solid #2ecc71;">
+        <h3>📊 통계 분석 허브 센터</h3>
+        <div class="hub-grid">
+            <a href="https://analytics.naver.com/" target="_blank" class="hub-btn hub-btn-naver-a">🟢 네이버 애널리틱스</a>
+            <a href="https://searchadvisor.naver.com/" target="_blank" class="hub-btn hub-btn-naver-s">🟢 네이버 서치어드바이저</a>
+            <a href="https://search.google.com/search-console" target="_blank" class="hub-btn hub-btn-google-gsc">🔵 구글 서치 콘솔</a>
+            <a href="https://analytics.google.com/" target="_blank" class="hub-btn hub-btn-google-ga">🔴 구글 애널리틱스(GA4)</a>
+        </div>
+    </div>
+
+    <div class="box" style="border-top: 5px solid #27ae60;">
+        <h3>🤖 1. 상단: AI 자동 기사 발행 (수동 일회성 발행만 가능)</h3>
+        <form action="/admin/create-auto" method="post">
+            <label>카테고리 선택</label>
+            <select name="category">
+                <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
+                <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+            </select>
+
+            <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin: 12px 0;">
+                <label class="checkbox-label" style="color:#2c3e50;">
+                    <input type="checkbox" name="use_subtitles" value="yes" checked>
+                    <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기 (체크 해제 시 평문 출력)</span>
+                </label>
             </div>
-        </div>
 
-        <div class="box" style="border-top: 5px solid #27ae60;">
-            <h3>🤖 1. 상단: AI 자동 기사 발행 (수동 일회성 발행만 가능)</h3>
-            <form action="/admin/create-auto" method="post">
-                <label>카테고리 선택</label>
-                <select name="category">
-                    <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
-                </select>
+            <button type="submit">🚀 최신 핫이슈 심층보도 기사 1회 발행</button>
+        </form>
+    </div>
 
-                <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin: 12px 0;">
-                    <label class="checkbox-label" style="color:#2c3e50;">
-                        <input type="checkbox" name="use_subtitles" value="yes" checked>
-                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기 (체크 해제 시 평문 출력)</span>
-                    </label>
-                </div>
-
-                <button type="submit">🚀 최신 핫이슈 심층보도 기사 1회 발행</button>
-            </form>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #2980b9;">
-            <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
-            <form action="/admin/create-manual" method="post">
-                <label>카테고리 선택</label>
-                <select name="category">
-                    <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
-                </select>
-                <label>기사 제목</label>
-                <input type="text" name="title" placeholder="제목 입력" required>
-                
-                <div class="custom-head-box">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
-                        <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
-                    </label>
-                    <div id="manual_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
-                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" name="custom_image_url" id="manual_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
-                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('manual_head_file').click()">📁 내 기기 파일</button>
-                            <input type="file" id="manual_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'manual_head_url', 'manual_head_preview')">
-                        </div>
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
-                        <img id="manual_head_preview" class="preview-box-img">
+    <div class="box" style="border-top: 5px solid #2980b9;">
+        <h3>✍️ 2. 중단: 완전 수동 글 작성</h3>
+        <form action="/admin/create-manual" method="post">
+            <label>카테고리 선택</label>
+            <select name="category">
+                <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
+                <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+            </select>
+            <label>기사 제목</label>
+            <input type="text" name="title" placeholder="제목 입력" required>
+            
+            <div class="custom-head-box">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="use_unsplash" id="manual_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('manual')">
+                    <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
+                </label>
+                <div id="manual_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
+                    <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" name="custom_image_url" id="manual_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
+                        <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('manual_head_file').click()">📁 내 기기 파일</button>
+                        <input type="file" id="manual_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'manual_head_url', 'manual_head_preview')">
                     </div>
+                    <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
+                    <img id="manual_head_preview" class="preview-box-img">
                 </div>
+            </div>
 
-                <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
-                    <label class="checkbox-label" style="color:#2c3e50;">
-                        <input type="checkbox" name="use_subtitles" value="yes" checked>
-                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
-                    </label>
+            <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
+                <label class="checkbox-label" style="color:#2c3e50;">
+                    <input type="checkbox" name="use_subtitles" value="yes" checked>
+                    <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
+                </label>
+            </div>
+
+            <label>기사 본문 및 미디어 삽입</label>
+            <div class="img-tool-box">
+                <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
+                <div class="img-tool-row"><input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스)" style="flex: 1;"></div>
+                <div class="img-tool-row">
+                    <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
+                    <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('manual_file_input').click()">📁 내 기기 파일</button>
+                    <input type="file" id="manual_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'manualContent', 'manual_source')">
                 </div>
+            </div>
+            
+            <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
+                <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
+                <div class="img-tool-row">
+                    <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('manualContent')">▶️ 유튜브 영상 넣기</button>
+                    <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
+                </div>
+            </div>
 
-                <label>기사 본문 및 미디어 삽입</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
-                    <div class="img-tool-row"><input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스)" style="flex: 1;"></div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('manual_file_input').click()">📁 내 기기 파일</button>
-                        <input type="file" id="manual_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'manualContent', 'manual_source')">
+            <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
+            <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
+        </form>
+    </div>
+
+    <div class="box" style="border-top: 5px solid #8e44ad;">
+        <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
+        <form action="/admin/create-ai-expand" method="post">
+            <label>카테고리 선택</label>
+            <select name="category">
+                <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
+                <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
+            </select>
+            <label>기사 제목</label>
+            <input type="text" name="title" placeholder="제목 입력" required>
+            
+            <div class="custom-head-box">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
+                    <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
+                </label>
+                <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1.5px dashed #e59866; padding-top: 10px;">
+                    <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" name="custom_image_url" id="expand_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
+                        <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
+                        <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
                     </div>
+                    <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
+                    <img id="expand_head_preview" class="preview-box-img">
                 </div>
-                
-                <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
-                    <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('manualContent')">▶️ 유튜브 영상 넣기</button>
-                        <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
-                    </div>
+            </div>
+
+            <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
+                <label class="checkbox-label" style="color:#2c3e50;">
+                    <input type="checkbox" name="use_subtitles" value="yes" checked>
+                    <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
+                </label>
+            </div>
+
+            <label>AI 확장용 프롬프트 / 메모</label>
+            <div class="img-tool-box">
+                <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 출처 입력</div>
+                <div class="img-tool-row"><input type="text" id="expand_source" placeholder="출처 표기" style="flex: 1;"></div>
+                <div class="img-tool-row">
+                    <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
+                    <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('expand_file_input').click()">📁 내 기기 파일</button>
+                    <input type="file" id="expand_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'expandPrompt', 'expand_source')">
                 </div>
+            </div>
 
-                <textarea name="content" id="manualContent" placeholder="내용을 직접 작성하세요..." required></textarea>
-                <button type="submit" class="manual-btn">📝 직접 작성한 글 발행하기</button>
-            </form>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #8e44ad;">
-            <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
-            <form action="/admin/create-ai-expand" method="post">
-                <label>카테고리 선택</label>
-                <select name="category">
-                    <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                    <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
-                </select>
-                <label>기사 제목</label>
-                <input type="text" name="title" placeholder="제목 입력" required>
-                
-                <div class="custom-head-box">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
-                        <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
-                    </label>
-                    <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1.5px dashed #e59866; padding-top: 10px;">
-                        <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
-                        <div style="display: flex; gap: 8px;">
-                            <input type="text" name="custom_image_url" id="expand_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
-                            <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
-                            <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
-                        </div>
-                        <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
-                        <img id="expand_head_preview" class="preview-box-img">
-                    </div>
+            <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
+                <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
+                <div class="img-tool-row">
+                    <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('expandPrompt')">▶️ 유튜브 영상 넣기</button>
+                    <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
                 </div>
+            </div>
 
-                <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
-                    <label class="checkbox-label" style="color:#2c3e50;">
-                        <input type="checkbox" name="use_subtitles" value="yes" checked>
-                        <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
-                    </label>
-                </div>
+            <textarea name="prompt" id="expandPrompt" placeholder="AI에게 전달할 취재 메모나 프롬프트를 입력하세요..." required></textarea>
+            <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
+        </form>
+    </div>
 
-                <label>AI 확장용 프롬프트 / 메모</label>
-                <div class="img-tool-box">
-                    <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 출처 입력</div>
-                    <div class="img-tool-row"><input type="text" id="expand_source" placeholder="출처 표기" style="flex: 1;"></div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
-                        <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('expand_file_input').click()">📁 내 기기 파일</button>
-                        <input type="file" id="expand_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'expandPrompt', 'expand_source')">
-                    </div>
-                </div>
+    <div class="box" style="border-top: 5px solid #34495e;">
+        <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
+        <table><thead><tr style="border-bottom:2px solid #ccc; text-align:left;"><th style="padding:10px;">카테고리</th><th style="padding:10px;">제목</th><th style="padding:10px;">발행일시</th><th style="padding:10px; text-align:right;">관리</th></tr></thead>
+        <tbody>""" + articles_list_html + """</tbody></table>
+    </div>
 
-                <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
-                    <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
-                    <div class="img-tool-row">
-                        <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('expandPrompt')">▶️ 유튜브 영상 넣기</button>
-                        <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
-                    </div>
-                </div>
+    <script>
+    function toggleHeadImgSection(type) {
+        const chk = document.getElementById(type + '_use_unsplash');
+        const wrap = document.getElementById(type + '_custom_head_wrap');
+        wrap.style.display = chk.checked ? 'none' : 'block';
+    }
 
-                <textarea name="prompt" id="expandPrompt" placeholder="AI에게 전달할 취재 메모나 프롬프트를 입력하세요..." required></textarea>
-                <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
-            </form>
-        </div>
-
-        <div class="box" style="border-top: 5px solid #34495e;">
-            <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
-            <table><thead><tr style="border-bottom:2px solid #ccc; text-align:left;"><th style="padding:10px;">카테고리</th><th style="padding:10px;">제목</th><th style="padding:10px;">발행일시</th><th style="padding:10px; text-align:right;">관리</th></tr></thead>
-            <tbody>""" + articles_list_html + """</tbody></table>
-        </div>
-
-        <script>
-        function toggleHeadImgSection(type) {
-            const chk = document.getElementById(type + '_use_unsplash');
-            const wrap = document.getElementById(type + '_custom_head_wrap');
-            wrap.style.display = chk.checked ? 'none' : 'block';
-        }
-
-        async function uploadDirectHeadImage(input, urlInputId, previewImgId) {
-            if (input.files && input.files[0]) {
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {
-                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
-                    const data = await response.json();
-                    if (data.url) {
-                        document.getElementById(urlInputId).value = data.url;
-                        const preview = document.getElementById(previewImgId);
-                        preview.src = data.url;
-                        preview.style.display = 'block';
-                        alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
-                    } else {
-                        alert("업로드 실패: " + (data.error || "오류"));
-                    }
-                } catch (err) {
-                    alert("업로드 오류: " + err);
+    async function uploadDirectHeadImage(input, urlInputId, previewImgId) {
+        if (input.files && input.files[0]) {
+            const formData = new FormData();
+            formData.append("file", input.files[0]);
+            try {
+                const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
+                const data = await response.json();
+                if (data.url) {
+                    document.getElementById(urlInputId).value = data.url;
+                    const preview = document.getElementById(previewImgId);
+                    preview.src = data.url;
+                    preview.style.display = 'block';
+                    alert("대표 이미지가 Supabase 클라우드에 업로드되었습니다!");
+                } else {
+                    alert("업로드 실패: " + (data.error || "오류"));
                 }
-                input.value = "";
+            } catch (err) {
+                alert("업로드 오류: " + err);
             }
+            input.value = "";
         }
+    }
 
-        function injectHtmlTag(elementId, imgUrl, sourceText) {
-            let captionHtml = "";
-            let cleanSource = sourceText ? sourceText.trim() : "";
-            if (cleanSource !== "") {
-                if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
-                    cleanSource = "Photo by " + cleanSource;
-                }
-                captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+    function injectHtmlTag(elementId, imgUrl, sourceText) {
+        let captionHtml = "";
+        let cleanSource = sourceText ? sourceText.trim() : "";
+        if (cleanSource !== "") {
+            if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
+                cleanSource = "Photo by " + cleanSource;
             }
-            const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+            captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+        }
+        const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+        const textarea = document.getElementById(elementId);
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
+        textarea.focus();
+    }
+    function insertImageWithSource(elementId, sourceInputId) {
+        const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
+        if (url) {
+            const source = document.getElementById(sourceInputId).value;
+            injectHtmlTag(elementId, url, source);
+            document.getElementById(sourceInputId).value = "";
+        }
+    }
+    async function uploadImageWithSource(input, elementId, sourceInputId) {
+        if (input.files && input.files[0]) {
+            const formData = new FormData();
+            formData.append("file", input.files[0]);
+            try {
+                const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
+                const data = await response.json();
+                if (data.url) {
+                    const source = document.getElementById(sourceInputId).value;
+                    injectHtmlTag(elementId, data.url, source);
+                    document.getElementById(sourceInputId).value = "";
+                    alert("사진이 Supabase 클라우드에 업로드되었습니다!");
+                } else {
+                    alert("업로드 실패: " + (data.error || "오류"));
+                }
+            } catch (err) {
+                alert("업로드 오류: " + err);
+            }
+            input.value = "";
+        }
+    }
+
+    function insertYouTubeVideo(elementId) {
+        const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
+        if (ytUrl && ytUrl.trim() !== "") {
+            const tag = '\\n[YOUTUBE:' + ytUrl.trim() + ']\\n';
             const textarea = document.getElementById(elementId);
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
             textarea.focus();
+            alert("유튜브 동영상 삽입 코드가 추가되었습니다!");
         }
-        function insertImageWithSource(elementId, sourceInputId) {
-            const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
-            if (url) {
-                const source = document.getElementById(sourceInputId).value;
-                injectHtmlTag(elementId, url, source);
-                document.getElementById(sourceInputId).value = "";
-            }
-        }
-        async function uploadImageWithSource(input, elementId, sourceInputId) {
-            if (input.files && input.files[0]) {
-                const formData = new FormData();
-                formData.append("file", input.files[0]);
-                try {
-                    const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
-                    const data = await response.json();
-                    if (data.url) {
-                        const source = document.getElementById(sourceInputId).value;
-                        injectHtmlTag(elementId, data.url, source);
-                        document.getElementById(sourceInputId).value = "";
-                        alert("사진이 Supabase 클라우드에 업로드되었습니다!");
-                    } else {
-                        alert("업로드 실패: " + (data.error || "오류"));
-                    }
-                } catch (err) {
-                    alert("업로드 오류: " + err);
-                }
-                input.value = "";
-            }
-        }
-
-        function insertYouTubeVideo(elementId) {
-            const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
-            if (ytUrl && ytUrl.trim() !== "") {
-                const tag = '\\n[YOUTUBE:' + ytUrl.trim() + ']\\n';
-                const textarea = document.getElementById(elementId);
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
-                textarea.focus();
-                alert("유튜브 동영상 삽입 코드가 추가되었습니다!");
-            }
-        }
-        </script>
-    </body></html>
-    """
+    }
+    </script>
+</body>
+</html>"""
 
 @app.get("/admin/edit/{article_id}", response_class=HTMLResponse)
 def edit_page(article_id: int, admin_auth: str = Cookie(None)):
