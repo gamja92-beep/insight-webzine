@@ -334,7 +334,6 @@ def clean_and_format_content(text, category_name="종합", title="", use_subtitl
     text = text.replace('**', '').replace('__', '')
     clean_title_str = clean_article_title(title)
 
-    # 유튜브 태그 처리 함수
     def replace_youtube_tag(match):
         yt_url = match.group(1)
         video_id = ""
@@ -1241,7 +1240,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             }
         }
 
-        // 유튜브 동영상 태그 삽입 자바스크립트 함수
         function insertYouTubeVideo(elementId) {
             const ytUrl = prompt("삽입할 유튜브 영상의 링크(URL)나 공유 주소를 입력하세요:\\n(예: https://youtu.be/영상아이디 또는 https://www.youtube.com/watch?v=...)");
             if (ytUrl && ytUrl.trim() !== "") {
