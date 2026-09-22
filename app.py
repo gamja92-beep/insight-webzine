@@ -661,9 +661,7 @@ def create_ai_expand(
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/upload-image")
-async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
-    if admin_auth != "authenticated":
-        return {"error": "Unauthorized"}
+async def upload_image(file: UploadFile = File(...)):
     try:
         file_ext = file.filename.split(".")[-1]
         unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
