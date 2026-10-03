@@ -743,6 +743,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <html lang="ko">
         <head>
             <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
             <title>{art['title']} - 시사투데이 창</title>
             <meta name="description" content="{art['title']} - 프리미엄 시사투데이 창 실시간 뉴스 리포트">
             <link rel="canonical" href="{BASE_SITE_URL}/?view={art['id']}">
@@ -852,6 +853,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <html lang="ko">
     <head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
         <title>시사투데이 창 - 프리미엄 미디어</title>
         <meta name="description" content="시사투데이 창 - 정치, 경제, 세상이야기, AI테크, 건강복지, 생활정보 등 프리미엄 실시간 뉴스 미디어">
         <link rel="canonical" href="{BASE_SITE_URL}/">
