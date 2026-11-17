@@ -681,7 +681,6 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-# [추가] 독립형 이미지 생성기에서 곧바로 카테고리 기사로 발행하는 라우트
 @app.post("/admin/create-standalone-image-article")
 def create_standalone_image_article(
     category: str = Form(...),
@@ -700,7 +699,6 @@ def create_standalone_image_article(
     if not author_str.lower().startswith("photo by"):
         author_str = "Photo by " + author_str
 
-    # 다운로드 버튼이 포함된 본문 HTML 생성
     content_html = f'''
     <div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;">
         <img src="{clean_url}" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">
@@ -740,7 +738,7 @@ def rss_feed():
     articles = get_all_articles()
     rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n<rss version="2.0">\n<channel>\n  <title>시사투데이 창</title>\n  <link>' + BASE_SITE_URL + '/</link>\n  <description>프리미엄 시사투데이 창</description>\n'
     for art in articles:
-        rss_content += f"  <item>\n    <title>{art['title'].replace('&', '&amp;')}</title>\n    <link>{BASE_SITE_URL}/?view={art['id']}</link>\n    <guid>{BASE_SITE_URL}/?view={art['id']}</guid>\n    <pubDate>{art['created_at']}</pubDate>\n  </item>\n"
+        rss_content += f"  <item>\n    <title>{art['title'].replace('&', '&')}</title>\n    <link>{BASE_SITE_URL}/?view={art['id']}</link>\n    <guid>{BASE_SITE_URL}/?view={art['id']}</guid>\n    <pubDate>{art['created_at']}</pubDate>\n  </item>\n"
     rss_content += '</channel>\n</rss>'
     return PlainResponse(content=rss_content, media_type="application/rss+xml")
 
@@ -811,7 +809,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div style="border-bottom: 3px solid #1b4f72; padding-bottom: 12px; margin-bottom: 20px;">
                     <a href="/" style="text-decoration: none; display: inline-block;">
                         <div style="font-family: 'Gowun Batang', serif; font-size: 1.5em; font-weight: 700; color: #1a252f; display: flex; align-items: center; gap: 8px;">
-                            시사투데이&nbsp;<span style="display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 2px 12px; border-radius: 6px; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.12);">창</span>
+                            시사투데이 <span style="display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 2px 12px; border-radius: 6px; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.12);">창</span>
                         </div>
                     </a>
                 </div>
@@ -940,7 +938,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <body>
         <div class="header-flex">
             <a href="/" style="text-decoration: none;">
-                <div class="logo-title">시사투데이&nbsp;<span class="logo-chang">창</span></div>
+                <div class="logo-title">시사투데이 <span class="logo-chang">창</span></div>
             </a>
         </div>
         <div class="nav-tabs">
@@ -1051,7 +1049,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
     <a href="/" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 메인 페이지로</a>
     <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
     
-    <!-- [수정된 독립형 이미지 전용 창: 직접 발행 기능 추가] -->
     <div class="standalone-box">
         <h3 style="color: #16a085; margin-top: 0;">🖼️ [독립형] 무료 이미지 & 사진 전용 생성 및 발행기</h3>
         <p style="font-size: 0.9em; color: #555;">사진을 올린 후, 카테고리와 제목을 입력하고 버튼을 누르면 곧바로 해당 카테고리에 다운로드 기사가 발행됩니다.</p>
@@ -1531,7 +1528,7 @@ def update_article(
     category: str = Form(...), 
     title: str = Form(...), 
     content: str = Form(...), 
-    image_url: str, 
+    image_url: str = Form(None), 
     image_author: str = Form(None), 
     admin_auth: str = Cookie(None)
 ):
