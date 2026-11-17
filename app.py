@@ -529,7 +529,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     if category_name == "정치/시사":
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 시사보도 전문 기자입니다.
-오늘은 **2026년 9월 21일**입니다.
+오늘은 **2026년 11월 17일**입니다.
 [취재 분야]: 정치/시사 (국가 정책, 행정, 제도, 정국 주요 현안 중심)
 {ref_fact_context}
 지침:
@@ -541,7 +541,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     elif category_name == "세상이야기":
         editorial_prompt = f"""
 당신은 따뜻한 시선으로 세상을 관조하는 휴먼 다큐멘터리 전문 칼럼니스트입니다.
-오늘은 **2026년 9월 21일**입니다.
+오늘은 **2026년 11월 17일**입니다.
 [취재 분야]: 세상이야기 (이웃들의 진솔한 삶, 소외된 이웃들의 이야기, 인생 철학과 감동이 담긴 미담 중심)
 {ref_fact_context}
 지침:
@@ -553,7 +553,7 @@ def generate_ai_article(category_name, use_subtitles=True):
     else:
         editorial_prompt = f"""
 당신은 팩트를 최우선으로 다루는 정론지의 수석 심층보도 전문 기자입니다.
-오늘은 **2026년 9월 21일**입니다.
+오늘은 **2026년 11월 17일**입니다.
 [취재 분야]: {category_name}
 {ref_fact_context}
 지침:
@@ -661,7 +661,9 @@ def create_ai_expand(
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.post("/admin/upload-image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(None)):
+    if admin_auth != "authenticated":
+        return {"error": "Unauthorized"}
     try:
         file_ext = file.filename.split(".")[-1]
         unique_filename = f"img_{int(time.time())}_{random.randint(1000,9999)}.{file_ext}"
@@ -702,7 +704,7 @@ def rss_feed():
     articles = get_all_articles()
     rss_content = '<?xml version="1.0" encoding="UTF-8" ?>\n<rss version="2.0">\n<channel>\n  <title>시사투데이 창</title>\n  <link>' + BASE_SITE_URL + '/</link>\n  <description>프리미엄 시사투데이 창</description>\n'
     for art in articles:
-        rss_content += f"  <item>\n    <title>{art['title'].replace('&', '&amp;')}</title>\n    <link>{BASE_SITE_URL}/?view={art['id']}</link>\n    <guid>{BASE_SITE_URL}/?view={art['id']}</guid>\n    <pubDate>{art['created_at']}</pubDate>\n  </item>\n"
+        rss_content += f"  <item>\n    <title>{art['title'].replace('&', '&')}</title>\n    <link>{BASE_SITE_URL}/?view={art['id']}</link>\n    <guid>{BASE_SITE_URL}/?view={art['id']}</guid>\n    <pubDate>{art['created_at']}</pubDate>\n  </item>\n"
     rss_content += '</channel>\n</rss>'
     return PlainResponse(content=rss_content, media_type="application/rss+xml")
 
@@ -743,7 +745,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
         <html lang="ko">
         <head>
             <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
             <title>{art['title']} - 시사투데이 창</title>
             <meta name="description" content="{art['title']} - 프리미엄 시사투데이 창 실시간 뉴스 리포트">
             <link rel="canonical" href="{BASE_SITE_URL}/?view={art['id']}">
@@ -774,7 +775,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
                 <div style="border-bottom: 3px solid #1b4f72; padding-bottom: 12px; margin-bottom: 20px;">
                     <a href="/" style="text-decoration: none; display: inline-block;">
                         <div style="font-family: 'Gowun Batang', serif; font-size: 1.5em; font-weight: 700; color: #1a252f; display: flex; align-items: center; gap: 8px;">
-                            시사투데이&nbsp;<span style="display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 2px 12px; border-radius: 6px; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.12);">창</span>
+                            시사투데이 <span style="display: inline-block; background: #fff; color: #111; border: 2.5px solid #111; padding: 2px 12px; border-radius: 6px; transform: rotate(5deg); box-shadow: 2px 2px 4px rgba(0,0,0,0.12);">창</span>
                         </div>
                     </a>
                 </div>
@@ -853,7 +854,6 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <html lang="ko">
     <head>
         <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="google-site-verification" content="FuUKAJVoYVh_WbGkmCXJX2YwcIayUpBDGpBwLu7vlkU" />
         <title>시사투데이 창 - 프리미엄 미디어</title>
         <meta name="description" content="시사투데이 창 - 정치, 경제, 세상이야기, AI테크, 건강복지, 생활정보 등 프리미엄 실시간 뉴스 미디어">
         <link rel="canonical" href="{BASE_SITE_URL}/">
@@ -904,7 +904,7 @@ def index(request: Request, category: str = None, view: int = None, q: str = Non
     <body>
         <div class="header-flex">
             <a href="/" style="text-decoration: none;">
-                <div class="logo-title">시사투데이&nbsp;<span class="logo-chang">창</span></div>
+                <div class="logo-title">시사투데이 <span class="logo-chang">창</span></div>
             </a>
         </div>
         <div class="nav-tabs">
@@ -1081,8 +1081,8 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 
             <label>기사 본문 및 미디어 삽입</label>
             <div class="img-tool-box">
-                <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
-                <div class="img-tool-row"><input type="text" id="manual_source" placeholder="출처 표기 (예: 연합뉴스)" style="flex: 1;"></div>
+                <div class="img-tool-title">📷 본문 이미지 삽입 및 다운로드 버튼 자동 생성</div>
+                <div class="img-tool-row"><input type="text" id="manual_source" placeholder="출처 표기 (예: Pixabay)" style="flex: 1;"></div>
                 <div class="img-tool-row">
                     <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('manualContent', 'manual_source')">🌐 URL 주소로 넣기</button>
                     <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('manual_file_input').click()">📁 내 기기 파일</button>
@@ -1119,7 +1119,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                     <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
                     <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
                 </label>
-                <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1.5px dashed #e59866; padding-top: 10px;">
+                <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1px dashed #e59866; padding-top: 10px;">
                     <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
                     <div style="display: flex; gap: 8px;">
                         <input type="text" name="custom_image_url" id="expand_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
@@ -1140,7 +1140,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
 
             <label>AI 확장용 프롬프트 / 메모</label>
             <div class="img-tool-box">
-                <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 출처 입력</div>
+                <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 다운로드 버튼 자동 생성</div>
                 <div class="img-tool-row"><input type="text" id="expand_source" placeholder="출처 표기" style="flex: 1;"></div>
                 <div class="img-tool-row">
                     <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
@@ -1198,6 +1198,7 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         }
     }
 
+    // [수정됨] 본문 이미지 삽입 시 다운로드 버튼과 출처가 함께 들어가도록 생성
     function injectHtmlTag(elementId, imgUrl, sourceText) {
         let captionHtml = "";
         let cleanSource = sourceText ? sourceText.trim() : "";
@@ -1205,15 +1206,18 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
             if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
                 cleanSource = "Photo by " + cleanSource;
             }
-            captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+            captionHtml = '📷 ' + cleanSource;
         }
-        const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+        
+        const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지"><div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;"><span style="font-size: 0.85em; color: #95a5a6; font-style: italic;">' + captionHtml + '</span><a href="' + imgUrl.trim() + '" download="siyatoday_photo.jpg" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold;">📥 사진 다운로드</a></div></div>\\n';
+        
         const textarea = document.getElementById(elementId);
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         textarea.value = textarea.value.substring(0, start) + tag + textarea.value.substring(end);
         textarea.focus();
     }
+
     function insertImageWithSource(elementId, sourceInputId) {
         const url = prompt("넣을 이미지의 웹 주소(URL)를 입력하세요:");
         if (url) {
@@ -1324,7 +1328,7 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
 
             <label>기사 내용 및 미디어 삽입</label>
             <div class="img-tool-box">
-                <div class="img-tool-title">📷 본문 이미지 삽입 및 출처 입력</div>
+                <div class="img-tool-title">📷 본문 이미지 삽입 및 다운로드 버튼 자동 생성</div>
                 <div class="img-tool-row"><input type="text" id="edit_source" placeholder="출처 표기" style="flex: 1;"></div>
                 <div class="img-tool-row">
                     <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('editContent', 'edit_source')">🌐 URL 주소로 넣기</button>
@@ -1376,9 +1380,9 @@ def edit_page(article_id: int, admin_auth: str = Cookie(None)):
             if (!cleanSource.toLowerCase().startsWith("photo by") && !cleanSource.startsWith("Photo by")) {
                 cleanSource = "Photo by " + cleanSource;
             }
-            captionHtml = '<div class="img-source" style="margin-top: 8px !important; margin-bottom: 24px !important; font-size: 0.85em !important; color: #95a5a6 !important; font-style: italic !important; text-align: left !important; display: block !important;">📷 ' + cleanSource + '</div>';
+            captionHtml = '📷 ' + cleanSource;
         }
-        const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">' + captionHtml + '</div>\\n';
+        const tag = '\\n<div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;"><img src="' + imgUrl.trim() + '" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지"><div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;"><span style="font-size: 0.85em; color: #95a5a6; font-style: italic;">' + captionHtml + '</span><a href="' + imgUrl.trim() + '" download="siyatoday_photo.jpg" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold;">📥 사진 다운로드</a></div></div>\\n';
         const textarea = document.getElementById(elementId);
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
