@@ -681,38 +681,54 @@ async def upload_image(file: UploadFile = File(...), admin_auth: str = Cookie(No
     except Exception as e:
         return {"error": str(e)}
 
-@app.post("/admin/create-standalone-image-article")
-def create_standalone_image_article(
+# [수정] 여러 장의 사진을 한 번에 받아서 각각 다운로드 버튼을 생성하여 일괄 발행하는 라우트
+@app.post("/admin/create-multi-image-article")
+async def create_multi_image_article(
     category: str = Form(...),
     title: str = Form(...),
-    image_url: str = Form(...),
-    image_author: str = Form(None),
+    image_urls: list[str] = Form(...),
+    image_authors: list[str] = Form(...),
     admin_auth: str = Cookie(None)
 ):
     if admin_auth != "authenticated":
         return RedirectResponse(url="/admin", status_code=303)
     
     clean_t = clean_article_title(title)
-    clean_url = image_url.strip()
-    author_str = image_author.strip() if image_author else "시사투데이 창"
     
-    if not author_str.lower().startswith("photo by"):
-        author_str = "Photo by " + author_str
+    # 대표 이미지는 첫 번째 사진으로 지정
+    main_img_url = image_urls[0].strip() if image_urls else ""
+    main_author = image_authors[0].strip() if image_authors and image_authors[0] else "시사투데이 창"
+    if not main_author.lower().startswith("photo by"):
+        main_author = "Photo by " + main_author
 
-    content_html = f'''
-    <div class="article-img-box" style="margin: 25px auto 10px auto; text-align: left; max-width: 100%; display: block;">
-        <img src="{clean_url}" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-            <span style="font-size: 0.85em; color: #95a5a6; font-style: italic;">📷 {author_str}</span>
-            <a href="{clean_url}" download="siyatoday_photo.jpg" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold;">📥 사진 다운로드</a>
+    content_html_parts = []
+    for i, url in enumerate(image_urls):
+        u = url.strip()
+        if not u:
+            continue
+        auth = image_authors[i].strip() if i < len(image_authors) and image_authors[i] else "시사투데이 창"
+        if not auth.lower().startswith("photo by"):
+            auth = "Photo by " + auth
+
+        part_html = f'''
+        <div class="article-img-box" style="margin: 25px auto 15px auto; text-align: left; max-width: 100%; display: block;">
+            <img src="{u}" style="width: 100%; max-width: 100%; border-radius: 8px; display: block;" alt="기사 이미지">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                <span style="font-size: 0.85em; color: #95a5a6; font-style: italic;">📷 {auth}</span>
+                <a href="{u}" download="siyatoday_photo_{i+1}.jpg" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold;">📥 사진 {i+1} 다운로드</a>
+            </div>
         </div>
-    </div>
-    <p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">
-        {clean_t} 고화질 무료 이미지 리포트입니다. 상단의 다운로드 버튼을 클릭하시면 원본 사진을 간편하게 저장하실 수 있습니다.
-    </p>
-    '''
+        '''
+        content_html_parts.append(part_html)
 
-    save_article_to_db(category, clean_t, content_html, clean_url, author_str)
+    content_html_parts.append(f'''
+    <p style="margin-bottom: 24px; text-align: left !important; word-break: normal; line-height: 1.8; color: #111111; font-size: 1.02em; letter-spacing: -0.3px;">
+        {clean_t} 고화질 무료 이미지 갤러리 리포트입니다. 하단의 개별 다운로드 버튼을 클릭하시면 원본 사진들을 각각 저장하실 수 있습니다.
+    </p>
+    ''')
+
+    final_content = "".join(content_html_parts)
+    save_article_to_db(category, clean_t, final_content, main_img_url, main_author)
     return RedirectResponse(url="/admin/studio", status_code=303)
 
 @app.get("/siyatodaychangkey2026.txt", response_class=PlainResponse)
@@ -1043,17 +1059,19 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #7d6608; cursor: pointer; margin-top: 0; }
         .preview-box-img { max-width: 180px; max-height: 100px; border-radius: 4px; margin-top: 8px; display: none; }
         .standalone-box { background: #e8f8f5; border: 2px solid #16a085; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); }
+        .multi-img-item { background: #fff; border: 1px solid #bdc3c7; border-radius: 6px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
     </style>
 </head>
 <body>
     <a href="/" style="display:inline-block; margin-bottom:15px; color:#3498db; font-weight:bold; text-decoration:none;">← 메인 페이지로</a>
     <h1>🛡️ 시사투데이 창 관리자 스튜디오</h1>
     
+    <!-- [다중 사진 일괄 발행 전용 창] -->
     <div class="standalone-box">
-        <h3 style="color: #16a085; margin-top: 0;">🖼️ [독립형] 무료 이미지 & 사진 전용 생성 및 발행기</h3>
-        <p style="font-size: 0.9em; color: #555;">사진을 올린 후, 카테고리와 제목을 입력하고 버튼을 누르면 곧바로 해당 카테고리에 다운로드 기사가 발행됩니다.</p>
+        <h3 style="color: #16a085; margin-top: 0;">🖼️ [다중형] 무료 이미지 & 사진 일괄 갤러리 발행기</h3>
+        <p style="font-size: 0.9em; color: #555;">원하는 만큼 사진을 추가하고 각각 출처를 적은 뒤, 한 번에 카테고리 기사로 발행할 수 있습니다.</p>
         
-        <form action="/admin/create-standalone-image-article" method="post">
+        <form action="/admin/create-multi-image-article" method="post">
             <label>발행할 카테고리 선택</label>
             <select name="category" required>
                 <option value="생활정보">생활정보</option>
@@ -1067,20 +1085,28 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 <option value="지역창">지역창</option>
             </select>
 
-            <label>기사 제목 (예: 무료 이미지 다운로드 가을 알밤 이미지 사진)</label>
+            <label>기사 제목 (예: 무료 이미지 다운로드 가을 풍경 모음 갤러리)</label>
             <input type="text" name="title" placeholder="제목을 입력하세요" required>
 
-            <label>사진 출처 (예: Unsplash, Pixabay, 작가명)</label>
-            <input type="text" name="image_author" placeholder="출처 입력 (예: Photo by John)">
-
-            <label>이미지 주소 (URL) 또는 내 기기 파일 업로드</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                <input type="text" id="standalone_url" name="image_url" placeholder="이미지 웹 주소(URL)" style="margin-bottom: 0; flex: 1;" required>
-                <button type="button" class="btn-action" style="background: #16a085; height: 42px;" onclick="document.getElementById('standalone_file').click()">📁 내 기기 파일</button>
-                <input type="file" id="standalone_file" style="display: none;" accept="image/*" onchange="uploadStandaloneImage(this)">
+            <label>등록할 사진 목록 (원하는 만큼 추가 가능)</label>
+            <div id="image_list_container">
+                <div class="multi-img-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 0.9em; color: #16a085;">사진 #1</strong>
+                        <button type="button" class="btn-action" style="background: #e74c3c; padding: 3px 8px; font-size: 11px;" onclick="this.parentElement.parentElement.remove()">삭제</button>
+                    </div>
+                    <input type="text" name="image_authors" placeholder="사진 출처 (예: Pixabay)" style="margin-bottom: 4px;">
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" name="image_urls" class="img-url-input" placeholder="이미지 주소(URL)" style="margin-bottom: 0; flex: 1;" required>
+                        <button type="button" class="btn-action" style="background: #16a085;" onclick="triggerFileInput(this)">📁 내 기기 파일</button>
+                        <input type="file" style="display: none;" accept="image/*" onchange="uploadMultiImageFile(this)">
+                    </div>
+                </div>
             </div>
 
-            <button type="submit" class="btn-action" style="background: #16a085; width: 100%; padding: 14px; font-size: 16px; margin-top: 10px;">🚀 이 사진으로 곧바로 카테고리 기사 발행하기</button>
+            <button type="button" class="btn-action" style="background: #f39c12; width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px;" onclick="addImageField()">➕ 사진 항목 추가하기</button>
+
+            <button type="submit" class="btn-action" style="background: #16a085; width: 100%; padding: 14px; font-size: 16px;">🚀 사진들로 곧바로 카테고리 기사 일괄 발행하기</button>
         </form>
     </div>
 
@@ -1173,65 +1199,6 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         </form>
     </div>
 
-    <div class="box" style="border-top: 5px solid #8e44ad;">
-        <h3>✨ 3. 하단: AI 프롬프트 확장 발행</h3>
-        <form action="/admin/create-ai-expand" method="post">
-            <label>카테고리 선택</label>
-            <select name="category">
-                <option value="정치/시사">정치/시사</option><option value="경제/주식">경제/주식</option><option value="세상이야기">세상이야기</option>
-                <option value="AI/테크">AI/테크</option><option value="건강/복지">건강/복지</option><option value="생활정보">생활정보</option><option value="연예계뉴스">연예계뉴스</option><option value="스포츠">스포츠</option><option value="지역창">지역창</option>
-            </select>
-            <label>기사 제목</label>
-            <input type="text" name="title" placeholder="제목 입력" required>
-            
-            <div class="custom-head-box">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="use_unsplash" id="expand_use_unsplash" value="yes" checked onchange="toggleHeadImgSection('expand')">
-                    <span>🖼️ 스마트 고정 이미지 풀 사용하기 (체크 해제 시 직접 지정)</span>
-                </label>
-                <div id="expand_custom_head_wrap" style="display: none; margin-top: 12px; border-top: 1.5px dashed #e59866; padding-top: 10px;">
-                    <small style="color: #a04000; font-weight: bold; display: block; margin-bottom: 6px;">[수동 대표 이미지 설정]</small>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" name="custom_image_url" id="expand_head_url" placeholder="이미지 주소(URL)" style="margin-bottom: 8px; flex: 1;">
-                        <button type="button" class="btn-action" style="background: #16a085; height: 42px; margin-top: 8px;" onclick="document.getElementById('expand_head_file').click()">📁 내 기기 파일</button>
-                        <input type="file" id="expand_head_file" style="display: none;" accept="image/*" onchange="uploadDirectHeadImage(this, 'expand_head_url', 'expand_head_preview')">
-                    </div>
-                    <input type="text" name="custom_image_author" placeholder="대표 이미지 출처 표기 (예: 연합뉴스)" style="margin-bottom: 4px;">
-                    <img id="expand_head_preview" class="preview-box-img">
-                </div>
-            </div>
-
-            <div style="background:#f4f6f7; padding:10px; border-radius:6px; margin-bottom:15px;">
-                <label class="checkbox-label" style="color:#2c3e50;">
-                    <input type="checkbox" name="use_subtitles" value="yes" checked>
-                    <span>📌 본문 단락마다 '### 소제목' 자동으로 예쁘게 넣기</span>
-                </label>
-            </div>
-
-            <label>AI 확장용 프롬프트 / 메모</label>
-            <div class="img-tool-box">
-                <div class="img-tool-title">📷 본문 추가 이미지 삽입 및 다운로드 버튼 자동 생성</div>
-                <div class="img-tool-row"><input type="text" id="expand_source" placeholder="출처 표기" style="flex: 1;"></div>
-                <div class="img-tool-row">
-                    <button type="button" class="btn-action" style="background: #e67e22;" onclick="insertImageWithSource('expandPrompt', 'expand_source')">🌐 URL 주소로 넣기</button>
-                    <button type="button" class="btn-action" style="background: #16a085;" onclick="document.getElementById('expand_file_input').click()">📁 내 기기 파일</button>
-                    <input type="file" id="expand_file_input" style="display: none;" accept="image/*" onchange="uploadImageWithSource(this, 'expandPrompt', 'expand_source')">
-                </div>
-            </div>
-
-            <div class="img-tool-box" style="border-top: 3px solid #e74c3c;">
-                <div class="img-tool-title" style="color: #c0392b;">📺 유튜브 동영상 본문 삽입</div>
-                <div class="img-tool-row">
-                    <button type="button" class="btn-action" style="background: #e74c3c;" onclick="insertYouTubeVideo('expandPrompt')">▶️ 유튜브 영상 넣기</button>
-                    <small style="color: #7f8c8d; align-self: center;">(유튜브 링크를 입력하면 본문에 반응형 재생기로 삽입됩니다)</small>
-                </div>
-            </div>
-
-            <textarea name="prompt" id="expandPrompt" placeholder="AI에게 전달할 취재 메모나 프롬프트를 입력하세요..." required></textarea>
-            <button type="submit" class="ai-expand-btn">🪄 명품 신문 스타일 기사 발행하기</button>
-        </form>
-    </div>
-
     <div class="box" style="border-top: 5px solid #34495e;">
         <h3>📋 4. 발행된 기사 관리 및 삭제 대장</h3>
         <table><thead><tr style="border-bottom:2px solid #ccc; text-align:left;"><th style="padding:10px;">카테고리</th><th style="padding:10px;">제목</th><th style="padding:10px;">발행일시</th><th style="padding:10px; text-align:right;">관리</th></tr></thead>
@@ -1268,7 +1235,34 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
         }
     }
 
-    async function uploadStandaloneImage(input) {
+    // [추가] 다중 사진 입력 필드 동적 생성 및 파일 업로드 함수
+    let imageItemCount = 1;
+    function addImageField() {
+        imageItemCount++;
+        const container = document.getElementById('image_list_container');
+        const div = document.createElement('div');
+        div.className = 'multi-img-item';
+        div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 0.9em; color: #16a085;">사진 #${imageItemCount}</strong>
+                <button type="button" class="btn-action" style="background: #e74c3c; padding: 3px 8px; font-size: 11px;" onclick="this.parentElement.parentElement.remove()">삭제</button>
+            </div>
+            <input type="text" name="image_authors" placeholder="사진 출처 (예: Pixabay)" style="margin-bottom: 4px;">
+            <div style="display: flex; gap: 6px;">
+                <input type="text" name="image_urls" class="img-url-input" placeholder="이미지 주소(URL)" style="margin-bottom: 0; flex: 1;" required>
+                <button type="button" class="btn-action" style="background: #16a085;" onclick="triggerFileInput(this)">📁 내 기기 파일</button>
+                <input type="file" style="display: none;" accept="image/*" onchange="uploadMultiImageFile(this)">
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    function triggerFileInput(btn) {
+        const fileInput = btn.nextElementSibling;
+        fileInput.click();
+    }
+
+    async function uploadMultiImageFile(input) {
         if (input.files && input.files[0]) {
             const formData = new FormData();
             formData.append("file", input.files[0]);
@@ -1276,8 +1270,9 @@ def admin_studio(request: Request, admin_auth: str = Cookie(None)):
                 const response = await fetch("/admin/upload-image", { method: "POST", body: formData });
                 const data = await response.json();
                 if (data.url) {
-                    document.getElementById('standalone_url').value = data.url;
-                    alert("이미지가 Supabase 클라우드에 성공적으로 업로드되었습니다!");
+                    const urlInput = input.previousElementSibling.previousElementSibling;
+                    urlInput.value = data.url;
+                    alert("사진이 Supabase 클라우드에 성공적으로 업로드되었습니다!");
                 } else {
                     alert("업로드 실패: " + (data.error || "오류"));
                 }
